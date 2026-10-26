@@ -7,9 +7,9 @@
 
 window.VORTEX_CONFIG = {
   // 1) Project URL  (ejemplo: https://abcdefghijk.supabase.co)
-  SUPABASE_URL: "https://TU-PROYECTO.supabase.co",
+  SUPABASE_URL: "https://kqrkibrbapixirmzuxfe.supabase.co",
 
   // 2) Clave pública: "anon public" o "Publishable key"
   //    (NUNCA pegues aquí la clave "service_role" ni la "secret")
-  SUPABASE_KEY: "PEGA-AQUI-TU-CLAVE-PUBLICA",
+  SUPABASE_KEY: "sb_publishable_w1tvmoCVhyhOnm2SF0YcaA_GTxjwvbs",
 };
