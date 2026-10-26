@@ -21,7 +21,10 @@ export function CrearUsuario({ planes, corte, onCreado, recargar }) {
     if (!/^\S+@\S+\.\S+$/.test(f.email.trim())) return setErr("Escribe un correo válido.");
     if (f.pass.length < 6) return setErr("La contraseña debe tener al menos 6 caracteres.");
     setCargando(true);
-    const datos = f.plan === "Prueba" ? {} : { plan: f.plan, est: "Activo", venc: corte, prueba: null };
+    const hoy = new Date().toISOString().slice(0, 10);
+    const datos = f.plan === "Prueba" ? {}
+      : f.plan === "Gratuito" ? { plan: "Gratuito", est: "Vencido", prueba: null }
+      : { plan: f.plan, est: "Activo", venc: corte, prueba: null, insc: { plan: f.plan, f: hoy } };
     const { error } = await supabase.rpc("crear_usuario", { p_email: f.email.trim(), p_password: f.pass, p_nombre: f.nombre.trim(), p_rol: f.rol, p_datos: datos });
     setCargando(false);
     if (error) return setErr(msg(error));
@@ -40,9 +43,9 @@ export function CrearUsuario({ planes, corte, onCreado, recargar }) {
       <Campo l="Contraseña inicial (mínimo 6 caracteres)"><input value={f.pass} onChange={s("pass")} className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Campo>
       <div className="grid grid-cols-2 gap-2">
         <Campo l="Tipo de cuenta"><select value={f.rol} onChange={s("rol")} className="w-full rounded-xl px-2 py-2 text-sm" style={inp}><option value="agente">Agente</option><option value="admin">Administrador</option></select></Campo>
-        <Campo l="Plan"><select value={f.plan} onChange={s("plan")} className="w-full rounded-xl px-2 py-2 text-sm" style={inp}><option value="Prueba">Prueba 48 h</option>{planes.map((p) => <option key={p}>{p}</option>)}</select></Campo>
+        <Campo l="Plan"><select value={f.plan} onChange={s("plan")} className="w-full rounded-xl px-2 py-2 text-sm" style={inp}><option value="Prueba">Prueba 48 h</option><option value="Gratuito">Gratuito</option>{planes.map((p) => <option key={p}>{p}</option>)}</select></Campo>
       </div>
-      {f.plan !== "Prueba" && <div className="text-xs" style={{ color: C.mute }}>Quedará activo hasta el próximo corte ({corte}).</div>}
+      <div className="text-xs" style={{ color: C.mute }}>{f.plan === "Prueba" ? "Tendrá 48 horas de acceso completo; luego pasa a Gratuito." : f.plan === "Gratuito" ? "Acceso limitado hasta que pague un plan." : `Quedará activo hasta el próximo corte (${corte}) y no se le pedirá carnet.`}</div>
       <Error t={err} />
       <div className="grid grid-cols-2 gap-2">
         <Boton onClick={crear} disabled={cargando}>{cargando ? "Creando…" : "Crear usuario"}</Boton>

@@ -856,7 +856,7 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
           <div className="flex flex-wrap gap-2 items-center"><Ci ci={u.ci} />{u.insc && <span className="text-xs" style={{ color: C.lilaDk }}>Se inscribió en {u.insc.plan} · {fechaL(isoD(u.insc.f))}</span>}</div>
           <div className="grid grid-cols-2 gap-2">
             <select value={u.est} onChange={(e) => setU(u.n, { est: e.target.value }, `estado cambiado a ${e.target.value}`)} className="rounded-lg px-2 py-1.5 text-sm" style={inp}>{["Prueba", "Activo", "Vencido", "Suspendido", "Bloqueado"].map((x) => <option key={x}>{x}</option>)}</select>
-            <select value={u.plan} onChange={(e) => setU(u.n, { plan: e.target.value }, `plan cambiado a ${e.target.value}`)} className="rounded-lg px-2 py-1.5 text-sm" style={inp}>{["Prueba", ...cfg.planes.map((q) => q.nombre)].map((x) => <option key={x}>{x}</option>)}</select>
+            <select value={u.plan} onChange={(e) => setU(u.n, { plan: e.target.value }, `plan cambiado a ${e.target.value}`)} className="rounded-lg px-2 py-1.5 text-sm" style={inp}>{["Prueba", "Gratuito", ...cfg.planes.map((q) => q.nombre)].map((x) => <option key={x}>{x}</option>)}</select>
           </div>
           {u.est === "Activo" && (!u.venc || u.venc < isoOf(HOY)) && <button onClick={() => setU(u.n, { venc: isoOf(proximoCorte(cfg.dia)) }, `acceso habilitado hasta ${fechaL(proximoCorte(cfg.dia))}`)} className="w-full py-2 rounded-lg text-xs font-semibold" style={{ background: C.okSoft, color: C.ok }}>Habilitar acceso hasta el próximo corte ({fechaL(proximoCorte(cfg.dia))})</button>}
           {cuentas && u._uid && <cuentas.Acciones u={u} onHecho={(t) => { log(`${u.n}: ${t}`); flash(t); }} />}
@@ -979,6 +979,15 @@ const prorrateo = (precio, dia) => { const fin = proximoCorte(dia); const ini = 
 const PRECIOS = { Inicial: 49, Profesional: 99, Premium: 169 };
 const ORD = { gratuito: 0, Inicial: 1, Profesional: 2, Premium: 3, prueba: 3, admin: 3 };
 const permisos = (n) => { const r = ORD[n] ?? 0; return { nivel: n, ficha: r >= 1, maxCapt: { Inicial: 5, Profesional: 20, Premium: 40 }[n] || null, req: r >= 1, fav: r >= 2, vis: r >= 1, share: r >= 2, report: r >= 1, cierre: r >= 1, filtros: r >= 1, match: r >= 2, matchAv: r >= 2, inversa: r >= 2, cliente: r >= 2, busq: r >= 2, vigDet: r >= 2, hist: r >= 2, seg: r >= 2, recordatorios: r >= 2, stats: r >= 3, informes: r >= 3, auto: r >= 3, soporte: r >= 3 }; };
+const CUENTAS = [["admin", "SuperAdmin"], ["prueba", "Prueba"], ["gratuito", "Gratuito"], ["Inicial", "Inicial"], ["Profesional", "Profesional"], ["Premium", "Premium"]];
+const RESUMEN = {
+  admin: "Panel de administración: aprobar pagos, configurar cobros y planes, crear y gestionar usuarios, revisar reportes, sugerencias y auditoría.",
+  prueba: "48 horas con acceso completo (igual que Premium). Al terminar, la cuenta pasa automáticamente a Gratuito hasta que pague un plan.",
+  gratuito: "Solo puede buscar y ver datos básicos de las propiedades. Bloqueado: ficha completa, contacto con captadores, requerimientos, visitas, captaciones, reportes y todo lo de los planes.",
+  Inicial: "Hasta 5 captaciones · ficha completa y WhatsApp con captadores · requerimientos de clientes · agenda de visitas · reportes. Sin favoritos, coincidencias avanzadas ni estadísticas.",
+  Profesional: "Hasta 20 captaciones · todo lo de Inicial · coincidencias ponderadas e inversas · favoritos · compartir por WhatsApp · búsquedas guardadas · seguimiento · recordatorios. Sin estadísticas, informes ni automatizaciones.",
+  Premium: "Hasta 40 captaciones · todo lo de Profesional · estadísticas · informes con exportación CSV · automatizaciones · soporte prioritario.",
+};
 const PLAN_BEN = {
   Inicial: ["Hasta 5 captaciones activas", "Ficha completa y contacto por WhatsApp con captadores", "Registro de requerimientos de clientes", "Agenda de visitas", "Reportes y consultas"],
   Profesional: ["Hasta 20 captaciones activas", "Todo lo de Inicial", "Coincidencias ponderadas con explicación y coincidencia inversa", "Favoritos y guardar para clientes", "Compartir propiedades por WhatsApp", "Búsquedas guardadas", "Seguimiento de oportunidades", "Recordatorios de agenda", "Historial de cierres y vigencia detallada"],
@@ -1027,11 +1036,15 @@ function Sus({ acceso, users, setUsers, pagos, setPagos, cfg, flash, nivel, tria
   const mios = pagos.filter((p) => p.de === ME).sort((a, b) => b.iso.localeCompare(a.iso));
   const pend = mios.find((p) => p.est === "Pendiente");
   const rech = mios[0] && mios[0].est === "Rechazado" ? mios[0] : null;
-  const listo = (!!mi.ci || !!(ci.front && ci.back)) && !!f.comp;
+  // El carnet se pide UNA sola vez: en la primera inscripción. Renovaciones, mejoras
+  // o volver a pagar después de vencer ya no lo piden.
+  const yaVerificado = !!(mi.ci && (mi.ci.front || mi.ci.demo)) || !!mi.insc || mios.some((p) => p.est === "Aprobado");
+  const necesitaCi = !renov && !yaVerificado;
+  const listo = (!necesitaCi || !!(ci.front && ci.back)) && !!f.comp;
   const enviar = () => {
-    if (!mi.ci && !(ci.front && ci.back)) { flash("Sube la foto de tu carnet (anverso y reverso) para continuar."); return; }
+    if (necesitaCi && !(ci.front && ci.back)) { flash("Sube la foto de tu carnet (anverso y reverso) para continuar."); return; }
     if (!f.comp) { flash("Sube la foto del comprobante (baucher) para continuar."); return; }
-    setUsers(users.map((u) => (u.n === ME ? { ...u, ci: u.ci || { front: ci.front, back: ci.back }, ...(renov ? {} : { insc: { plan, f: isoOf(HOY) } }) } : u)));
+    setUsers(users.map((u) => (u.n === ME ? { ...u, ...(ci.front && ci.back && !u.ci ? { ci: { front: ci.front, back: ci.back } } : {}), ...(u.insc ? {} : { insc: { plan, f: isoOf(HOY) } }) } : u)));
     setPagos([{ id: "n" + Date.now(), de: ME, plan: accion === "renov" ? planRen : plan, monto, iso: isoOf(HOY), tipo: TIPOS_PAGO[accion], metodo: metodo === "QR" ? "QR" : "Cuenta", ref: f.ref.trim(), est: "Pendiente", comp: f.comp, nota: accion === "renov" ? "Mes completo" : accion === "mejora" ? `Diferencia entre planes · ${pr.resta} de ${pr.ciclo} días` : `${pr.resta} de ${pr.ciclo} días (prorrateo hasta ${fechaL(pr.fin)})` }, ...pagos]);
     setF({ ref: "", comp: null });
     flash("Comprobante enviado. Te avisaremos cuando se verifique el pago.");
@@ -1056,17 +1069,17 @@ function Sus({ acceso, users, setUsers, pagos, setPagos, cfg, flash, nivel, tria
       </div>
       {accion === "baja" ? <div className="rounded-xl p-3 space-y-2" style={{ background: C.card, border: `1px solid ${C.line}` }}><div className="text-sm" style={{ color: C.ink }}>Bajar a <b>{plan}</b> no genera pago ahora. Mantienes {planAct} hasta el próximo corte y desde entonces pagas {bs(precioDe(cfg, plan))} al mes.</div>{mi.planProx === plan ? <div className="text-xs" style={{ color: C.ok }}>✓ Cambio programado para el próximo corte</div> : <button onClick={() => { setUsers(users.map((u) => (u.n === ME ? { ...u, planProx: plan } : u))); flash(`Cambio a ${plan} programado para el próximo corte.`); }} className="w-full py-2.5 rounded-xl font-semibold text-white" style={{ background: C.lila }}>Programar cambio a {plan}</button>}</div> : pend ? <div className="rounded-xl p-3 text-sm" style={{ background: C.amberSoft, color: C.amber }}>⏳ Tu pago de {bs(pend.monto)} está en verificación. Te habilitaremos en cuanto se confirme.</div> : <>
         {rech && <div className="rounded-xl p-3 text-sm" style={{ background: C.redSoft, color: C.red }}>Tu último pago fue rechazado: {rech.mot}. Puedes enviarlo de nuevo.</div>}
-        {!mi.ci && <div className="rounded-xl p-3 space-y-2" style={{ background: C.card, border: `1px solid ${C.line}` }}>
-          <div className="text-sm font-semibold" style={{ color: C.ink }}>🪪 Verificación de identidad</div>
-          <div className="text-xs" style={{ color: C.mute }}>Para activar un plan de pago necesitamos una foto de tu carnet por ambos lados. Solo la ve el equipo administrador.</div>
+        {necesitaCi ? <div className="rounded-xl p-3 space-y-2" style={{ background: C.card, border: `1px solid ${C.line}` }}>
+          <div className="text-sm font-semibold" style={{ color: C.ink }}>🪪 Verificación de identidad (solo esta vez)</div>
+          <div className="text-xs" style={{ color: C.mute }}>Como es tu primera inscripción, necesitamos una foto de tu carnet por ambos lados. Solo la ve el equipo administrador y no se volverá a pedir.</div>
           <div className="grid grid-cols-2 gap-2">{[["front", "Anverso"], ["back", "Reverso"]].map(([k, l]) => <label key={k} className="flex items-center justify-center rounded-xl text-xs text-center cursor-pointer overflow-hidden" style={{ height: 96, border: `1px dashed ${C.mute}`, color: C.mute }}>{ci[k] ? <img src={ci[k]} alt={l} className="w-full h-full object-cover" /> : `📷 ${l}`}<input type="file" accept="image/*" className="hidden" onChange={async (e) => { const u = e.target.files[0] && await subir(e.target.files[0]); if (u) setCi((x) => ({ ...x, [k]: u })); }} /></label>)}</div>
-        </div>}
+        </div> : <div className="rounded-xl p-2.5 text-xs" style={{ background: C.okSoft, color: C.ok }}>🪪 Identidad ya verificada · no necesitas volver a subir tu carnet.</div>}
         <Seg o={["QR", "Cuenta bancaria"]} v={metodo} set={setMetodo} />
         {metodo === "QR" ? <div className="flex flex-col items-center gap-2">{cfg.qr ? <img src={cfg.qr} alt="QR de pago" className="rounded-xl" style={{ width: 170, height: 170, objectFit: "cover" }} /> : <div className="flex items-center justify-center rounded-xl text-xs text-center" style={{ width: 170, height: 170, border: `1px dashed ${C.mute}`, color: C.mute }}>QR de ejemplo<br />(lo sube el administrador)</div>}<div className="text-sm" style={{ color: C.ink }}>Escanea y paga exactamente <b>{bs(monto)}</b></div></div>
           : <div className="rounded-xl p-3 text-sm space-y-0.5" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.ink }}><div>Titular: <b>{cfg.titular}</b></div><div>Banco: {cfg.banco}</div><div>Cuenta: {cfg.cuenta}</div><div>Monto exacto: <b>{bs(monto)}</b></div></div>}
         <label className="block w-full py-2.5 rounded-xl text-sm text-center cursor-pointer" style={{ border: `1px dashed ${C.mute}`, color: C.mute }}>{f.comp ? "✓ Comprobante cargado (cambiar)" : "🧾 Subir foto del comprobante (baucher)"}<input type="file" accept="image/*" className="hidden" onChange={async (e) => { const u = e.target.files[0] && await subir(e.target.files[0]); if (u) setF((x) => ({ ...x, comp: u })); }} /></label>
         <input value={f.ref} onChange={(e) => setF({ ...f, ref: e.target.value })} placeholder="Número de comprobante o referencia (opcional)" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} />
-        <div className="text-xs space-y-0.5" style={{ color: C.mute }}><div>{mi.ci || (ci.front && ci.back) ? "✅" : "⬜"} Carnet: anverso y reverso</div><div>{f.comp ? "✅" : "⬜"} Foto del comprobante (baucher)</div></div>
+        <div className="text-xs space-y-0.5" style={{ color: C.mute }}>{necesitaCi && <div>{ci.front && ci.back ? "✅" : "⬜"} Carnet: anverso y reverso</div>}<div>{f.comp ? "✅" : "⬜"} Foto del comprobante (baucher)</div></div>
         <button onClick={enviar} disabled={!listo} className="w-full py-3 rounded-xl font-semibold text-white" style={{ background: listo ? C.grad : C.mute }}>Ya pagué: enviar comprobante</button>
       </>}
       {mios.length > 0 && <div className="text-sm font-semibold pt-1" style={{ color: C.ink }}>Mis pagos</div>}
@@ -1188,7 +1201,7 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas }) {
   PERFIL.datos = mi.perfil || null;
   PERFIL.guardar = (d) => setUsers((us) => us.map((u) => (u.n === ME ? { ...u, perfil: d } : u)));
   const iniciales = ME.split(" ").filter(Boolean).slice(0, 2).map((x) => x[0].toUpperCase()).join("") || "?";
-  const planUser = mi.est === "Activo" && mi.venc && mi.venc >= isoOf(HOY) ? mi.plan : null;
+  const planUser = mi.est === "Activo" && mi.venc && mi.venc >= isoOf(HOY) && (ORD[mi.plan] || 0) >= 1 ? mi.plan : null;
   const vivo = now < fin;
   const nivel = sim === "admin" ? "admin" : sim === "auto" ? (planUser || (vivo ? "prueba" : "gratuito")) : sim === "prueba" ? (vivo ? "prueba" : "gratuito") : sim;
   const perm = permisos(nivel);
@@ -1210,9 +1223,16 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas }) {
   return (
     <div className="vx-shell" style={{ fontFamily: "'Montserrat', 'Avenir Next', 'Segoe UI', system-ui, sans-serif" }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap');`}</style>
-      {esAdmin && <div className="flex flex-wrap justify-center items-center gap-2 mb-3 text-xs px-2 vx-simbar" style={{ color: C.ink }}>
-        <span>Ver como:</span>
-        {[["auto", "Mi cuenta"], ["prueba", "Prueba"], ["gratuito", "Gratuito"], ["Inicial", "Inicial"], ["Profesional", "Profesional"], ["Premium", "Premium"], ["admin", "SuperAdmin"]].map(([k, l]) => <Chip key={k} on={sim === k} onClick={() => setSim(k)}>{l}</Chip>)}<Chip on={false} onClick={() => setFin(Date.now() - 1000)}>⏩ Fin de prueba</Chip>
+      {esAdmin && <div className="vx-simbar" style={{ width: "100%", maxWidth: 520 }}>
+        <div className="flex items-center gap-2 overflow-x-auto px-2 pb-2 text-xs" style={{ color: C.ink }}>
+          <span className="shrink-0 font-semibold">👁 Ver la app como:</span>
+          {CUENTAS.map(([k, l]) => <span key={k} className="shrink-0"><Chip on={sim === k} onClick={() => { setSim(k); setSel(null); if (k === "prueba") setFin(Date.now() + 48 * 36e5); }}>{l}</Chip></span>)}
+          {sim === "prueba" && vivo && <span className="shrink-0"><Chip on={false} onClick={() => setFin(Date.now() - 1000)}>⏩ Terminar prueba</Chip></span>}
+        </div>
+        <div className="mx-2 mb-2 rounded-xl px-3 py-2 text-xs" style={{ background: "#fff", color: C.mute, border: `1px solid ${C.line}` }}>
+          <b style={{ color: C.lilaDk }}>{sim === "prueba" && !vivo ? "Prueba terminada → Gratuito" : (CUENTAS.find((c) => c[0] === sim) || [0, "Cuenta"])[1]}:</b> {RESUMEN[sim === "prueba" && !vivo ? "gratuito" : sim]}
+          {sim !== "admin" && <div className="mt-1" style={{ color: C.amber }}>Vista previa: lo que publiques o registres aquí se guarda con tu usuario de administrador.</div>}
+        </div>
       </div>}
       <div className="relative flex flex-col overflow-hidden vx-frame" style={{ background: C.bg }}>
         <div className="px-4 pt-3 pb-2 flex items-center justify-between" style={{ background: "#fff" }}>
