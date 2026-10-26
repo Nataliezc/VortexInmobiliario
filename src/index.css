@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Marco adaptable: pantalla completa en celular, panel centrado en computadora */
+html, body, #root { height: 100%; margin: 0; }
+body { background: #E3DEF3; -webkit-tap-highlight-color: transparent; }
+.vx-shell { height: 100vh; height: 100dvh; display: flex; flex-direction: column; align-items: center; padding: 16px 12px; box-sizing: border-box; font-family: 'Montserrat', 'Segoe UI', system-ui, sans-serif; }
+.vx-frame { flex: 1; min-height: 0; width: 100%; max-width: 520px; border: 6px solid #7928CA; border-radius: 28px; box-shadow: 0 20px 60px rgba(60, 30, 120, .18); }
+@media (max-width: 640px) {
+  .vx-shell { padding: 0; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .vx-frame { max-width: none; border: 0; border-radius: 0; box-shadow: none; }
+  .vx-simbar { padding-top: 8px; margin-bottom: 6px !important; }
+}
