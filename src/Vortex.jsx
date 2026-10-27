@@ -1153,19 +1153,46 @@ const pendWa = (visitas) => {
   return out;
 };
 // ── Copy completo de una propiedad, con el WhatsApp de quien lo envía ──
-const textoCopy = (p, tel) => [
-  `🏠 *${p.t}*`,
-  `${p.op} · ${p.tipo}`,
-  `💰 ${money(p)}`,
-  `📍 ${p.zona}, ${p.ciudad}`,
-  [p.dorm ? `🛏 ${p.dorm} dormitorio${p.dorm > 1 ? "s" : ""}` : "", p.ban ? `🚿 ${p.ban} baño${p.ban > 1 ? "s" : ""}` : "", p.m2 ? `📐 ${p.m2} m²` : ""].filter(Boolean).join(" · "),
-  `🚗 Garaje: ${p.garaje ? `Sí${p.gTipo ? ` (${p.gTipo.toLowerCase()})` : ""}` : "No"}${p.gAparte ? ` · garaje aparte en el edificio${p.gPrecio ? `: ${p.mon === "USD" ? "USD" : "Bs"} ${p.gPrecio}/mes` : ""}` : ""}`,
-  `🐾 Mascotas: ${p.mascotas}${p.mascCond ? ` (${p.mascCond})` : ""}`,
-  p.amoblado ? `🛋 ${p.amoblado}` : "",
-  p.condComp ? `📄 ${p.condComp}` : "",
-  p.desc ? `\n${p.desc.trim()}` : "",
-  waNum(tel).length >= 8 ? `\n📲 Más información por WhatsApp: https://wa.me/${waNum(tel)}` : "",
-].filter(Boolean).join("\n");
+// Quita del copy los datos de contacto del captador (teléfonos, enlaces de WhatsApp)
+const limpiarContacto = (txt) => String(txt || "").split("\n")
+  .filter((l) => !/wa\.me|whatsapp|wsp|wpp|whats|contacto|contactar|llamar|ll[aá]manos|escr[ií]beme|escr[ií]benos|cel\b|cel\.|celular|tel[eé]fono|tel\.|📞|📱|☎/i.test(l))
+  .map((l) => l.replace(/(\+?591[\s-]?)?\b[67]\d{2}[\s-]?\d{2}[\s-]?\d{3}\b/g, "").replace(/\s{2,}/g, " ").trimEnd())
+  .join("\n").replace(/\n{3,}/g, "\n\n").trim();
+// Copy para enviar: si la captación tiene su propio copy, se usa ese y solo se agregan
+// los datos que el copy no menciona (así no se repite nada). Al final va el WhatsApp de quien lo envía.
+const textoCopy = (p, tel) => {
+  const enlace = waNum(tel).length >= 8 ? `📲 Más información por WhatsApp: https://wa.me/${waNum(tel)}` : "";
+  const desc = limpiarContacto(p.desc);
+  const gar = `🚗 Garaje: ${p.garaje ? `Sí${p.gTipo ? ` (${p.gTipo.toLowerCase()})` : ""}` : "No"}${p.gAparte ? ` · garaje aparte en el edificio${p.gPrecio ? `: ${p.mon === "USD" ? "USD" : "Bs"} ${p.gPrecio}/mes` : ""}` : ""}`;
+  const masc = `🐾 Mascotas: ${p.mascotas === "Condicionado" ? "Sí, con condiciones" : p.mascotas}${p.mascCond ? ` (${p.mascCond})` : ""}`;
+  const dormTxt = p.dorm ? `🛏 ${p.dorm} dormitorio${p.dorm > 1 ? "s" : ""}` : "", banTxt = p.ban ? `🚿 ${p.ban} baño${p.ban > 1 ? "s" : ""}` : "", m2Txt = p.m2 ? `📐 ${p.m2} m²` : "";
+  if (desc.length >= 40) {
+    const d = leerCopy(desc, ZONAS); // lo que el copy ya dice
+    const extra = [
+      !d.op || !d.tipo ? `🏠 ${p.op} · ${p.tipo}` : "",
+      !d.precio ? `💰 ${money(p)}` : "",
+      !d.zona ? `📍 ${p.zona}, ${p.ciudad}` : "",
+      [!d.dorm ? dormTxt : "", !d.ban ? banTxt : "", !d.m2 ? m2Txt : ""].filter(Boolean).join(" · "),
+      !d.garaje && p.garaje !== undefined ? gar : "",
+      !d.mascotas && p.mascotas ? masc : "",
+      !d.amoblado && p.amoblado ? `🛋 ${p.amoblado}` : "",
+      !d.condComp && p.condComp ? `📄 ${p.condComp}` : "",
+    ].filter(Boolean);
+    return [desc, extra.length ? "\n" + extra.join("\n") : "", enlace ? "\n" + enlace : ""].filter(Boolean).join("\n");
+  }
+  return [
+    `🏠 *${p.t}*`,
+    `${p.op} · ${p.tipo}`,
+    `💰 ${money(p)}`,
+    `📍 ${p.zona}, ${p.ciudad}`,
+    [dormTxt, banTxt, m2Txt].filter(Boolean).join(" · "),
+    gar, masc,
+    p.amoblado ? `🛋 ${p.amoblado}` : "",
+    p.condComp ? `📄 ${p.condComp}` : "",
+    desc ? `\n${desc}` : "",
+    enlace ? `\n${enlace}` : "",
+  ].filter(Boolean).join("\n");
+};
 async function copiarTexto(t) {
   try { await navigator.clipboard.writeText(t); return true; } catch {
     try { const a = document.createElement("textarea"); a.value = t; a.style.position = "fixed"; a.style.opacity = "0"; document.body.appendChild(a); a.select(); const ok = document.execCommand("copy"); a.remove(); return ok; } catch { return false; }
