@@ -113,7 +113,7 @@ function DetalleInner({ p, acceso, onBack, onVisit, onReport, ant, rate, onProfi
   return (
     <div className="p-4 pb-8 space-y-3">
       <button onClick={onBack} className="text-sm" style={{ color: C.brandDk }}>‹ Volver a resultados</button>
-      <Photo hue={p.hue} h={190} src={locked ? null : p.fotos?.[0]} label={locked ? "Fotos con suscripción" : p.fotos?.length ? `1 / ${p.fotos.length} fotos` : "Sin fotos"} />
+      {!locked && p.fotos && p.fotos.length ? <Galeria fotos={p.fotos} titulo={p.t} texto={`${p.t} · ${money(p)} · ${p.zona}, ${p.ciudad}`} /> : <Photo hue={p.hue} h={190} src={null} label={locked ? "Fotos con suscripción" : "Sin fotos"} />}
       <div className="flex items-center justify-between"><span className="text-sm" style={{ color: C.mute }}>{p.op} · {p.tipo}</span><span className="flex gap-1 items-center"><EstBadge est={p.est || "Disponible"} /><Badge v={v} /></span></div>
       <h2 className="font-semibold text-xl leading-snug" style={{ color: C.ink }}>{locked ? tBasico(p) : p.t}</h2>
       <div style={{ ...serif, fontSize: 28, fontWeight: 700, color: C.ink }}>{money(p)}</div>
@@ -288,7 +288,7 @@ function Visitas({ visitas, setVisitas, props, clientes, flash, notify, users, p
   const [vm, setVm] = useState({ y: HOY.getFullYear(), m: HOY.getMonth() });
   const [sel, setSel] = useState(isoOf(HOY));
   const [nuevo, setNuevo] = useState(false);
-  const [v, setV] = useState({ pid: "", cid: "", h: "10:00", modo: "Captador de la propiedad", otro: "", cotro: "" });
+  const [v, setV] = useState({ pid: "", cid: "", h: "10:00", modo: "Captador de la propiedad", otro: "", cotro: "", tel: "", agTel: "", waCli: true, waAg: true, waCuando: 1440, txtCli: null, txtAg: null });
   const next = { Pendiente: "Confirmada", Confirmada: "Realizada", Realizada: "Pendiente", Cancelada: "Pendiente", Reprogramada: "Confirmada" };
   const col = { Pendiente: [C.amber, C.amberSoft], Confirmada: [C.brandDk, C.brandSoft], Realizada: [C.ok, C.okSoft], Cancelada: [C.red, C.redSoft], Reprogramada: [C.amber, C.amberSoft] };
   const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
@@ -306,17 +306,43 @@ function Visitas({ visitas, setVisitas, props, clientes, flash, notify, users, p
   const cOtro = v.cid === "__otro";
   const cNombre = cOtro ? v.cotro.trim() : cli ? cli.n : "";
   const otro = v.modo !== "Captador de la propiedad";
+  const agNombre = otro ? v.otro.trim() : prop ? prop.cap.n : "";
+  const agUser = users.find((u) => u.n === agNombre);
+  const agTelAuto = !otro && prop ? prop.cap.tel || "" : (agUser && agUser.perfil && agUser.perfil.tel) || "";
+  const telAg = v.agTel.trim() || agTelAuto;
+  const telCli = v.tel.trim() || (cli && cli.tel) || "";
+  const esPremium = !!perm.auto;
+  const datosMsg = { cl: cNombre || "cliente", pt: prop ? prop.t : "la propiedad", zona: prop ? `${prop.zona}, ${prop.ciudad}` : "", fecha: `${sd} de ${MESES[sm - 1].toLowerCase()}`, h: v.h || "10:00", ag: agNombre || "el agente", yo: ME };
+  const txtCli = v.txtCli ?? plantillaWa("cli", datosMsg);
+  const txtAg = v.txtAg ?? plantillaWa("ag", datosMsg);
+  const conAg = !!agNombre && agNombre !== ME;
+  const marcarWa = (id, k) => setVisitas((vs) => vs.map((y) => (y.id === id ? { ...y, wa: { ...y.wa, [k]: { ...y.wa[k], env: true, envF: Date.now() } } } : y)));
+  const porEnviar = pendWa(visitas);
   const save = () => {
     if (!prop || !cNombre) { flash("Elige la propiedad y el cliente, o escribe su nombre."); return; }
     if (otro && !v.otro.trim()) { flash("Escribe el nombre del agente."); return; }
-    const ag = otro ? v.otro.trim() : prop.cap.n;
-    setVisitas([...visitas, { id: Date.now(), p: prop.id, cl: cNombre, f: sel, h: v.h || "10:00", ag, de: ME, rec: perm.recordatorios ? autos.recDef || 0 : 0, est: "Pendiente" }]);
+    if (esPremium && v.waCli && waNum(telCli).length < 8) { flash("Escribe el WhatsApp del cliente o desactiva el mensaje al cliente."); return; }
+    if (esPremium && v.waAg && conAg && waNum(telAg).length < 8) { flash("Escribe el WhatsApp del agente o desactiva el mensaje al agente."); return; }
+    const ag = agNombre;
+    const wa = esPremium && (v.waCli || (v.waAg && conAg)) ? { cuando: v.waCuando, cli: v.waCli ? { tel: telCli, txt: txtCli, env: false } : null, ag: v.waAg && conAg ? { tel: telAg, txt: txtAg, env: false } : null } : null;
+    setVisitas([...visitas, { id: Date.now(), p: prop.id, cl: cNombre, clTel: telCli, f: sel, h: v.h || "10:00", ag, agTel: telAg, de: ME, rec: perm.recordatorios ? autos.recDef || 0 : 0, est: "Pendiente", ...(wa ? { wa } : {}) }]);
     notify("Visita agendada", `${cNombre} · ${prop.t} · ${sd} ${MESES[sm - 1].toLowerCase()}, ${v.h}`, { tab: "visitas" });
     flash(ag === ME ? "Visita agendada." : reg(ag) ? `Visita agendada y también en el calendario de ${ag}. Le llegó una notificación.` : `Visita agendada. ${ag} no está en la app: avísale por WhatsApp.`);
-    setNuevo(false); setV({ ...v, pid: "", cid: "", otro: "", cotro: "" });
+    if (wa) flash(v.waCuando === 0 ? "Visita agendada. Los mensajes de WhatsApp están listos arriba para enviar." : `Visita agendada. Los mensajes de WhatsApp quedan programados (${MOMENTOS_WA.find((m) => m[0] === v.waCuando)[1].toLowerCase()}).`);
+    setNuevo(false); setV({ ...v, pid: "", cid: "", otro: "", cotro: "", tel: "", agTel: "", txtCli: null, txtAg: null });
   };
   return (
     <div className="p-4 space-y-3">
+      {porEnviar.length > 0 && <div className="rounded-2xl p-3 space-y-2" style={{ background: "#E7F8EE", border: "1.5px solid #25D366" }}>
+        <div className="text-sm font-bold" style={{ color: "#0F7A3D" }}>📲 Mensajes de WhatsApp listos para enviar ({porEnviar.length})</div>
+        {porEnviar.map(({ x, k, m }) => (
+          <div key={x.id + k} className="rounded-xl p-2.5 space-y-1.5" style={{ background: "#fff" }}>
+            <div className="text-xs font-semibold" style={{ color: C.ink }}>{k === "cli" ? `Al cliente: ${x.cl}` : `Al agente: ${x.ag}`} · visita {fechaL(isoD(x.f))}, {x.h}</div>
+            <div className="text-xs" style={{ color: C.mute }}>{m.txt}</div>
+            <a href={waLink(m.tel, m.txt)} target="_blank" rel="noreferrer" onClick={() => marcarWa(x.id, k)} className="block text-center py-2 rounded-lg text-sm font-semibold text-white" style={{ background: "#25D366" }}>Enviar por WhatsApp</a>
+          </div>
+        ))}
+      </div>}
       <div className="flex items-center justify-between">
         <button onClick={() => go(-1)} className="px-3 py-1 rounded-lg text-lg" style={{ border: `1px solid ${C.line}`, color: C.ink }}>‹</button>
         <h2 className="font-semibold" style={{ color: C.ink }}>{MESES[vm.m]} {vm.y}</h2>
@@ -343,10 +369,23 @@ function Visitas({ visitas, setVisitas, props, clientes, flash, notify, users, p
           <Fld l="Propiedad"><select value={v.pid} onChange={(e) => setV({ ...v, pid: e.target.value })} className="w-full rounded-xl px-3 py-2 text-sm" style={inp}><option value="">Elige una propiedad</option>{abiertas.map((p) => <option key={p.id} value={p.id}>{p.t}</option>)}</select></Fld>
           <Fld l="Cliente"><select value={v.cid} onChange={(e) => setV({ ...v, cid: e.target.value })} className="w-full rounded-xl px-3 py-2 text-sm" style={inp}><option value="">Elige un cliente</option>{clientes.map((c) => <option key={c.id} value={c.id}>{c.n}</option>)}<option value="__otro">➕ Otro cliente (no registrado)</option></select></Fld>
           {cOtro && <Fld l="Nombre del cliente"><input value={v.cotro} onChange={(e) => setV({ ...v, cotro: e.target.value })} placeholder="Escribe el nombre del cliente" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>}
+          {(cOtro || (esPremium && cli)) && <Fld l={`WhatsApp del cliente${esPremium ? "" : " (opcional)"}`}><input value={v.tel || (cli && cli.tel) || ""} onChange={(e) => setV({ ...v, tel: e.target.value })} inputMode="tel" placeholder="Ej. 70012345" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>}
           <Fld l="Hora"><input type="time" value={v.h} onChange={(e) => setV({ ...v, h: e.target.value })} className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
           <Fld l="Agente que atiende la visita"><Seg o={["Captador de la propiedad", "Otro agente"]} v={v.modo} set={(m) => setV({ ...v, modo: m })} /></Fld>
           {otro ? <Fld l="Nombre del agente"><input value={v.otro} onChange={(e) => setV({ ...v, otro: e.target.value })} placeholder="Escribe su nombre (puede no estar en la app)" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
             : prop && <div className="text-xs" style={{ color: C.lilaDk }}>Agente: {prop.cap.n === ME ? "tú (captador)" : prop.cap.n + ", recibirá una notificación"}</div>}
+          {conAg && (!agTelAuto || otro) && <Fld l={`WhatsApp de ${agNombre || "el agente"}${esPremium ? "" : " (opcional)"}`}><input value={v.agTel || agTelAuto} onChange={(e) => setV({ ...v, agTel: e.target.value })} inputMode="tel" placeholder="Ej. 70012345" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>}
+          {esPremium ? <div className="rounded-xl p-3 space-y-2.5" style={{ background: "#fff", border: "1.5px solid #25D366" }}>
+            <div className="text-sm font-semibold" style={{ color: "#0F7A3D" }}>📲 Confirmación por WhatsApp</div>
+            <div className="flex flex-wrap gap-2"><Chip on={v.waCli} onClick={() => setV({ ...v, waCli: !v.waCli })}>{v.waCli ? "✓ " : ""}Al cliente</Chip>{conAg && <Chip on={v.waAg} onClick={() => setV({ ...v, waAg: !v.waAg })}>{v.waAg ? "✓ " : ""}Al agente ({agNombre.split(" ")[0]})</Chip>}</div>
+            {(v.waCli || (v.waAg && conAg)) && <>
+              <Fld l="¿Cuándo enviar?"><Seg o={MOMENTOS_WA.map((m) => m[1])} v={MOMENTOS_WA.find((m) => m[0] === v.waCuando)[1]} set={(l) => setV({ ...v, waCuando: MOMENTOS_WA.find((m) => m[1] === l)[0] })} /></Fld>
+              {v.waCli && <Fld l="Mensaje para el cliente"><textarea rows={4} value={txtCli} onChange={(e) => setV({ ...v, txtCli: e.target.value })} className="w-full rounded-xl px-3 py-2 text-xs" style={inp} /></Fld>}
+              {v.waAg && conAg && <Fld l={`Mensaje para ${agNombre}`}><textarea rows={3} value={txtAg} onChange={(e) => setV({ ...v, txtAg: e.target.value })} className="w-full rounded-xl px-3 py-2 text-xs" style={inp} /></Fld>}
+              {(v.txtCli !== null || v.txtAg !== null) && <button onClick={() => setV({ ...v, txtCli: null, txtAg: null })} className="text-xs underline" style={{ color: C.mute }}>Restaurar mensajes sugeridos</button>}
+              <div className="text-xs" style={{ color: C.mute }}>A la hora elegida, el mensaje aparece arriba en Visitas y en Alertas, listo para enviarse con un toque desde tu WhatsApp.</div>
+            </>}
+          </div> : <div className="text-xs rounded-xl p-2.5" style={{ background: "#fff", color: C.mute }}>🔒 Programar confirmaciones por WhatsApp al cliente y al agente: disponible en el plan Premium.</div>}
           <button onClick={save} className="w-full py-3 rounded-xl font-semibold text-white" style={{ background: C.lila }}>Agendar para el {sd} de {MESES[sm - 1].toLowerCase()}</button>
         </div>
       )}
@@ -356,13 +395,14 @@ function Visitas({ visitas, setVisitas, props, clientes, flash, notify, users, p
           <div key={x.id} className="rounded-2xl p-3 space-y-1.5" style={{ background: C.card, border: `1px solid ${C.line}` }}>
             <div className="flex items-center justify-between"><span className="font-semibold text-sm" style={{ color: C.ink }}>{x.h}</span><span className="text-xs px-2 py-0.5 rounded-md" style={{ background: col[x.est][1], color: col[x.est][0] }}>{x.est}</span></div>
             <div className="text-sm" style={{ color: C.ink }}>{p ? p.t : "Propiedad"}</div>
-            <div className="text-xs" style={{ color: C.mute }}>Cliente: {x.cl} · Agente: {x.ag}</div>
-            {x.de && x.de !== ME ? <div className="text-xs" style={{ color: C.lilaDk }}>📥 Agendada por {x.de} directamente en tu calendario</div> : x.ag === ME ? null : reg(x.ag) ? <div className="text-xs" style={{ color: C.ok }}>✓ También agendada en el calendario de {x.ag}</div> : <div className="text-xs" style={{ color: C.amber }}>⚠️ {x.ag} no está en la app · <button onClick={() => flash(`Mensaje listo: "Hola ${x.ag}, visita el ${x.f} a las ${x.h} con ${x.cl}."`)} className="underline">Avisar por WhatsApp</button></div>}
+            <div className="text-xs" style={{ color: C.mute }}>Cliente: {x.cl}{x.clTel ? ` (${x.clTel})` : ""} · Agente: {x.ag}</div>
+            {x.wa && (x.de === ME || !x.de) && ["cli", "ag"].filter((k) => x.wa[k]).map((k) => <div key={k} className="flex items-center justify-between gap-2 text-xs rounded-lg px-2 py-1.5" style={{ background: "#E7F8EE", color: "#0F7A3D" }}><span>📲 {k === "cli" ? "Cliente" : x.ag.split(" ")[0]}: {x.wa[k].env ? "✓ mensaje enviado" : `programado · ${(MOMENTOS_WA.find((m) => m[0] === x.wa.cuando) || [0, ""])[1].toLowerCase()}`}</span><a href={waLink(x.wa[k].tel, x.wa[k].txt)} target="_blank" rel="noreferrer" onClick={() => marcarWa(x.id, k)} className="underline font-semibold shrink-0">{x.wa[k].env ? "Reenviar" : "Enviar ahora"}</a></div>)}
+            {x.de && x.de !== ME ? <div className="text-xs" style={{ color: C.lilaDk }}>📥 Agendada por {x.de} directamente en tu calendario</div> : x.ag === ME ? null : reg(x.ag) ? <div className="text-xs" style={{ color: C.ok }}>✓ También agendada en el calendario de {x.ag}</div> : <div className="text-xs" style={{ color: C.amber }}>⚠️ {x.ag} no está en la app · <a href={waLink(x.agTel, `Hola ${x.ag}, te confirmo la visita del ${fechaL(isoD(x.f))} a las ${x.h} con mi cliente ${x.cl}${p ? " en " + p.t : ""}. — ${ME}`)} target="_blank" rel="noreferrer" className="underline">Avisar por WhatsApp</a></div>}
             <div className="flex gap-2 pt-1">
               <button onClick={() => setVisitas(visitas.map((y) => (y.id === x.id ? { ...y, est: next[y.est] } : y)))} className="text-xs px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${C.line}`, color: C.ink }}>Pasar a {next[x.est]}</button>
               <button onClick={() => setVisitas(visitas.map((y) => (y.id === x.id ? { ...y, est: "Cancelada" } : y)))} className="text-xs px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${C.line}`, color: C.red }}>Cancelar</button>
             </div>
-            {perm.recordatorios && <div className="flex flex-wrap items-center gap-2 pt-1"><span className="text-xs" style={{ color: C.mute }}>🔔 Recordarme:</span>{RECS.map(([m, l]) => <Chip key={m} on={(x.rec || 0) === m} onClick={() => setVisitas(visitas.map((y) => (y.id === x.id ? { ...y, rec: m } : y)))}>{l}</Chip>)}<button onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`Hola ${x.cl}, te recuerdo la visita del ${x.f} a las ${x.h}${p ? " a " + p.t : ""}.`)}`, "_blank")} className="text-xs underline" style={{ color: C.brandDk }}>Recordar al cliente por WhatsApp</button></div>}
+            {perm.recordatorios && <div className="flex flex-wrap items-center gap-2 pt-1"><span className="text-xs" style={{ color: C.mute }}>🔔 Recordarme:</span>{RECS.map(([m, l]) => <Chip key={m} on={(x.rec || 0) === m} onClick={() => setVisitas(visitas.map((y) => (y.id === x.id ? { ...y, rec: m } : y)))}>{l}</Chip>)}<a href={x.clTel ? waLink(x.clTel, `Hola ${x.cl}, te recuerdo la visita del ${fechaL(isoD(x.f))} a las ${x.h}${p ? " a " + p.t : ""}.`) : `https://wa.me/?text=${encodeURIComponent(`Hola ${x.cl}, te recuerdo la visita del ${fechaL(isoD(x.f))} a las ${x.h}${p ? " a " + p.t : ""}.`)}`} target="_blank" rel="noreferrer" className="text-xs underline" style={{ color: C.brandDk }}>Recordar al cliente por WhatsApp</a></div>}
           </div>
         );
       })}
@@ -375,6 +415,7 @@ function Alertas({ go, notifs, visitas, props, clientes, perm, autos }) {
   const ahora = new Date();
   const extra = [];
   if (perm.recordatorios) visitas.filter((v) => v.rec && !["Cancelada", "Realizada"].includes(v.est)).forEach((v) => { const dt = new Date(`${v.f}T${v.h}:00`); if (dt > ahora && dt - v.rec * 6e4 <= ahora) { const pp = props.find((q) => q.id === v.p); extra.push({ id: "r" + v.id, ic: "⏰", t: `Recordatorio: visita ${v.f} a las ${v.h}`, s: `${v.cl}${pp ? " · " + pp.t : ""}`, to: { tab: "visitas" }, h: "Recordatorio de agenda" }); } });
+  pendWa(visitas).forEach(({ x, k }) => extra.push({ id: `w${x.id}${k}`, ic: "📲", t: `Enviar confirmación por WhatsApp a ${k === "cli" ? x.cl : x.ag}`, s: `Visita ${fechaL(isoD(x.f))}, ${x.h} · toca para abrir Visitas y enviarlo`, to: { tab: "visitas" }, h: "Mensaje programado" }));
   if (perm.auto) {
     const act = props.filter((p) => p.cap.n === ME && ["Disponible", "Reservado"].includes(p.est || "Disponible"));
     if (autos.vig.on) act.filter((p) => p.dias >= autos.vig.n).forEach((p) => extra.push({ id: "a1" + p.id, ic: "🤖", t: "Captación sin confirmar", s: `${p.t} lleva ${p.dias} días sin confirmarse`, to: { tab: "perfil" }, h: "Automatización" }));
@@ -593,24 +634,28 @@ const inp = { border: `1px solid ${C.line}`, background: C.card, color: C.ink };
 const Seg = ({ o, v, set }) => <div className="flex flex-wrap gap-2">{o.map((x) => <Chip key={x} on={v === x} onClick={() => set(x)}>{x}</Chip>)}</div>;
 const Fld = ({ l, children }) => <div className="space-y-1.5"><div className="text-xs font-medium" style={{ color: C.mute }}>{l}</div>{children}</div>;
 
-const toF = (p) => ({ op: p.op, tipo: p.tipo, ciudad: p.ciudad, zona: p.zona, t: p.t, precio: String(p.precio), mon: p.mon, dorm: String(p.dorm), ban: String(p.ban), m2: String(p.m2), garaje: p.garaje ? "Sí" : "No", gTipo: p.gTipo || "Independiente", gAparte: p.gAparte ? "Sí" : "No", gPrecio: p.gPrecio || "", mascotas: p.mascotas, mascCond: p.mascCond || "", amoblado: p.amoblado, com: p.com, condComp: p.condComp || "", desc: p.desc || "", fotos: p.fotos || [] });
+const TIPOS_INM = ["Casa", "Departamento", "Terreno", "Oficina", "Comercial"];
+const toF = (p) => ({ op: p.op, tipo: TIPOS_INM.includes(p.tipo) ? p.tipo : "Otro", tipoOtro: TIPOS_INM.includes(p.tipo) || p.tipo === "Otro" ? "" : p.tipo, ciudad: p.ciudad, zona: p.zona, t: p.t, precio: String(p.precio), mon: p.mon, dorm: String(p.dorm), ban: String(p.ban), m2: String(p.m2), garaje: p.garaje ? "Sí" : "No", gTipo: p.gTipo || "Independiente", gAparte: p.gAparte ? "Sí" : "No", gPrecio: p.gPrecio || "", mascotas: p.mascotas, mascCond: p.mascCond || "", amoblado: p.amoblado, com: p.com, condComp: p.condComp || "", desc: p.desc || "", fotos: p.fotos || [] });
 
-function Form({ onSave, init }) {
-  const [f, setF] = useState(init ? toF(init) : { op: "Alquiler", tipo: "Departamento", ciudad: "La Paz", zona: "", t: "", precio: "", mon: "USD", dorm: "2", ban: "1", m2: "", garaje: "No", gTipo: "Independiente", gAparte: "No", gPrecio: "", mascotas: "No", mascCond: "", amoblado: "Vacío", com: "", condComp: "", desc: "", fotos: [] });
+function Form({ onSave, init, maxFotos = 3 }) {
+  const [f, setF] = useState(init ? toF(init) : { op: "Alquiler", tipo: "Departamento", tipoOtro: "", ciudad: "La Paz", zona: "", t: "", precio: "", mon: "USD", dorm: "2", ban: "1", m2: "", garaje: "No", gTipo: "Independiente", gAparte: "No", gPrecio: "", mascotas: "No", mascCond: "", amoblado: "Vacío", com: "", condComp: "", desc: "", fotos: [] });
   const [err, setErr] = useState("");
   const s = (k) => (v) => setF({ ...f, [k]: v });
   const num = (k) => (e) => s(k)(e.target.value.replace(/\D/g, ""));
   const vivienda = ["Casa", "Departamento"].includes(f.tipo);
   const save = () => {
     if (!f.t || !f.zona || !f.precio || !f.m2) { setErr("Completa título, zona, precio y superficie."); return; }
-    const b = ({ id: Date.now(), op: f.op, tipo: f.tipo, t: f.t, ciudad: f.ciudad, zona: f.zona, precio: +f.precio, mon: f.mon, dorm: vivienda ? +f.dorm : 0, ban: vivienda ? +f.ban : 0, m2: +f.m2, garaje: f.garaje === "Sí", gTipo: f.garaje === "Sí" ? f.gTipo : "", gAparte: f.gAparte === "Sí", gPrecio: f.gAparte === "Sí" ? f.gPrecio : "", mascotas: f.mascotas, mascCond: f.mascotas === "Condicionado" ? f.mascCond : "", condComp: f.condComp, desc: f.desc, amoblado: f.amoblado, dias: 0, est: "Disponible", cap: { n: ME, tel: miTel(), ciu: f.ciudad }, com: f.com || "A definir con el captador", hue: Math.floor(Math.random() * 360), fotos: f.fotos });
+    if (f.tipo === "Otro" && !f.tipoOtro.trim()) { setErr("Escribe qué tipo de inmueble es (por ejemplo: Galpón, Quinta, Habitación)."); return; }
+    const tipoFinal = f.tipo === "Otro" ? f.tipoOtro.trim().charAt(0).toUpperCase() + f.tipoOtro.trim().slice(1) : f.tipo;
+    const b = ({ id: Date.now(), op: f.op, tipo: tipoFinal, t: f.t, ciudad: f.ciudad, zona: f.zona, precio: +f.precio, mon: f.mon, dorm: vivienda ? +f.dorm : 0, ban: vivienda ? +f.ban : 0, m2: +f.m2, garaje: f.garaje === "Sí", gTipo: f.garaje === "Sí" ? f.gTipo : "", gAparte: f.gAparte === "Sí", gPrecio: f.gAparte === "Sí" ? f.gPrecio : "", mascotas: f.mascotas, mascCond: f.mascotas === "Condicionado" ? f.mascCond : "", condComp: f.condComp, desc: f.desc, amoblado: f.amoblado, dias: 0, est: "Disponible", cap: { n: ME, tel: miTel(), ciu: f.ciudad }, com: f.com || "A definir con el captador", hue: Math.floor(Math.random() * 360), fotos: f.fotos });
     onSave(init ? { ...init, ...b, id: init.id, dias: init.dias, est: init.est, hue: init.hue, cap: init.cap } : b);
   };
   return (
     <div className="space-y-4">
       <Fld l="Título del inmueble"><input value={f.t} onChange={(e) => s("t")(e.target.value)} placeholder="Ej. Depto con vista al parque, 2 dormitorios" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
       <Fld l="Operación"><Seg o={["Venta", "Alquiler", "Anticrético", "Preventa"]} v={f.op} set={s("op")} /></Fld>
-      <Fld l="Tipo de inmueble"><Seg o={["Casa", "Departamento", "Terreno", "Oficina", "Comercial", "Otro"]} v={f.tipo} set={s("tipo")} /></Fld>
+      <Fld l="Tipo de inmueble"><Seg o={[...TIPOS_INM, "Otro"]} v={f.tipo} set={s("tipo")} /></Fld>
+      {f.tipo === "Otro" && <Fld l="¿Qué tipo de inmueble es?"><input value={f.tipoOtro} onChange={(e) => s("tipoOtro")(e.target.value)} maxLength={30} placeholder="Ej. Galpón, Quinta, Habitación, Edificio" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} autoFocus /></Fld>}
       <Fld l="Ciudad"><Seg o={Object.keys(ZONAS)} v={f.ciudad} set={(v) => setF({ ...f, ciudad: v, zona: "" })} /></Fld>
       <Fld l="Zona o barrio"><input list="zonas" value={f.zona} onChange={(e) => s("zona")(e.target.value)} placeholder="Escribe la zona exacta" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /><datalist id="zonas">{ZONAS[f.ciudad].map((z) => <option key={z} value={z} />)}</datalist></Fld>
       <div className="grid grid-cols-2 gap-3">
@@ -631,7 +676,7 @@ function Form({ onSave, init }) {
       <Fld l="Condiciones complementarias"><textarea rows={3} value={f.condComp} onChange={(e) => s("condComp")(e.target.value)} placeholder="Garantía, papeles requeridos, tiempo mínimo de contrato…" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
       <Fld l="Descripción completa (copy)"><textarea rows={6} value={f.desc} onChange={(e) => s("desc")(e.target.value)} placeholder="Pega aquí el texto completo del anuncio" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
       <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Toda colaboración con otro agente se divide 50/50. No necesitas indicarlo aquí.</div>
-      <div className="space-y-2"><label className="block w-full py-3 rounded-xl text-sm text-center cursor-pointer" style={{ border: `1px dashed ${C.mute}`, color: C.mute }}>📷 Agregar fotografías<input type="file" accept="image/*" multiple className="hidden" onChange={async (e) => { const u = await subirVarios(e.target.files); setF((x) => ({ ...x, fotos: [...x.fotos, ...u] })); }} /></label>{f.fotos.length > 0 && <div className="flex gap-2 overflow-x-auto">{f.fotos.map((u, i) => <div key={u} className="relative shrink-0"><img src={u} alt="" className="rounded-lg object-cover" style={{ width: 72, height: 72 }} /><button onClick={() => s("fotos")(f.fotos.filter((_, j) => j !== i))} className="absolute top-0 right-0 text-xs px-1 rounded-bl-lg" style={{ background: C.ink, color: "#fff" }}>✕</button></div>)}</div>}</div>
+      <div className="space-y-2"><label className="block w-full py-3 rounded-xl text-sm text-center cursor-pointer" style={{ border: `1px dashed ${C.mute}`, color: C.mute }}>{f.fotos.length >= maxFotos ? `✓ ${f.fotos.length} de ${maxFotos} fotos (máximo de tu plan)` : `📷 Agregar fotografías (${f.fotos.length} de ${maxFotos})`}<input type="file" accept="image/*" multiple className="hidden" disabled={f.fotos.length >= maxFotos} onChange={async (e) => { const libres = maxFotos - f.fotos.length; const sel = Array.from(e.target.files || []); if (sel.length > libres) setErr(`Tu plan permite hasta ${maxFotos} fotos por captación. Se agregarán solo ${Math.max(0, libres)}.`); else setErr(""); e.target.value = ""; const u = await subirVarios(sel.slice(0, Math.max(0, libres))); setF((x) => ({ ...x, fotos: [...x.fotos, ...u].slice(0, Math.max(maxFotos, x.fotos.length)) })); }} /></label>{f.fotos.length > 0 && <div className="flex gap-2 overflow-x-auto">{f.fotos.map((u, i) => <div key={u} className="relative shrink-0"><img src={u} alt="" className="rounded-lg object-cover" style={{ width: 72, height: 72 }} /><button onClick={() => s("fotos")(f.fotos.filter((_, j) => j !== i))} className="absolute top-0 right-0 text-xs px-1 rounded-bl-lg" style={{ background: C.ink, color: "#fff" }}>✕</button></div>)}</div>}</div>
       {err && <div className="text-sm" style={{ color: C.red }}>{err}</div>}
       <button onClick={save} className="w-full py-3 rounded-xl font-semibold text-white" style={{ background: C.grad }}>{init ? "Guardar cambios" : "Publicar captación"}</button>
     </div>
@@ -654,7 +699,7 @@ function Perfil({ acceso, props, setProps, flash, ops, setOps, reports, favs, re
     <div className="p-4 space-y-3">
       <button onClick={() => setNueva(false)} className="text-sm" style={{ color: C.brandDk }}>‹ Volver a mi perfil</button>
       <h2 className="font-semibold text-lg" style={{ color: C.ink }}>{nueva === true ? "Nueva captación" : "Editar captación"}</h2>
-      <Form init={nueva === true ? null : nueva} onSave={(p) => { if (nueva === true) { if (bloq) { flash("Alcanzaste el límite de captaciones de tu plan."); return; } const np = { ...p, creada: Date.now() }; setProps([np, ...props]); onPublicada(np); flash("Captación publicada. Confírmala cada cierto tiempo para mantenerla visible."); } else { setProps(props.map((x) => (x.id === p.id ? p : x))); flash("Cambios guardados."); } setNueva(false); }} />
+      <Form maxFotos={perm.maxFotos || 3} init={nueva === true ? null : nueva} onSave={(p) => { if (nueva === true) { if (bloq) { flash("Alcanzaste el límite de captaciones de tu plan."); return; } const np = { ...p, creada: Date.now() }; setProps([np, ...props]); onPublicada(np); flash("Captación publicada. Confírmala cada cierto tiempo para mantenerla visible."); } else { setProps(props.map((x) => (x.id === p.id ? p : x))); flash("Cambios guardados."); } setNueva(false); }} />
     </div>
   );
   if (cerrando) return <Cierre p={cerrando} props={props} setProps={setProps} ops={ops} setOps={setOps} reviews={reviews} setReviews={setReviews} flash={flash} onDone={() => setCerrando(null)} />;
@@ -978,20 +1023,20 @@ const proximoCorte = (dia) => { let d = new Date(HOY.getFullYear(), HOY.getMonth
 const prorrateo = (precio, dia) => { const fin = proximoCorte(dia); const ini = new Date(fin.getFullYear(), fin.getMonth() - 1, dia); const ciclo = Math.round((fin - ini) / 864e5), resta = Math.round((fin - HOY) / 864e5); return { fin, resta, ciclo, monto: Math.round((precio * resta) / ciclo) }; };
 const PRECIOS = { Inicial: 49, Profesional: 99, Premium: 169 };
 const ORD = { gratuito: 0, Inicial: 1, Profesional: 2, Premium: 3, prueba: 3, admin: 3 };
-const permisos = (n) => { const r = ORD[n] ?? 0; return { nivel: n, ficha: r >= 1, maxCapt: { Inicial: 5, Profesional: 20, Premium: 40 }[n] || null, req: r >= 1, fav: r >= 2, vis: r >= 1, share: r >= 2, report: r >= 1, cierre: r >= 1, filtros: r >= 1, match: r >= 2, matchAv: r >= 2, inversa: r >= 2, cliente: r >= 2, busq: r >= 2, vigDet: r >= 2, hist: r >= 2, seg: r >= 2, recordatorios: r >= 2, stats: r >= 3, informes: r >= 3, auto: r >= 3, soporte: r >= 3 }; };
+const permisos = (n) => { const r = ORD[n] ?? 0; return { nivel: n, ficha: r >= 1, maxCapt: { Inicial: 5, Profesional: 20, Premium: 40 }[n] || null, maxFotos: { Inicial: 3, Profesional: 5 }[n] || (r >= 3 ? 8 : 3), req: r >= 1, fav: r >= 2, vis: r >= 1, share: r >= 2, report: r >= 1, cierre: r >= 1, filtros: r >= 1, match: r >= 2, matchAv: r >= 2, inversa: r >= 2, cliente: r >= 2, busq: r >= 2, vigDet: r >= 2, hist: r >= 2, seg: r >= 2, recordatorios: r >= 2, stats: r >= 3, informes: r >= 3, auto: r >= 3, soporte: r >= 3 }; };
 const CUENTAS = [["admin", "SuperAdmin"], ["prueba", "Prueba"], ["gratuito", "Gratuito"], ["Inicial", "Inicial"], ["Profesional", "Profesional"], ["Premium", "Premium"]];
 const RESUMEN = {
   admin: "Panel de administración: aprobar pagos, configurar cobros y planes, crear y gestionar usuarios, revisar reportes, sugerencias y auditoría.",
   prueba: "48 horas con acceso completo (igual que Premium). Al terminar, la cuenta pasa automáticamente a Gratuito hasta que pague un plan.",
   gratuito: "Solo puede buscar y ver datos básicos de las propiedades. Bloqueado: ficha completa, contacto con captadores, requerimientos, visitas, captaciones, reportes y todo lo de los planes.",
-  Inicial: "Hasta 5 captaciones · ficha completa y WhatsApp con captadores · requerimientos de clientes · agenda de visitas · reportes. Sin favoritos, coincidencias avanzadas ni estadísticas.",
-  Profesional: "Hasta 20 captaciones · todo lo de Inicial · coincidencias ponderadas e inversas · favoritos · compartir por WhatsApp · búsquedas guardadas · seguimiento · recordatorios. Sin estadísticas, informes ni automatizaciones.",
-  Premium: "Hasta 40 captaciones · todo lo de Profesional · estadísticas · informes con exportación CSV · automatizaciones · soporte prioritario.",
+  Inicial: "Hasta 5 captaciones · 3 fotos por captación · ficha completa y WhatsApp con captadores · requerimientos de clientes · agenda de visitas · reportes. Sin favoritos, coincidencias avanzadas ni estadísticas.",
+  Profesional: "Hasta 20 captaciones · 5 fotos por captación · todo lo de Inicial · coincidencias ponderadas e inversas · favoritos · compartir por WhatsApp · búsquedas guardadas · seguimiento · recordatorios. Sin estadísticas, informes ni automatizaciones.",
+  Premium: "Hasta 40 captaciones · 8 fotos por captación · confirmaciones de visita programadas por WhatsApp · todo lo de Profesional · estadísticas · informes con exportación CSV · automatizaciones · soporte prioritario.",
 };
 const PLAN_BEN = {
-  Inicial: ["Hasta 5 captaciones activas", "Ficha completa y contacto por WhatsApp con captadores", "Registro de requerimientos de clientes", "Agenda de visitas", "Reportes y consultas"],
-  Profesional: ["Hasta 20 captaciones activas", "Todo lo de Inicial", "Coincidencias ponderadas con explicación y coincidencia inversa", "Favoritos y guardar para clientes", "Compartir propiedades por WhatsApp", "Búsquedas guardadas", "Seguimiento de oportunidades", "Recordatorios de agenda", "Historial de cierres y vigencia detallada"],
-  Premium: ["Hasta 40 captaciones activas", "Todo lo de Profesional", "Estadísticas de captaciones y cierres", "Informes avanzados con exportación CSV", "Automatizaciones configurables", "Soporte prioritario"],
+  Inicial: ["Hasta 5 captaciones activas", "Hasta 3 fotos por captación", "Ficha completa y contacto por WhatsApp con captadores", "Registro de requerimientos de clientes", "Agenda de visitas", "Reportes y consultas"],
+  Profesional: ["Hasta 20 captaciones activas", "Hasta 5 fotos por captación", "Todo lo de Inicial", "Coincidencias ponderadas con explicación y coincidencia inversa", "Favoritos y guardar para clientes", "Compartir propiedades por WhatsApp", "Búsquedas guardadas", "Seguimiento de oportunidades", "Recordatorios de agenda", "Historial de cierres y vigencia detallada"],
+  Premium: ["Hasta 40 captaciones activas", "Hasta 8 fotos por captación", "Confirmaciones de visita programadas por WhatsApp", "Todo lo de Profesional", "Estadísticas de captaciones y cierres", "Informes avanzados con exportación CSV", "Automatizaciones configurables", "Soporte prioritario"],
 };
 const TIPOS_PAGO = { alta: "Primer pago (prorrateo)", renov: "Renovación", mejora: "Mejora de plan" };
 const ETAPAS = ["Nuevo", "Contactado", "Visita agendada", "Negociación", "Cerrado ganado", "Perdido"];
@@ -1008,6 +1053,70 @@ const REP_TIPOS = {
   "Soporte o consulta": ["Tengo una duda", "Quiero una función nueva", "Otro"],
 };
 const descargarCsv = (nombre, filas) => { const csv = filas.map((r) => r.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(",")).join("\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = nombre; a.click(); };
+// ── WhatsApp ──
+const waNum = (t) => { let d = String(t || "").replace(/\D/g, ""); if (d.length === 8) d = "591" + d; return d; };
+const waLink = (tel, txt) => `https://wa.me/${waNum(tel)}?text=${encodeURIComponent(txt || "")}`;
+const MOMENTOS_WA = [[0, "Al agendar"], [1440, "1 día antes"], [120, "2 horas antes"], [30, "30 min antes"]];
+const plantillaWa = (k, d) => k === "cli"
+  ? `Hola ${d.cl} 👋, te confirmo la visita a *${d.pt}*${d.zona ? ` (${d.zona})` : ""} el ${d.fecha} a las ${d.h}. ${d.ag === d.yo ? "Te atenderé personalmente." : `Te atenderá ${d.ag}.`} ¿Me confirmas tu asistencia? — ${d.yo}, Vortex`
+  : `Hola ${d.ag} 👋, te confirmo la visita a *${d.pt}* el ${d.fecha} a las ${d.h} con mi cliente ${d.cl}. ¿Me confirmas? — ${d.yo}, Vortex`;
+const momentoWa = (x) => (x.wa && x.wa.cuando ? new Date(`${x.f}T${x.h}:00`).getTime() - x.wa.cuando * 6e4 : 0);
+// Mensajes programados que ya llegó la hora de enviar (solo de visitas que agendé yo)
+const pendWa = (visitas) => {
+  const ahora = Date.now(), out = [];
+  visitas.filter((x) => x.wa && (x.de === ME || !x.de) && !["Cancelada", "Realizada"].includes(x.est)).forEach((x) => {
+    const fin = new Date(`${x.f}T${x.h}:00`).getTime() + 36e5;
+    if (ahora < momentoWa(x) || ahora > fin) return;
+    ["cli", "ag"].forEach((k) => { const m = x.wa[k]; if (m && !m.env) out.push({ x, k, m }); });
+  });
+  return out;
+};
+// ── Fotos: descargar o enviar ──
+const nombreArchivo = (t) => (t || "foto").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 40).toLowerCase() || "foto";
+const bajarBlob = async (u) => { const r = await fetch(u, { mode: "cors" }); if (!r.ok) throw new Error("descarga"); return r.blob(); };
+async function descargarFotos(urls, base, desde = 1) {
+  for (let i = 0; i < urls.length; i++) {
+    try {
+      const b = await bajarBlob(urls[i]);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(b); a.download = `${base}-${desde + i}.${(b.type.split("/")[1] || "jpg").replace("jpeg", "jpg")}`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      await new Promise((r) => setTimeout(r, 400));
+    } catch { window.open(urls[i], "_blank"); }
+  }
+}
+async function compartirFotos(urls, base, texto) {
+  try {
+    const files = await Promise.all(urls.map(async (u, i) => { const b = await bajarBlob(u); return new File([b], `${base}-${i + 1}.jpg`, { type: b.type || "image/jpeg" }); }));
+    if (navigator.canShare && navigator.canShare({ files })) { await navigator.share({ files, text: texto }); return true; }
+  } catch (e) { if (e && e.name === "AbortError") return true; }
+  return false;
+}
+function Galeria({ fotos, titulo, texto }) {
+  const [i, setI] = useState(0);
+  const [ocup, setOcup] = useState("");
+  const base = nombreArchivo(titulo);
+  const n = fotos.length, j = Math.min(i, n - 1);
+  const compartible = typeof navigator !== "undefined" && !!navigator.share;
+  const btn = { background: "rgba(16,20,44,.6)", color: "#fff" };
+  return (
+    <div className="space-y-2">
+      <div className="relative rounded-2xl overflow-hidden" style={{ height: 230, background: C.line }}>
+        <img src={fotos[j]} alt={`Foto ${j + 1}`} className="w-full h-full object-cover" />
+        {n > 1 && <button onClick={() => setI((j - 1 + n) % n)} className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full text-lg" style={btn}>‹</button>}
+        {n > 1 && <button onClick={() => setI((j + 1) % n)} className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full text-lg" style={btn}>›</button>}
+        <button onClick={() => descargarFotos([fotos[j]], base, j + 1)} title="Descargar esta foto" className="absolute top-2 right-2 px-2.5 py-1 rounded-lg text-xs" style={btn}>⬇ Esta foto</button>
+        <span className="absolute bottom-2 right-2 text-xs px-2 py-0.5 rounded-md" style={btn}>{j + 1} / {n}</span>
+      </div>
+      {n > 1 && <div className="flex gap-1.5 overflow-x-auto">{fotos.map((u, k) => <button key={u} onClick={() => setI(k)} className="shrink-0 rounded-lg overflow-hidden" style={{ width: 52, height: 52, border: `2px solid ${k === j ? C.lila : "transparent"}` }}><img src={u} alt="" className="w-full h-full object-cover" /></button>)}</div>}
+      <div className={`grid gap-2 ${compartible ? "grid-cols-2" : "grid-cols-1"}`}>
+        <button disabled={!!ocup} onClick={async () => { setOcup("d"); await descargarFotos(fotos, base); setOcup(""); }} className="py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.brandSoft, color: C.brandDk }}>{ocup === "d" ? "Descargando…" : `⬇ Descargar ${n > 1 ? `las ${n} fotos` : "la foto"}`}</button>
+        {compartible && <button disabled={!!ocup} onClick={async () => { setOcup("c"); const ok = await compartirFotos(fotos, base, texto); if (!ok) await descargarFotos(fotos, base); setOcup(""); }} className="py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.lilaSoft, color: C.lilaDk }}>{ocup === "c" ? "Preparando…" : "📤 Enviar fotos"}</button>}
+      </div>
+    </div>
+  );
+}
 const tBasico = (p) => `${p.tipo} en ${p.zona}, ${p.ciudad}`;
 const Lock = ({ t, plan, go }) => <div className="rounded-2xl p-4 text-center space-y-2" style={{ background: C.lilaSoft }}><div className="text-2xl">🔒</div><div className="text-sm font-semibold" style={{ color: C.lilaDk }}>{t}</div><div className="text-xs" style={{ color: C.mute }}>Disponible desde el plan {plan}.</div><button onClick={go} className="px-4 py-2 rounded-xl text-sm font-semibold text-white" style={{ background: C.lila }}>Ver planes</button></div>;
 const precioDe = (cfg, n) => (cfg.planes.find((p) => p.nombre === n) || { precio: 0 }).precio;
