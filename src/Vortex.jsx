@@ -104,7 +104,7 @@ function Detalle(a) {
   const ant = (a.users.find((x) => x.n === a.p.cap.n) || { ant: 0 }).ant;
   return DetalleInner({ ...a, ant });
 }
-function DetalleInner({ p, acceso, onBack, onVisit, onReport, ant, rate, onProfile, favs, toggleFav, clientes, onSub, perm }) {
+function DetalleInner({ p, acceso, onBack, onVisit, onReport, ant, rate, onProfile, favs, toggleFav, clientes, onSub, perm, flash }) {
   const [share, setShare] = useState(false);
   const v = vigencia(p, perm.vigDet);
   const locked = acceso === "vencido";
@@ -159,11 +159,17 @@ function DetalleInner({ p, acceso, onBack, onVisit, onReport, ant, rate, onProfi
             <button onClick={() => window.open(`https://wa.me/${p.cap.tel.replace(/\D/g, "")}?text=${encodeURIComponent("Hola " + p.cap.n + ", vi tu captación en Vortex: " + p.t)}`, "_blank")} className="py-3 rounded-xl font-semibold text-white" style={{ background: "#1FA855" }}>Escribir por WhatsApp</button>
             {perm.share && <button onClick={() => setShare(!share)} className="py-3 rounded-xl font-semibold" style={{ background: C.card, border: `1px solid ${C.ink}`, color: C.ink }}>Compartir con cliente</button>}
           </div>
-          {share && (
-            <div className="rounded-xl p-3 text-sm whitespace-pre-line" style={{ background: "#E7F6DD", color: "#1B3A12" }}>{msg}
-              <button className="block mt-2 w-full py-2 rounded-lg text-white font-semibold" style={{ background: "#1FA855" }}>Enviar por WhatsApp</button>
-            </div>
-          )}
+          {share && (() => { const txt = textoCopy(p, miTel()); return (
+            <div className="rounded-xl p-3 space-y-2" style={{ background: "#E7F6DD", color: "#1B3A12" }}>
+              <div className="text-xs font-semibold">Así le llegará a tu cliente (con tu WhatsApp, no el del captador):</div>
+              <div className="text-sm whitespace-pre-line rounded-lg p-2.5" style={{ background: "#fff", maxHeight: 260, overflowY: "auto" }}>{txt}</div>
+              {waNum(miTel()).length < 8 && <div className="text-xs" style={{ color: C.amber }}>⚠️ Agrega tu WhatsApp en Perfil → Mis datos para que el mensaje incluya tu enlace de contacto.</div>}
+              <div className="grid grid-cols-2 gap-2">
+                <a href={`https://wa.me/?text=${encodeURIComponent(txt)}`} target="_blank" rel="noreferrer" className="block text-center py-2 rounded-lg text-white font-semibold text-sm" style={{ background: "#1FA855" }}>Enviar por WhatsApp</a>
+                <button onClick={async () => { const ok = await copiarTexto(txt); flash && flash(ok ? "Copy copiado. Pégalo en el chat de tu cliente." : "No se pudo copiar automáticamente."); }} className="py-2 rounded-lg font-semibold text-sm" style={{ background: "#fff", color: "#1B3A12" }}>📋 Copiar copy</button>
+              </div>
+              {p.fotos && p.fotos.length > 0 && <div className="text-xs">Las fotos las envías con el botón “📤 Enviar fotos” de arriba.</div>}
+            </div>); })()}
           {perm.report && <button onClick={() => onReport(p)} className="w-full text-xs underline" style={{ color: C.mute }}>Reportar a este agente</button>}
           <button onClick={() => onVisit(p)} className="w-full py-3 rounded-xl font-semibold text-white" style={{ background: C.lila }}>Agendar visita</button>
         </>
@@ -288,7 +294,7 @@ function Visitas({ visitas, setVisitas, props, clientes, flash, notify, users, p
   const [vm, setVm] = useState({ y: HOY.getFullYear(), m: HOY.getMonth() });
   const [sel, setSel] = useState(isoOf(HOY));
   const [nuevo, setNuevo] = useState(false);
-  const [v, setV] = useState({ pid: "", cid: "", h: "10:00", modo: "Captador de la propiedad", otro: "", cotro: "", tel: "", agTel: "", waCli: true, waAg: true, waCuando: 1440, txtCli: null, txtAg: null });
+  const [v, setV] = useState({ pid: "", cid: "", h: "10:00", modo: "Captador de la propiedad", otro: "", cotro: "", ptxt: "", tel: "", agTel: "", waCli: true, waAg: true, waCuando: 1440, txtCli: null, txtAg: null });
   const next = { Pendiente: "Confirmada", Confirmada: "Realizada", Realizada: "Pendiente", Cancelada: "Pendiente", Reprogramada: "Confirmada" };
   const col = { Pendiente: [C.amber, C.amberSoft], Confirmada: [C.brandDk, C.brandSoft], Realizada: [C.ok, C.okSoft], Cancelada: [C.red, C.redSoft], Reprogramada: [C.amber, C.amberSoft] };
   const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
@@ -302,34 +308,35 @@ function Visitas({ visitas, setVisitas, props, clientes, flash, notify, users, p
   const delDia = visitas.filter((x) => x.f === sel).sort((a, b) => a.h.localeCompare(b.h));
   const abiertas = props.filter((p) => !["Cerrado", "Caído"].includes(p.est || "Disponible"));
   const prop = abiertas.find((p) => String(p.id) === v.pid);
+  const manual = v.pid === "__otra";
   const cli = clientes.find((c) => String(c.id) === v.cid);
   const cOtro = v.cid === "__otro";
   const cNombre = cOtro ? v.cotro.trim() : cli ? cli.n : "";
-  const otro = v.modo !== "Captador de la propiedad";
-  const agNombre = otro ? v.otro.trim() : prop ? prop.cap.n : "";
+  const otro = v.modo === "Otro agente";
+  const agNombre = otro ? v.otro.trim() : manual ? ME : prop ? prop.cap.n : "";
   const agUser = users.find((u) => u.n === agNombre);
   const agTelAuto = !otro && prop ? prop.cap.tel || "" : (agUser && agUser.perfil && agUser.perfil.tel) || "";
   const telAg = v.agTel.trim() || agTelAuto;
   const telCli = v.tel.trim() || (cli && cli.tel) || "";
   const esPremium = !!perm.auto;
-  const datosMsg = { cl: cNombre || "cliente", pt: prop ? prop.t : "la propiedad", zona: prop ? `${prop.zona}, ${prop.ciudad}` : "", fecha: `${sd} de ${MESES[sm - 1].toLowerCase()}`, h: v.h || "10:00", ag: agNombre || "el agente", yo: ME };
+  const datosMsg = { cl: cNombre || "cliente", pt: prop ? prop.t : manual && v.ptxt.trim() ? v.ptxt.trim() : "la propiedad", zona: prop ? `${prop.zona}, ${prop.ciudad}` : "", fecha: `${sd} de ${MESES[sm - 1].toLowerCase()}`, h: v.h || "10:00", ag: agNombre || "el agente", yo: ME };
   const txtCli = v.txtCli ?? plantillaWa("cli", datosMsg);
   const txtAg = v.txtAg ?? plantillaWa("ag", datosMsg);
   const conAg = !!agNombre && agNombre !== ME;
   const marcarWa = (id, k) => setVisitas((vs) => vs.map((y) => (y.id === id ? { ...y, wa: { ...y.wa, [k]: { ...y.wa[k], env: true, envF: Date.now() } } } : y)));
   const porEnviar = pendWa(visitas);
   const save = () => {
-    if (!prop || !cNombre) { flash("Elige la propiedad y el cliente, o escribe su nombre."); return; }
+    if ((!prop && !(manual && v.ptxt.trim())) || !cNombre) { flash(manual ? "Escribe la descripción o dirección de la propiedad y el nombre del cliente." : "Elige la propiedad y el cliente, o escribe su nombre."); return; }
     if (otro && !v.otro.trim()) { flash("Escribe el nombre del agente."); return; }
     if (esPremium && v.waCli && waNum(telCli).length < 8) { flash("Escribe el WhatsApp del cliente o desactiva el mensaje al cliente."); return; }
     if (esPremium && v.waAg && conAg && waNum(telAg).length < 8) { flash("Escribe el WhatsApp del agente o desactiva el mensaje al agente."); return; }
     const ag = agNombre;
     const wa = esPremium && (v.waCli || (v.waAg && conAg)) ? { cuando: v.waCuando, cli: v.waCli ? { tel: telCli, txt: txtCli, env: false } : null, ag: v.waAg && conAg ? { tel: telAg, txt: txtAg, env: false } : null } : null;
-    setVisitas([...visitas, { id: Date.now(), p: prop.id, cl: cNombre, clTel: telCli, f: sel, h: v.h || "10:00", ag, agTel: telAg, de: ME, rec: perm.recordatorios ? autos.recDef || 0 : 0, est: "Pendiente", ...(wa ? { wa } : {}) }]);
-    notify("Visita agendada", `${cNombre} · ${prop.t} · ${sd} ${MESES[sm - 1].toLowerCase()}, ${v.h}`, { tab: "visitas" });
+    setVisitas([...visitas, { id: Date.now(), p: prop ? prop.id : null, ...(manual ? { pTxt: v.ptxt.trim() } : {}), cl: cNombre, clTel: telCli, f: sel, h: v.h || "10:00", ag, agTel: telAg, de: ME, rec: perm.recordatorios ? autos.recDef || 0 : 0, est: "Pendiente", ...(wa ? { wa } : {}) }]);
+    notify("Visita agendada", `${cNombre} · ${prop ? prop.t : v.ptxt.trim()} · ${sd} ${MESES[sm - 1].toLowerCase()}, ${v.h}`, { tab: "visitas" });
     flash(ag === ME ? "Visita agendada." : reg(ag) ? `Visita agendada y también en el calendario de ${ag}. Le llegó una notificación.` : `Visita agendada. ${ag} no está en la app: avísale por WhatsApp.`);
     if (wa) flash(v.waCuando === 0 ? "Visita agendada. Los mensajes de WhatsApp están listos arriba para enviar." : `Visita agendada. Los mensajes de WhatsApp quedan programados (${MOMENTOS_WA.find((m) => m[0] === v.waCuando)[1].toLowerCase()}).`);
-    setNuevo(false); setV({ ...v, pid: "", cid: "", otro: "", cotro: "", tel: "", agTel: "", txtCli: null, txtAg: null });
+    setNuevo(false); setV({ ...v, pid: "", ptxt: "", modo: "Captador de la propiedad", cid: "", otro: "", cotro: "", tel: "", agTel: "", txtCli: null, txtAg: null });
   };
   return (
     <div className="p-4 space-y-3">
@@ -366,14 +373,15 @@ function Visitas({ visitas, setVisitas, props, clientes, flash, notify, users, p
       <div className="flex items-center justify-between"><div className="font-semibold" style={{ color: C.ink }}>{sd} de {MESES[sm - 1].toLowerCase()} de {sy}</div><button onClick={() => setNuevo(!nuevo)} className="text-sm px-3 py-1.5 rounded-full text-white" style={{ background: C.grad }}>{nuevo ? "Cerrar" : "+ Registrar visita"}</button></div>
       {nuevo && (
         <div className="rounded-2xl p-3 space-y-3" style={{ background: C.lilaSoft }}>
-          <Fld l="Propiedad"><select value={v.pid} onChange={(e) => setV({ ...v, pid: e.target.value })} className="w-full rounded-xl px-3 py-2 text-sm" style={inp}><option value="">Elige una propiedad</option>{abiertas.map((p) => <option key={p.id} value={p.id}>{p.t}</option>)}</select></Fld>
+          <Fld l="Propiedad"><select value={v.pid} onChange={(e) => { const pid = e.target.value; setV({ ...v, pid, modo: pid === "__otra" ? (v.modo === "Otro agente" ? "Otro agente" : "La atiendo yo") : v.modo === "La atiendo yo" ? "Captador de la propiedad" : v.modo }); }} className="w-full rounded-xl px-3 py-2 text-sm" style={inp}><option value="">Elige una propiedad</option>{abiertas.map((p) => <option key={p.id} value={p.id}>{p.t}</option>)}<option value="__otra">✏️ Otra propiedad (no está en Vortex)</option></select></Fld>
+          {manual && <Fld l="Descripción o dirección de la propiedad"><textarea rows={2} value={v.ptxt} onChange={(e) => setV({ ...v, ptxt: e.target.value })} placeholder="Ej. Casa 3 dorm. en Av. América #123, zona Queru Queru" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>}
           <Fld l="Cliente"><select value={v.cid} onChange={(e) => setV({ ...v, cid: e.target.value })} className="w-full rounded-xl px-3 py-2 text-sm" style={inp}><option value="">Elige un cliente</option>{clientes.map((c) => <option key={c.id} value={c.id}>{c.n}</option>)}<option value="__otro">➕ Otro cliente (no registrado)</option></select></Fld>
           {cOtro && <Fld l="Nombre del cliente"><input value={v.cotro} onChange={(e) => setV({ ...v, cotro: e.target.value })} placeholder="Escribe el nombre del cliente" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>}
           {(cOtro || (esPremium && cli)) && <Fld l={`WhatsApp del cliente${esPremium ? "" : " (opcional)"}`}><input value={v.tel || (cli && cli.tel) || ""} onChange={(e) => setV({ ...v, tel: e.target.value })} inputMode="tel" placeholder="Ej. 70012345" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>}
           <Fld l="Hora"><input type="time" value={v.h} onChange={(e) => setV({ ...v, h: e.target.value })} className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
-          <Fld l="Agente que atiende la visita"><Seg o={["Captador de la propiedad", "Otro agente"]} v={v.modo} set={(m) => setV({ ...v, modo: m })} /></Fld>
+          <Fld l="Agente que atiende la visita"><Seg o={[manual ? "La atiendo yo" : "Captador de la propiedad", "Otro agente"]} v={v.modo} set={(m) => setV({ ...v, modo: m })} /></Fld>
           {otro ? <Fld l="Nombre del agente"><input value={v.otro} onChange={(e) => setV({ ...v, otro: e.target.value })} placeholder="Escribe su nombre (puede no estar en la app)" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
-            : prop && <div className="text-xs" style={{ color: C.lilaDk }}>Agente: {prop.cap.n === ME ? "tú (captador)" : prop.cap.n + ", recibirá una notificación"}</div>}
+            : prop ? <div className="text-xs" style={{ color: C.lilaDk }}>Agente: {prop.cap.n === ME ? "tú (captador)" : prop.cap.n + ", recibirá una notificación"}</div> : manual ? <div className="text-xs" style={{ color: C.lilaDk }}>Agente: tú</div> : null}
           {conAg && (!agTelAuto || otro) && <Fld l={`WhatsApp de ${agNombre || "el agente"}${esPremium ? "" : " (opcional)"}`}><input value={v.agTel || agTelAuto} onChange={(e) => setV({ ...v, agTel: e.target.value })} inputMode="tel" placeholder="Ej. 70012345" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>}
           {esPremium ? <div className="rounded-xl p-3 space-y-2.5" style={{ background: "#fff", border: "1.5px solid #25D366" }}>
             <div className="text-sm font-semibold" style={{ color: "#0F7A3D" }}>📲 Confirmación por WhatsApp</div>
@@ -394,7 +402,7 @@ function Visitas({ visitas, setVisitas, props, clientes, flash, notify, users, p
         return (
           <div key={x.id} className="rounded-2xl p-3 space-y-1.5" style={{ background: C.card, border: `1px solid ${C.line}` }}>
             <div className="flex items-center justify-between"><span className="font-semibold text-sm" style={{ color: C.ink }}>{x.h}</span><span className="text-xs px-2 py-0.5 rounded-md" style={{ background: col[x.est][1], color: col[x.est][0] }}>{x.est}</span></div>
-            <div className="text-sm" style={{ color: C.ink }}>{p ? p.t : "Propiedad"}</div>
+            <div className="text-sm" style={{ color: C.ink }}>{p ? p.t : x.pTxt ? <>✏️ {x.pTxt}</> : "Propiedad"}</div>
             <div className="text-xs" style={{ color: C.mute }}>Cliente: {x.cl}{x.clTel ? ` (${x.clTel})` : ""} · Agente: {x.ag}</div>
             {x.wa && (x.de === ME || !x.de) && ["cli", "ag"].filter((k) => x.wa[k]).map((k) => <div key={k} className="flex items-center justify-between gap-2 text-xs rounded-lg px-2 py-1.5" style={{ background: "#E7F8EE", color: "#0F7A3D" }}><span>📲 {k === "cli" ? "Cliente" : x.ag.split(" ")[0]}: {x.wa[k].env ? "✓ mensaje enviado" : `programado · ${(MOMENTOS_WA.find((m) => m[0] === x.wa.cuando) || [0, ""])[1].toLowerCase()}`}</span><a href={waLink(x.wa[k].tel, x.wa[k].txt)} target="_blank" rel="noreferrer" onClick={() => marcarWa(x.id, k)} className="underline font-semibold shrink-0">{x.wa[k].env ? "Reenviar" : "Enviar ahora"}</a></div>)}
             {x.de && x.de !== ME ? <div className="text-xs" style={{ color: C.lilaDk }}>📥 Agendada por {x.de} directamente en tu calendario</div> : x.ag === ME ? null : reg(x.ag) ? <div className="text-xs" style={{ color: C.ok }}>✓ También agendada en el calendario de {x.ag}</div> : <div className="text-xs" style={{ color: C.amber }}>⚠️ {x.ag} no está en la app · <a href={waLink(x.agTel, `Hola ${x.ag}, te confirmo la visita del ${fechaL(isoD(x.f))} a las ${x.h} con mi cliente ${x.cl}${p ? " en " + p.t : ""}. — ${ME}`)} target="_blank" rel="noreferrer" className="underline">Avisar por WhatsApp</a></div>}
@@ -411,10 +419,10 @@ function Visitas({ visitas, setVisitas, props, clientes, flash, notify, users, p
   );
 }
 
-function Alertas({ go, notifs, visitas, props, clientes, perm, autos }) {
+function Alertas({ go, notifs, visitas, props, clientes, perm, autos, goSub }) {
   const ahora = new Date();
   const extra = [];
-  if (perm.recordatorios) visitas.filter((v) => v.rec && !["Cancelada", "Realizada"].includes(v.est)).forEach((v) => { const dt = new Date(`${v.f}T${v.h}:00`); if (dt > ahora && dt - v.rec * 6e4 <= ahora) { const pp = props.find((q) => q.id === v.p); extra.push({ id: "r" + v.id, ic: "⏰", t: `Recordatorio: visita ${v.f} a las ${v.h}`, s: `${v.cl}${pp ? " · " + pp.t : ""}`, to: { tab: "visitas" }, h: "Recordatorio de agenda" }); } });
+  if (perm.recordatorios) visitas.filter((v) => v.rec && !["Cancelada", "Realizada"].includes(v.est)).forEach((v) => { const dt = new Date(`${v.f}T${v.h}:00`); if (dt > ahora && dt - v.rec * 6e4 <= ahora) { const pp = props.find((q) => q.id === v.p); extra.push({ id: "r" + v.id, ic: "⏰", t: `Recordatorio: visita ${v.f} a las ${v.h}`, s: `${v.cl}${pp ? " · " + pp.t : v.pTxt ? " · " + v.pTxt : ""}`, to: { tab: "visitas" }, h: "Recordatorio de agenda" }); } });
   pendWa(visitas).forEach(({ x, k }) => extra.push({ id: `w${x.id}${k}`, ic: "📲", t: `Enviar confirmación por WhatsApp a ${k === "cli" ? x.cl : x.ag}`, s: `Visita ${fechaL(isoD(x.f))}, ${x.h} · toca para abrir Visitas y enviarlo`, to: { tab: "visitas" }, h: "Mensaje programado" }));
   if (perm.auto) {
     const act = props.filter((p) => p.cap.n === ME && ["Disponible", "Reservado"].includes(p.est || "Disponible"));
@@ -425,12 +433,14 @@ function Alertas({ go, notifs, visitas, props, clientes, perm, autos }) {
   return (
     <div className="p-4 space-y-2">
       <h2 className="font-semibold text-lg" style={{ color: C.ink }}>Notificaciones</h2>
-      {[...extra, ...notifs].map((n) => (
-        <button key={n.id} onClick={() => go(n.to)} className="w-full text-left rounded-2xl p-3 flex gap-3" style={{ background: C.card, border: `1px solid ${C.line}` }}>
-          <span className="text-xl">{n.ic}</span>
-          <div className="flex-1"><div className="text-sm font-semibold" style={{ color: C.ink }}>{n.t}</div><div className="text-xs" style={{ color: C.mute }}>{n.s}</div><div className="text-xs mt-1" style={{ color: C.mute }}>{n.h}</div></div>
-        </button>
-      ))}
+      {[...extra, ...notifs].map((n) => { const bloq = n.pro && !perm.auto; return (
+        <button key={n.id} onClick={() => (bloq ? goSub && goSub() : go(n.to))} className="w-full text-left rounded-2xl p-3 flex gap-3" style={{ background: C.card, border: `1px solid ${bloq ? C.lilaSoft : C.line}` }}>
+          <span className="text-xl">{bloq ? "🔒" : n.ic}</span>
+          <div className="flex-1 min-w-0"><div className="text-sm font-semibold" style={{ color: C.ink }}>{bloq ? n.tPro || n.t : n.t}</div>
+            {bloq ? <><div className="text-xs select-none" style={{ color: C.mute, filter: "blur(4px)" }}>{n.s}</div><div className="text-xs mt-1 font-semibold" style={{ color: C.lilaDk }}>Mejora a Premium para ver el detalle completo ›</div></>
+              : <div className="text-xs" style={{ color: C.mute }}>{n.s}</div>}
+            <div className="text-xs mt-1" style={{ color: C.mute }}>{n.h}</div></div>
+        </button>); })}
     </div>
   );
 }
@@ -501,17 +511,24 @@ function Reportar({ p, onClose, onSend }) {
   const [m, setM] = useState("");
   const [d, setD] = useState("");
   const [fo, setFo] = useState([]);
-  const ok = m && d.trim().length >= 20;
+  const [intento, setIntento] = useState(false);
+  const faltan = d.trim().length < 20 ? 20 - d.trim().length : 0;
+  const ok = m && !faltan;
   return (
-    <div className="absolute inset-0 z-10 flex items-end" style={{ background: "rgba(30,27,58,.55)" }}>
-      <div className="w-full rounded-t-3xl p-4 space-y-3" style={{ background: C.card }}>
-        <div className="flex justify-between items-center"><div className="font-semibold" style={{ color: C.ink }}>Reportar a {p.cap.n}</div><button onClick={onClose} style={{ color: C.mute }}>Cerrar</button></div>
+    <div className="absolute inset-0 z-40 flex flex-col justify-end" style={{ background: "rgba(30,27,58,.55)" }} onClick={onClose}>
+      <div className="w-full rounded-t-3xl p-4 space-y-3 overflow-y-auto" style={{ background: C.card, maxHeight: "92%" }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-center sticky top-0 -mx-4 -mt-4 px-4 pt-4 pb-2" style={{ background: C.card }}><button onClick={onClose} className="text-sm" style={{ color: C.brandDk }}>‹ Volver</button><div className="font-semibold" style={{ color: C.ink }}>Reportar a {p.cap.n}</div><button onClick={onClose} className="text-xl leading-none" style={{ color: C.mute }}>✕</button></div>
+        <div className="text-xs font-medium" style={{ color: C.mute }}>1. Elige el motivo</div>
         <Seg o={MOTIVOS} v={m} set={setM} />
+        <div className="text-xs font-medium" style={{ color: C.mute }}>2. Cuenta qué pasó</div>
         <textarea rows={4} value={d} onChange={(e) => setD(e.target.value)} placeholder="Cuenta qué pasó, con fechas y datos concretos (mínimo 20 caracteres)" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} />
+        {faltan > 0 && d.length > 0 && <div className="text-xs" style={{ color: C.mute }}>Faltan {faltan} caracteres.</div>}
         <label className="block w-full py-2.5 rounded-xl text-sm text-center cursor-pointer" style={{ border: `1px dashed ${C.mute}`, color: C.mute }}>📎 Subir pruebas (capturas de chat, fotos)<input type="file" accept="image/*" multiple className="hidden" onChange={async (e) => { const u = await subirVarios(e.target.files); setFo((a) => [...a, ...u]); }} /></label>
         {fo.length > 0 && <div className="flex gap-2 overflow-x-auto">{fo.map((u, i) => <div key={u} className="relative shrink-0"><img src={u} alt="Prueba" className="rounded-lg object-cover" style={{ width: 64, height: 64 }} /><button onClick={() => setFo(fo.filter((_, j) => j !== i))} className="absolute top-0 right-0 text-xs px-1 rounded-bl-lg" style={{ background: `linear-gradient(135deg, ${C.lila}, ${C.brand})`, color: "#fff" }}>✕</button></div>)}</div>}
         <div className="text-xs" style={{ color: C.mute }}>Solo el equipo administrador ve este reporte ni sus pruebas. No se publica ni afecta el perfil del agente hasta que sea revisado y confirmado. Los reportes falsos pueden sancionarse.</div>
-        <button disabled={!ok} onClick={() => onSend({ id: Date.now(), tipo: "Agente", ag: p.cap.n, m, det: d, de: ME, pruebas: fo, prio: false, est: "Pendiente" })} className="w-full py-3 rounded-xl font-semibold text-white" style={{ background: ok ? C.lila : C.mute }}>Enviar reporte</button>
+        {intento && !ok && <div className="text-xs rounded-lg px-3 py-2" style={{ background: C.redSoft, color: C.red }}>{!m ? "Elige el motivo del reporte." : `Describe lo que pasó (faltan ${faltan} caracteres).`}</div>}
+        <button onClick={() => { setIntento(true); if (ok) onSend({ id: Date.now(), tipo: "Agente", ag: p.cap.n, m, det: d.trim(), de: ME, pruebas: fo, prio: false, est: "Pendiente" }); }} className="w-full py-3 rounded-xl font-semibold text-white" style={{ background: ok ? C.lila : C.mute }}>Enviar reporte</button>
+        <button onClick={onClose} className="w-full py-2.5 rounded-xl text-sm" style={{ border: `1px solid ${C.line}`, color: C.mute }}>Cancelar</button>
       </div>
     </div>
   );
@@ -732,12 +749,18 @@ function Perfil({ acceso, props, setProps, flash, ops, setOps, reports, favs, re
         const v = vigencia(p), est = p.est || "Disponible";
         return (
           <div key={p.id} className="rounded-2xl p-3 space-y-2" style={{ background: C.card, border: `1px solid ${C.line}` }}>
-            <div className="flex justify-between gap-2"><div className="font-semibold text-sm" style={{ color: C.ink }}>{p.t} <button disabled={vencido} onClick={() => setNueva(p)} className="text-xs underline" style={{ color: C.brandDk }}>Editar</button></div><span style={{ ...serif, color: C.ink, fontWeight: 700 }}>{money(p)}</span></div>
-            <div className="flex items-center justify-between"><span className="text-xs" style={{ color: C.mute }}>{p.op} · {p.zona}, {p.ciudad}</span><Badge v={v} /></div>
+            <div className="flex gap-3">
+              {p.fotos && p.fotos[0] ? <img src={p.fotos[0]} alt={p.t} className="rounded-xl object-cover shrink-0" style={{ width: 76, height: 76 }} /> : <div className="shrink-0 rounded-xl flex items-center justify-center text-xs text-center" style={{ width: 76, height: 76, background: `hsl(${p.hue || 260} 45% 90%)`, color: C.mute }}>Sin foto</div>}
+              <div className="flex-1 min-w-0 space-y-1">
+                <div className="flex justify-between gap-2"><div className="font-semibold text-sm" style={{ color: C.ink }}>{p.t} <button disabled={vencido} onClick={() => setNueva(p)} className="text-xs underline" style={{ color: C.brandDk }}>Editar</button></div><span style={{ ...serif, color: C.ink, fontWeight: 700 }}>{money(p)}</span></div>
+                <div className="text-xs" style={{ color: C.mute }}>{p.op} · {p.tipo} · {p.zona}, {p.ciudad}{p.fotos && p.fotos.length > 1 ? ` · 📷 ${p.fotos.length}` : ""}</div>
+                <div className="flex items-center gap-2 flex-wrap"><Badge v={v} />{v.n > 0 && !vencido && <button onClick={() => { upd(p.id, { dias: 0 }); flash("Disponibilidad confirmada."); }} className="text-xs underline font-semibold" style={{ color: C.lilaDk }}>✓ Confirmar que sigue disponible</button>}</div>
+              </div>
+            </div>
             {perm.stats && <div className="flex gap-3 text-xs" style={{ color: C.lilaDk }}><span>👁 {p.vistas || 0} visualizaciones</span><span>♥ {(p.guardados || 0) + favs.filter((f) => f.pid === p.id).length} guardaron</span></div>}
             <div className="flex gap-2">
               <select disabled={vencido} value={est} onChange={(e) => { const nv = e.target.value; if (nv === "Cerrado") { upd(p.id, { est: "Cerrado", opPend: true }); setPre(String(p.id)); setSub("ops"); flash("Ya no aparece en el buscador. Registra el cierre para completarlo oficialmente."); } else if (["Disponible", "Reservado"].includes(nv) && !["Disponible", "Reservado"].includes(est) && perm.maxCapt && activas >= perm.maxCapt) flash(`Tu plan ${nivel} permite ${perm.maxCapt} captaciones activas.`); else upd(p.id, { est: nv, opPend: false }); }} className="flex-1 rounded-lg px-2 py-1.5 text-sm" style={inp}>{ESTADOS.filter((e) => e !== "Cerrado" || est === "Cerrado").map((e) => <option key={e} value={e}>{EMO[e]} {e}</option>)}</select>
-              <button disabled={vencido} onClick={() => { upd(p.id, { dias: 0 }); flash("Disponibilidad confirmada."); }} className="px-3 py-1.5 rounded-lg text-sm font-semibold text-white" style={{ background: vencido ? C.mute : C.lila }}>Sigue disponible</button>
+              <button onClick={async () => { const ok = await copiarTexto(textoCopy(p, miTel())); flash(ok ? (waNum(miTel()).length < 8 ? "Copy copiado. Tip: agrega tu WhatsApp en Mis datos para incluir tu enlace." : "Copy copiado con tu enlace de WhatsApp. Pégalo en el chat de tu cliente.") : "No se pudo copiar automáticamente."); }} className="px-3 py-1.5 rounded-lg text-sm font-semibold text-white" style={{ background: C.lila }}>📋 Copiar copy</button>
             </div>
             {est !== "Cerrado" && <button disabled={!perm.cierre} onClick={() => setCerrando(p)} className="w-full py-2 rounded-lg text-sm font-semibold" style={{ border: `1.5px solid ${!perm.cierre ? C.mute : C.ink}`, color: !perm.cierre ? C.mute : C.ink }}>{!perm.cierre ? "🔒 " : ""}✔ Cerrar captación</button>}
             {est === "Cerrado" ? (p.opPend ? <div className="text-xs" style={{ color: C.amber }}>Ya no aparece en el buscador. Falta registrar el cierre para completarlo oficialmente (pestaña Cierres).</div> : <div className="text-xs" style={{ color: C.mute }}>Cerrada. No aparece en el buscador.</div>) : est !== "Disponible" && <div className="text-xs" style={{ color: C.mute }}>Los demás agentes ven que está {est.toLowerCase()}.</div>}
@@ -755,6 +778,9 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
   const [rej, setRej] = useState(null);
   const [mot, setMot] = useState("");
   const [filtro, setFiltro] = useState("Todos");
+  const [verPago, setVerPago] = useState(null);
+  const [buscaPago, setBuscaPago] = useState("");
+  const [cuantosPagos, setCuantosPagos] = useState(15);
   const [cfm, setCfm] = useState(false);
   const [fc, setFc] = useState("Todas");
   const log = (m) => setAudit((a) => [{ id: Math.random(), m, f: fechaL(new Date()) }, ...a]);
@@ -772,12 +798,12 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
     const base = p.tipo === "Renovación" && u && u.venc ? isoD(u.venc) : null;
     const fin = p.tipo === "Mejora de plan" && u && u.venc ? isoD(u.venc) : base ? new Date(base.getFullYear(), base.getMonth() + 1, cfg.dia) : proximoCorte(cfg.dia);
     setUsers(users.map((x) => (x.n === p.de ? { ...x, est: "Activo", plan: p.plan, venc: isoOf(fin), planProx: null } : x)));
-    setPagos(pagos.map((x) => (x.id === p.id ? { ...x, est: "Aprobado" } : x)));
+    setPagos(pagos.map((x) => (x.id === p.id ? { ...x, est: "Aprobado", revF: isoOf(HOY), hasta: isoOf(fin) } : x)));
     log(`Pago aprobado: ${p.de} · ${p.plan} · ${bs(p.monto)}. Habilitado hasta ${fechaL(fin)}`);
     flash(`Aprobado. ${p.de} habilitado hasta el ${fechaL(fin)}.`);
   };
   const rechazar = (p) => {
-    setPagos(pagos.map((x) => (x.id === p.id ? { ...x, est: "Rechazado", mot: mot || "sin motivo indicado" } : x)));
+    setPagos(pagos.map((x) => (x.id === p.id ? { ...x, est: "Rechazado", mot: mot || "sin motivo indicado", revF: isoOf(HOY) } : x)));
     log(`Pago rechazado: ${p.de} · ${bs(p.monto)} (${mot || "sin motivo"})`);
     setRej(null); setMot(""); flash("Pago rechazado. Se notificó al agente.");
   };
@@ -817,10 +843,31 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
           </div>
         ))}
         <div className="text-sm font-semibold pt-2" style={{ color: C.ink }}>Registro de pagos</div>
-        <div className="flex gap-2">{["Todos", "Aprobado", "Rechazado"].map((x) => <Chip key={x} on={filtro === x} onClick={() => setFiltro(x)}>{x}</Chip>)}</div>
-        {pagos.filter((p) => p.est !== "Pendiente" && (filtro === "Todos" || p.est === filtro)).sort((a, b) => b.iso.localeCompare(a.iso)).slice(0, 12).map((p) => (
-          <div key={p.id} className="rounded-xl p-2.5 flex justify-between items-center text-sm" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.ink }}><span>{p.de}<div className="text-xs" style={{ color: C.mute }}>{fechaL(isoD(p.iso))} · {p.plan} · {p.tipo}</div></span><span className="text-right"><b>{bs(p.monto)}</b><div className="text-xs" style={{ color: p.est === "Aprobado" ? C.ok : C.red }}>{p.est}</div></span></div>
-        ))}
+        <div className="flex gap-2">{["Todos", "Aprobado", "Rechazado"].map((x) => <Chip key={x} on={filtro === x} onClick={() => setFiltro(x)}>{x} ({pagos.filter((p) => p.est !== "Pendiente" && (x === "Todos" || p.est === x)).length})</Chip>)}</div>
+        <input value={buscaPago} onChange={(e) => setBuscaPago(e.target.value)} placeholder="Buscar por nombre del agente" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} />
+        {(() => { const lista = pagos.filter((p) => p.est !== "Pendiente" && (filtro === "Todos" || p.est === filtro) && (!buscaPago.trim() || (p.de || "").toLowerCase().includes(buscaPago.trim().toLowerCase()))).sort((a, b) => (b.revF || b.iso).localeCompare(a.revF || a.iso) || String(b.id).localeCompare(String(a.id))); return <>
+          {!lista.length && <div className="text-center py-4 text-sm" style={{ color: C.mute }}>No hay pagos {filtro === "Todos" ? "revisados" : filtro.toLowerCase() + "s"} todavía.</div>}
+          {lista.slice(0, cuantosPagos).map((p) => { const abierto = verPago === p.id; return (
+            <div key={p.id} className="rounded-xl text-sm overflow-hidden" style={{ background: C.card, border: `1px solid ${abierto ? C.lila : C.line}`, color: C.ink }}>
+              <button onClick={() => setVerPago(abierto ? null : p.id)} className="w-full p-2.5 flex justify-between items-center text-left"><span>{p.de}<div className="text-xs" style={{ color: C.mute }}>{fechaL(isoD(p.iso))} · {p.plan} · {p.tipo}</div></span><span className="text-right"><b>{bs(p.monto)}</b><div className="text-xs" style={{ color: p.est === "Aprobado" ? C.ok : C.red }}>{p.est} {abierto ? "▲" : "▼"}</div></span></button>
+              {abierto && <div className="px-3 pb-3 space-y-2 text-xs" style={{ borderTop: `1px solid ${C.line}` }}>
+                <div className="pt-2 grid grid-cols-2 gap-x-3 gap-y-1">
+                  <span style={{ color: C.mute }}>Enviado</span><span>{fechaL(isoD(p.iso))}</span>
+                  {p.revF && <><span style={{ color: C.mute }}>{p.est === "Aprobado" ? "Aprobado" : "Rechazado"}</span><span>{fechaL(isoD(p.revF))}</span></>}
+                  <span style={{ color: C.mute }}>Método</span><span>{p.metodo === "QR" ? "QR" : "Transferencia"}</span>
+                  {p.ref && <><span style={{ color: C.mute }}>Referencia</span><span>{p.ref}</span></>}
+                  {p.hasta && <><span style={{ color: C.mute }}>Habilitado hasta</span><span>{fechaL(isoD(p.hasta))}</span></>}
+                  {p.nota && <><span style={{ color: C.mute }}>Detalle</span><span>{p.nota}</span></>}
+                </div>
+                {p.est === "Rechazado" && <div className="rounded-lg px-2.5 py-1.5" style={{ background: C.redSoft, color: C.red }}>Motivo: {p.mot}</div>}
+                <div style={{ color: C.mute }}>Carnet</div>
+                <Ci ci={(users.find((x) => x.n === p.de) || {}).ci} />
+                <div style={{ color: C.mute }}>Comprobante</div>
+                {p.comp ? <a href={p.comp} target="_blank" rel="noreferrer"><img src={p.comp} alt="Comprobante" className="w-full rounded-xl object-contain" style={{ maxHeight: 320, background: C.bg }} /><div className="text-center mt-1 underline" style={{ color: C.brandDk }}>Abrir comprobante en tamaño completo</div></a> : <div style={{ color: C.mute }}>Sin comprobante</div>}
+              </div>}
+            </div>); })}
+          {lista.length > cuantosPagos && <button onClick={() => setCuantosPagos(cuantosPagos + 15)} className="w-full py-2 rounded-xl text-sm" style={{ border: `1px solid ${C.line}`, color: C.lilaDk }}>Ver más pagos ({lista.length - cuantosPagos} restantes)</button>}
+        </>; })()}
       </>}
       {s === "fin" && <>
         <div className="grid grid-cols-2 gap-2">
@@ -1071,6 +1118,25 @@ const pendWa = (visitas) => {
   });
   return out;
 };
+// ── Copy completo de una propiedad, con el WhatsApp de quien lo envía ──
+const textoCopy = (p, tel) => [
+  `🏠 *${p.t}*`,
+  `${p.op} · ${p.tipo}`,
+  `💰 ${money(p)}`,
+  `📍 ${p.zona}, ${p.ciudad}`,
+  [p.dorm ? `🛏 ${p.dorm} dormitorio${p.dorm > 1 ? "s" : ""}` : "", p.ban ? `🚿 ${p.ban} baño${p.ban > 1 ? "s" : ""}` : "", p.m2 ? `📐 ${p.m2} m²` : ""].filter(Boolean).join(" · "),
+  `🚗 Garaje: ${p.garaje ? `Sí${p.gTipo ? ` (${p.gTipo.toLowerCase()})` : ""}` : "No"}${p.gAparte ? ` · garaje aparte en el edificio${p.gPrecio ? `: ${p.mon === "USD" ? "USD" : "Bs"} ${p.gPrecio}/mes` : ""}` : ""}`,
+  `🐾 Mascotas: ${p.mascotas}${p.mascCond ? ` (${p.mascCond})` : ""}`,
+  p.amoblado ? `🛋 ${p.amoblado}` : "",
+  p.condComp ? `📄 ${p.condComp}` : "",
+  p.desc ? `\n${p.desc.trim()}` : "",
+  waNum(tel).length >= 8 ? `\n📲 Más información por WhatsApp: https://wa.me/${waNum(tel)}` : "",
+].filter(Boolean).join("\n");
+async function copiarTexto(t) {
+  try { await navigator.clipboard.writeText(t); return true; } catch {
+    try { const a = document.createElement("textarea"); a.value = t; a.style.position = "fixed"; a.style.opacity = "0"; document.body.appendChild(a); a.select(); const ok = document.execCommand("copy"); a.remove(); return ok; } catch { return false; }
+  }
+}
 // ── Fotos: descargar o enviar ──
 const nombreArchivo = (t) => (t || "foto").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 40).toLowerCase() || "foto";
 const bajarBlob = async (u) => { const r = await fetch(u, { mode: "cors" }); if (!r.ok) throw new Error("descarga"); return r.blob(); };
@@ -1318,6 +1384,36 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas }) {
   useEffect(() => { setUsers((us) => (us.some((u) => u.est === "Prueba" && u.prueba && now > u.prueba.fin) ? us.map((u) => (u.est === "Prueba" && u.prueba && now > u.prueba.fin ? { ...u, est: "Vencido" } : u)) : us)); }, [now]);
   const onPublicada = (p) => { if (!perm.inversa) return; clientes.forEach((r) => { if (match(r, p)) notify("Nueva propiedad compatible", `${p.t} coincide con el requerimiento de ${r.n}`, { tab: "buscar", p: p.id }, "🔔"); }); };
   const goSub = () => { setSel(null); setTab("perfil"); setPerfilSub("sus"); };
+  // ── Vigilancia: avisa de propiedades nuevas compatibles con mis requerimientos
+  //    y de cambios en propiedades que guardé (completo en Premium, resumido en los demás planes)
+  const [vig, setVig] = useSyncObj("ajustes_usuario", "vigilancia", { ini: false, f: {}, ...(inicial.vigilancia || {}) }, sesion);
+  useEffect(() => {
+    const resumen = (p) => ({ pr: p.precio, mo: p.mon, es: p.est || "Disponible", fo: (p.fotos || []).length, t: p.t, d: (p.desc || "").length + (p.condComp || "").length });
+    const f = { ...(vig.f || {}) }, nuevos = [];
+    let cambio = !vig.ini;
+    const ajenas = props.filter((p) => p.cap && p.cap.n !== ME);
+    const ids = new Set(ajenas.map((p) => String(p.id)));
+    for (const p of ajenas) {
+      const k = String(p.id), r = resumen(p), prev = f[k];
+      if (!prev) {
+        if (vig.ini && !["Cerrado", "Caído"].includes(r.es)) clientes.forEach((c) => { const m = match(c, p); if (m) nuevos.push({ ic: "🏠", t: `Nueva propiedad compatible con ${c.n}`, tPro: "Hay una nueva propiedad compatible con uno de tus requerimientos", s: `${p.t} · ${money(p)} · ${p.zona}, ${p.ciudad} · ${m.pct}% de coincidencia`, to: { tab: "buscar", p: p.id }, pro: true }); });
+        f[k] = r; cambio = true;
+      } else if (JSON.stringify(prev) !== JSON.stringify(r)) {
+        if (favs.some((x) => x.pid === p.id)) {
+          const det = [];
+          if (prev.pr !== r.pr || prev.mo !== r.mo) det.push(`precio ${money({ ...p, precio: prev.pr, mon: prev.mo })} → ${money(p)}`);
+          if (prev.es !== r.es) det.push(`ahora está ${r.es.toLowerCase()}`);
+          if (r.fo > prev.fo) det.push(`${r.fo - prev.fo} foto${r.fo - prev.fo > 1 ? "s" : ""} nueva${r.fo - prev.fo > 1 ? "s" : ""}`);
+          if (prev.t !== r.t || prev.d !== r.d) det.push("descripción actualizada");
+          if (det.length) nuevos.push({ ic: "♥", t: "Se actualizó una propiedad que guardaste", tPro: "Una propiedad que guardaste tuvo cambios", s: `${p.t}: ${det.join(" · ")}`, to: { tab: "buscar", p: p.id }, pro: true });
+        }
+        f[k] = r; cambio = true;
+      }
+    }
+    for (const k of Object.keys(f)) if (!ids.has(k)) { delete f[k]; cambio = true; }
+    if (nuevos.length) setNotifs((n) => [...nuevos.map((x, i) => ({ id: Date.now() + i, h: "Ahora", ...x })), ...n]);
+    if (cambio) setVig({ ini: true, f });
+  }, [props]);
   const notify = (t, s, to, ic = "📅") => setNotifs((n) => [{ id: Date.now(), ic, t, s, to, h: "Ahora" }, ...n]);
   const open = (p) => { setSel(p); if (p.cap.n !== ME) setProps((ps) => ps.map((x) => (x.id === p.id ? { ...x, vistas: (x.vistas || 0) + 1 } : x))); };
   const rate = (n) => { const r = reviews.filter((x) => x.ag === n); return r.length ? { avg: r.reduce((a, x) => a + x.s, 0) / r.length, n: r.length } : null; };
@@ -1352,11 +1448,11 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas }) {
         {banner && <button onClick={goSub} className="w-full text-left text-xs px-4 py-2 font-medium" style={{ background: banner[1], color: banner[2] }}>{banner[0]} · Ver planes ›</button>}
         <div className="flex-1 overflow-y-auto">
           {acceso === "admin" ? <Admin reports={reports} setReports={setReports} users={users} setUsers={setUsers} audit={audit} setAudit={setAudit} props={props} ops={ops} sugs={sugs} setSugs={setSugs} pagos={pagos} setPagos={setPagos} cfg={cfg} setCfg={setCfg} flash={flash} cuentas={cuentas} />
-            : sel ? <Detalle p={sel} acceso={acceso} onBack={() => setSel(null)} onVisit={agendar} onReport={setReportando} users={users} onSub={goSub} perm={perm} rate={rate} onProfile={setPerfilDe} favs={favs} toggleFav={toggleFav} clientes={clientes} />
+            : sel ? <Detalle p={sel} acceso={acceso} onBack={() => setSel(null)} onVisit={agendar} onReport={setReportando} users={users} onSub={goSub} perm={perm} rate={rate} onProfile={setPerfilDe} favs={favs} toggleFav={toggleFav} clientes={clientes} flash={flash} />
             : tab === "buscar" ? <Buscar acceso={acceso} open={open} props={props} rate={rate} favs={favs} perm={perm} goSub={goSub} busq={busq} setBusq={setBusq} />
             : tab === "clientes" ? (perm.req ? <Clientes acceso={acceso} open={open} props={props} clientes={clientes} setClientes={setClientes} favs={favs} toggleFav={toggleFav} delCliente={delCliente} perm={perm} visitas={visitas} goSub={goSub} /> : <div className="p-4"><Lock t="Requerimientos de clientes" plan="Inicial" go={goSub} /></div>)
             : tab === "visitas" ? (perm.vis ? <Visitas visitas={visitas} setVisitas={setVisitas} props={props} clientes={clientes} flash={flash} notify={notify} users={users} perm={perm} autos={autos} /> : <div className="p-4"><Lock t="Agenda de visitas" plan="Inicial" go={goSub} /></div>)
-            : tab === "alertas" ? <Alertas go={go} notifs={notifs} visitas={visitas} props={props} clientes={clientes} perm={perm} autos={autos} />
+            : tab === "alertas" ? <Alertas go={go} notifs={notifs} visitas={visitas} props={props} clientes={clientes} perm={perm} autos={autos} goSub={goSub} />
             : <Perfil acceso={acceso} props={props} setProps={setProps} flash={flash} ops={ops} setOps={setOps} reports={reports} favs={favs} reviews={reviews} setReviews={setReviews} onReport={setReportando} sugs={sugs} setSugs={setSugs} users={users} setUsers={setUsers} pagos={pagos} setPagos={setPagos} cfg={cfg} subInit={perfilSub} clearSub={() => setPerfilSub(null)} perm={perm} nivel={nivel} goSub={goSub} onPublicada={onPublicada} trial={{ inicio: fin - 48 * 36e5, fin }} setReports={setReports} clientes={clientes} visitas={visitas} autos={autos} setAutos={setAutos} />}
         </div>
         {perfilDe && <Ficha n={perfilDe} props={props} users={users} rate={rate} onClose={() => setPerfilDe(null)} />}

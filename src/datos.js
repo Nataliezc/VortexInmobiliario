@@ -81,8 +81,8 @@ export async function cargarTodo() {
   const cfg = await supabase.from("ajustes").select("valor").eq("clave", "cfg").maybeSingle();
   if (cfg.error) throw new Error(`No se pudo leer "ajustes": ${cfg.error.message}`);
   out.cfg = cfg.data ? cfg.data.valor : null;
-  const au = await supabase.from("ajustes_usuario").select("valor").eq("clave", "autos").maybeSingle();
-  out.autos = au.data ? au.data.valor : null;
+  const au = await supabase.from("ajustes_usuario").select("clave, valor");
+  (au.data || []).forEach((r) => { out[r.clave] = r.valor; });
   return out;
 }
 

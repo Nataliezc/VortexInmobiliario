@@ -48,6 +48,7 @@ export default function App() {
 
   // Perfil + datos al iniciar sesión
   useEffect(() => {
+    setMenu(false);
     if (!sesion) { setPerfil(null); setDatos(null); setError(""); return; }
     let vivo = true;
     (async () => {
