@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useSync, useSyncObj } from "./datos";
 import { subir, subirVarios } from "./archivos";
+import { leerCopy, camposFaltantes, NOMBRES_CAMPOS } from "./leerCopy";
 
 // Fecha de hoy (a medianoche). Antes era una fecha fija de demostración.
 const hoy0 = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); };
@@ -658,46 +659,67 @@ const ESTADOS = ["Disponible", "Reservado", "En pausa", "Cerrado", "Caído"];
 const EMO = { Disponible: "🟢", Reservado: "🟡", "En pausa": "⏸️", Cerrado: "🔴", Caído: "⚫" };
 const inp = { border: `1px solid ${C.line}`, background: C.card, color: C.ink };
 const Seg = ({ o, v, set }) => <div className="flex flex-wrap gap-2">{o.map((x) => <Chip key={x} on={v === x} onClick={() => set(x)}>{x}</Chip>)}</div>;
-const Fld = ({ l, children }) => <div className="space-y-1.5"><div className="text-xs font-medium" style={{ color: C.mute }}>{l}</div>{children}</div>;
+const Fld = ({ l, children, x }) => <div className="space-y-1.5" style={x ? { background: C.amberSoft, borderRadius: 12, padding: 8, outline: `1.5px solid ${C.amber}` } : undefined}><div className="text-xs font-medium" style={{ color: x ? C.amber : C.mute }}>{l}</div>{children}</div>;
 
 const TIPOS_INM = ["Casa", "Departamento", "Terreno", "Oficina", "Comercial"];
 const toF = (p) => ({ op: p.op, tipo: TIPOS_INM.includes(p.tipo) ? p.tipo : "Otro", tipoOtro: TIPOS_INM.includes(p.tipo) || p.tipo === "Otro" ? "" : p.tipo, ciudad: p.ciudad, zona: p.zona, t: p.t, precio: String(p.precio), mon: p.mon, dorm: String(p.dorm), ban: String(p.ban), m2: String(p.m2), garaje: p.garaje ? "Sí" : "No", gTipo: p.gTipo || "Independiente", gAparte: p.gAparte ? "Sí" : "No", gPrecio: p.gPrecio || "", mascotas: p.mascotas, mascCond: p.mascCond || "", amoblado: p.amoblado, com: p.com, condComp: p.condComp || "", desc: p.desc || "", fotos: p.fotos || [] });
 
-function Form({ onSave, init, maxFotos = 3 }) {
+function Form({ onSave, init, maxFotos = 3, autoCopy = false }) {
+  const [copyTxt, setCopyTxt] = useState("");
+  const [marcar, setMarcar] = useState(false);
+  const [info, setInfo] = useState("");
+  const falta = (k) => marcar && camposFaltantes(f).includes(k);
+  const lb = (k, l) => (falta(k) ? `⚠️ ${l} · falta completar` : l);
+  const leer = () => {
+    if (copyTxt.trim().length < 20) { setInfo("Pega el copy completo del anuncio para poder leerlo."); return; }
+    const d = leerCopy(copyTxt, ZONAS);
+    const vacio = { op: "", tipo: "", tipoOtro: "", ciudad: "", zona: "", t: "", precio: "", mon: "", dorm: "", ban: "", m2: "", garaje: "", gTipo: "", gAparte: "", gPrecio: "", mascotas: "", mascCond: "", amoblado: "", com: "", condComp: "" };
+    const nuevo = { ...f, ...vacio, ...d, fotos: f.fotos };
+    setF(nuevo); setMarcar(true); setErr("");
+    const fal = camposFaltantes(nuevo);
+    setInfo(fal.length ? `✨ Listo: llenamos los datos que encontramos en tu copy. Completa ${fal.length === 1 ? "el campo marcado" : `los ${fal.length} campos marcados`} en amarillo: ${fal.map((k) => NOMBRES_CAMPOS[k]).join(", ")}.` : "✨ ¡Encontramos todos los datos! Revísalos antes de publicar.");
+  };
   const [f, setF] = useState(init ? toF(init) : { op: "Alquiler", tipo: "Departamento", tipoOtro: "", ciudad: "La Paz", zona: "", t: "", precio: "", mon: "USD", dorm: "2", ban: "1", m2: "", garaje: "No", gTipo: "Independiente", gAparte: "No", gPrecio: "", mascotas: "No", mascCond: "", amoblado: "Vacío", com: "", condComp: "", desc: "", fotos: [] });
   const [err, setErr] = useState("");
   const s = (k) => (v) => setF({ ...f, [k]: v });
   const num = (k) => (e) => s(k)(e.target.value.replace(/\D/g, ""));
   const vivienda = ["Casa", "Departamento"].includes(f.tipo);
   const save = () => {
-    if (!f.t || !f.zona || !f.precio || !f.m2) { setErr("Completa título, zona, precio y superficie."); return; }
-    if (f.tipo === "Otro" && !f.tipoOtro.trim()) { setErr("Escribe qué tipo de inmueble es (por ejemplo: Galpón, Quinta, Habitación)."); return; }
+    const fal = camposFaltantes(f);
+    if (fal.length) { setMarcar(true); setErr(`Para publicar falta completar: ${fal.map((k) => NOMBRES_CAMPOS[k]).join(", ")}. Están marcados en amarillo.`); return; }
     const tipoFinal = f.tipo === "Otro" ? f.tipoOtro.trim().charAt(0).toUpperCase() + f.tipoOtro.trim().slice(1) : f.tipo;
     const b = ({ id: Date.now(), op: f.op, tipo: tipoFinal, t: f.t, ciudad: f.ciudad, zona: f.zona, precio: +f.precio, mon: f.mon, dorm: vivienda ? +f.dorm : 0, ban: vivienda ? +f.ban : 0, m2: +f.m2, garaje: f.garaje === "Sí", gTipo: f.garaje === "Sí" ? f.gTipo : "", gAparte: f.gAparte === "Sí", gPrecio: f.gAparte === "Sí" ? f.gPrecio : "", mascotas: f.mascotas, mascCond: f.mascotas === "Condicionado" ? f.mascCond : "", condComp: f.condComp, desc: f.desc, amoblado: f.amoblado, dias: 0, est: "Disponible", cap: { n: ME, tel: miTel(), ciu: f.ciudad }, com: f.com || "A definir con el captador", hue: Math.floor(Math.random() * 360), fotos: f.fotos });
     onSave(init ? { ...init, ...b, id: init.id, dias: init.dias, est: init.est, hue: init.hue, cap: init.cap } : b);
   };
   return (
     <div className="space-y-4">
-      <Fld l="Título del inmueble"><input value={f.t} onChange={(e) => s("t")(e.target.value)} placeholder="Ej. Depto con vista al parque, 2 dormitorios" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
-      <Fld l="Operación"><Seg o={["Venta", "Alquiler", "Anticrético", "Preventa"]} v={f.op} set={s("op")} /></Fld>
-      <Fld l="Tipo de inmueble"><Seg o={[...TIPOS_INM, "Otro"]} v={f.tipo} set={s("tipo")} /></Fld>
-      {f.tipo === "Otro" && <Fld l="¿Qué tipo de inmueble es?"><input value={f.tipoOtro} onChange={(e) => s("tipoOtro")(e.target.value)} maxLength={30} placeholder="Ej. Galpón, Quinta, Habitación, Edificio" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} autoFocus /></Fld>}
-      <Fld l="Ciudad"><Seg o={Object.keys(ZONAS)} v={f.ciudad} set={(v) => setF({ ...f, ciudad: v, zona: "" })} /></Fld>
-      <Fld l="Zona o barrio"><input list="zonas" value={f.zona} onChange={(e) => s("zona")(e.target.value)} placeholder="Escribe la zona exacta" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /><datalist id="zonas">{ZONAS[f.ciudad].map((z) => <option key={z} value={z} />)}</datalist></Fld>
+      {!init && (autoCopy ? <div className="rounded-2xl p-3 space-y-2" style={{ background: C.lilaSoft, border: `1.5px solid ${C.lila}` }}>
+        <div className="text-sm font-semibold" style={{ color: C.lilaDk }}>✨ ¿Ya tienes el copy? Pégalo y llenamos los datos por ti</div>
+        <textarea rows={5} value={copyTxt} onChange={(e) => setCopyTxt(e.target.value)} placeholder="Pega aquí el texto completo de tu anuncio (precio, zona, dormitorios, garaje, mascotas…)" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} />
+        <button onClick={leer} className="w-full py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: C.grad }}>Leer copy y llenar datos</button>
+        {info && <div className="text-xs rounded-lg px-3 py-2" style={{ background: "#fff", color: info.startsWith("✨") ? C.lilaDk : C.amber }}>{info}</div>}
+        <div className="text-xs" style={{ color: C.mute }}>Revisa siempre los datos: lo que no esté en el copy quedará vacío para que lo completes.</div>
+      </div> : <div className="rounded-xl p-2.5 text-xs" style={{ background: C.lilaSoft, color: C.lilaDk }}>🔒 Cargar la captación pegando tu copy (se llenan los datos solos): disponible en los planes Profesional y Premium.</div>)}
+      <Fld l={lb("t", "Título del inmueble")} x={falta("t")}><input value={f.t} onChange={(e) => s("t")(e.target.value)} placeholder="Ej. Depto con vista al parque, 2 dormitorios" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
+      <Fld l={lb("op", "Operación")} x={falta("op")}><Seg o={["Venta", "Alquiler", "Anticrético", "Preventa"]} v={f.op} set={s("op")} /></Fld>
+      <Fld l={lb("tipo", "Tipo de inmueble")} x={falta("tipo")}><Seg o={[...TIPOS_INM, "Otro"]} v={f.tipo} set={s("tipo")} /></Fld>
+      {f.tipo === "Otro" && <Fld l={lb("tipoOtro", "¿Qué tipo de inmueble es?")} x={falta("tipoOtro")}><input value={f.tipoOtro} onChange={(e) => s("tipoOtro")(e.target.value)} maxLength={30} placeholder="Ej. Galpón, Quinta, Habitación, Edificio" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} autoFocus /></Fld>}
+      <Fld l={lb("ciudad", "Ciudad")} x={falta("ciudad")}><Seg o={Object.keys(ZONAS)} v={f.ciudad} set={(v) => setF({ ...f, ciudad: v, zona: "" })} /></Fld>
+      <Fld l={lb("zona", "Zona o barrio")} x={falta("zona")}><input list="zonas" value={f.zona} onChange={(e) => s("zona")(e.target.value)} placeholder="Escribe la zona exacta" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /><datalist id="zonas">{(ZONAS[f.ciudad] || []).map((z) => <option key={z} value={z} />)}</datalist></Fld>
       <div className="grid grid-cols-2 gap-3">
-        <Fld l="Precio"><input value={f.precio} onChange={num("precio")} inputMode="numeric" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
-        <Fld l="Moneda"><Seg o={["USD", "BOB"]} v={f.mon} set={s("mon")} /></Fld>
-        {vivienda && <Fld l="Dormitorios"><input value={f.dorm} onChange={num("dorm")} inputMode="numeric" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>}
-        {vivienda && <Fld l="Baños"><input value={f.ban} onChange={num("ban")} inputMode="numeric" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>}
-        <Fld l="Superficie (m²)"><input value={f.m2} onChange={num("m2")} inputMode="numeric" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
+        <Fld l={lb("precio", "Precio")} x={falta("precio")}><input value={f.precio} onChange={num("precio")} inputMode="numeric" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
+        <Fld l={lb("mon", "Moneda")} x={falta("mon")}><Seg o={["USD", "BOB"]} v={f.mon} set={s("mon")} /></Fld>
+        {vivienda && <Fld l={lb("dorm", "Dormitorios")} x={falta("dorm")}><input value={f.dorm} onChange={num("dorm")} inputMode="numeric" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>}
+        {vivienda && <Fld l={lb("ban", "Baños")} x={falta("ban")}><input value={f.ban} onChange={num("ban")} inputMode="numeric" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>}
+        <Fld l={lb("m2", "Superficie (m²)")} x={falta("m2")}><input value={f.m2} onChange={num("m2")} inputMode="numeric" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
       </div>
-      <Fld l="¿El inmueble incluye garaje?"><Seg o={["Sí", "No"]} v={f.garaje} set={s("garaje")} /></Fld>
-      {f.garaje === "Sí" && <Fld l="Tipo de garaje"><Seg o={["Independiente", "Compartido"]} v={f.gTipo} set={s("gTipo")} /></Fld>}
-      <Fld l="¿Hay garaje para alquilar aparte en el edificio?"><Seg o={["No", "Sí"]} v={f.gAparte} set={s("gAparte")} /></Fld>
+      <Fld l={lb("garaje", "¿El inmueble incluye garaje?")} x={falta("garaje")}><Seg o={["Sí", "No"]} v={f.garaje} set={s("garaje")} /></Fld>
+      {f.garaje === "Sí" && <Fld l={lb("gTipo", "Tipo de garaje")} x={falta("gTipo")}><Seg o={["Independiente", "Compartido"]} v={f.gTipo} set={s("gTipo")} /></Fld>}
+      <Fld l={lb("gAparte", "¿Hay garaje para alquilar aparte en el edificio?")} x={falta("gAparte")}><Seg o={["No", "Sí"]} v={f.gAparte} set={s("gAparte")} /></Fld>
       {f.gAparte === "Sí" && <Fld l={`Precio extra por mes (${f.mon})`}><input value={f.gPrecio} onChange={num("gPrecio")} inputMode="numeric" placeholder="Ej. 50" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>}
-      <Fld l="Mascotas"><Seg o={["Sí", "No", "Condicionado"]} v={f.mascotas} set={s("mascotas")} /></Fld>
-      {f.mascotas === "Condicionado" && <Fld l="Condición para mascotas"><input value={f.mascCond} onChange={(e) => s("mascCond")(e.target.value)} placeholder="Ej. Solo perros pequeños, con depósito" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>}
-      <Fld l="Estado del inmueble"><Seg o={["Vacío", "Semi-amoblado", "Amoblado"]} v={f.amoblado} set={s("amoblado")} /></Fld>
+      <Fld l={lb("mascotas", "Mascotas")} x={falta("mascotas")}><Seg o={["Sí", "No", "Condicionado"]} v={f.mascotas} set={s("mascotas")} /></Fld>
+      {f.mascotas === "Condicionado" && <Fld l={lb("mascCond", "Condición para mascotas")} x={falta("mascCond")}><input value={f.mascCond} onChange={(e) => s("mascCond")(e.target.value)} placeholder="Ej. Solo perros pequeños, con depósito" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>}
+      <Fld l={lb("amoblado", "Estado del inmueble")} x={falta("amoblado")}><Seg o={["Vacío", "Semi-amoblado", "Amoblado"]} v={f.amoblado} set={s("amoblado")} /></Fld>
       <Fld l="Comisión del propietario"><input value={f.com} onChange={(e) => s("com")(e.target.value)} placeholder="Ej. 3% pagado por el propietario" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
       <Fld l="Condiciones complementarias"><textarea rows={3} value={f.condComp} onChange={(e) => s("condComp")(e.target.value)} placeholder="Garantía, papeles requeridos, tiempo mínimo de contrato…" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
       <Fld l="Descripción completa (copy)"><textarea rows={6} value={f.desc} onChange={(e) => s("desc")(e.target.value)} placeholder="Pega aquí el texto completo del anuncio" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
@@ -727,7 +749,7 @@ function Perfil({ acceso, props, setProps, flash, ops, setOps, reports, favs, re
       <button onClick={() => setNueva(false)} className="text-sm" style={{ color: C.brandDk }}>‹ Volver a mi perfil</button>
       <h2 className="font-semibold text-lg" style={{ color: C.ink }}>{nueva === true ? "Nueva captación" : nueva._repub ? "Volver a publicar captación" : "Editar captación"}</h2>
       {nueva !== true && nueva._repub && <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Revisa y actualiza los datos. Al guardar, la captación vuelve a estar Disponible en el buscador.</div>}
-      <Form maxFotos={perm.maxFotos || 3} init={nueva === true ? null : nueva} onSave={(p) => { if (nueva === true) { if (bloq) { flash("Alcanzaste el límite de captaciones de tu plan."); return; } const np = { ...p, creada: Date.now() }; setProps([np, ...props]); onPublicada(np); flash("Captación publicada. Confírmala cada cierto tiempo para mantenerla visible."); } else if (nueva._repub) { if (bloq) { flash("Alcanzaste el límite de captaciones activas de tu plan."); return; } const { _repub, ...limpio } = p; setProps(props.map((x) => (x.id === p.id ? { ...limpio, est: "Disponible", opPend: false, dias: 0, creada: Date.now() } : x))); flash("Captación publicada de nuevo. Ya aparece en el buscador."); setSub("capt"); } else { setProps(props.map((x) => (x.id === p.id ? p : x))); flash("Cambios guardados."); } setNueva(false); }} />
+      <Form autoCopy={!!perm.match} maxFotos={perm.maxFotos || 3} init={nueva === true ? null : nueva} onSave={(p) => { if (nueva === true) { if (bloq) { flash("Alcanzaste el límite de captaciones de tu plan."); return; } const np = { ...p, creada: Date.now() }; setProps([np, ...props]); onPublicada(np); flash("Captación publicada. Confírmala cada cierto tiempo para mantenerla visible."); } else if (nueva._repub) { if (bloq) { flash("Alcanzaste el límite de captaciones activas de tu plan."); return; } const { _repub, ...limpio } = p; setProps(props.map((x) => (x.id === p.id ? { ...limpio, est: "Disponible", opPend: false, dias: 0, creada: Date.now() } : x))); flash("Captación publicada de nuevo. Ya aparece en el buscador."); setSub("capt"); } else { setProps(props.map((x) => (x.id === p.id ? p : x))); flash("Cambios guardados."); } setNueva(false); }} />
     </div>
   );
   if (cerrando) return <Cierre p={cerrando} props={props} setProps={setProps} ops={ops} setOps={setOps} reviews={reviews} setReviews={setReviews} flash={flash} onDone={(hecho) => { setCerrando(null); if (hecho === true) setSub("ops"); }} />;
