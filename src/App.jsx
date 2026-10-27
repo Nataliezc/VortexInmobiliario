@@ -36,6 +36,8 @@ export default function App() {
   const [avisoTxt, setAvisoTxt] = useState("");
   const [subiendo, setSubiendo] = useState(0);
   const ultima = useRef(Date.now());
+  const [sim, setSim] = useState("admin");       // "Ver la app como" (solo administradores)
+  const [finPrueba, setFinPrueba] = useState(0);
   const [modo, setModo] = useState(null); // null = visitante | "login" | "registro"
   const [publico, setPublico] = useState(null);
   const [errPub, setErrPub] = useState("");
@@ -52,7 +54,7 @@ export default function App() {
 
   // Perfil + datos al iniciar sesión
   useEffect(() => {
-    setMenu(false);
+    setMenu(false); setSim("admin");
     if (!sesion) { setPerfil(null); setDatos(null); setError(""); return; }
     let vivo = true;
     (async () => {
@@ -145,8 +147,8 @@ export default function App() {
 
   return (
     <>
-      <Vortex key={perfil.uid} inicial={datos} sesion={perfil} onMenu={() => setMenu(true)} cuentas={perfil.rol === "admin" ? cuentas : null} />
-      {menu && <MenuCuenta sesion={perfil} onClose={() => setMenu(false)} />}
+      <Vortex key={perfil.uid} inicial={datos} sesion={perfil} onMenu={() => setMenu(true)} cuentas={perfil.rol === "admin" ? cuentas : null} sim={sim} setSim={setSim} finPrueba={finPrueba} />
+      {menu && <MenuCuenta sesion={perfil} onClose={() => setMenu(false)} vista={perfil.rol === "admin" ? { sim, setSim, terminarPrueba: () => { setFinPrueba(Date.now()); setMenu(false); } } : null} />}
       {(avisoTxt || subiendo > 0) && (
         <div className="fixed left-0 right-0 z-50 flex justify-center px-4" style={{ top: "calc(12px + env(safe-area-inset-top, 0px))" }}>
           <div className="text-sm px-4 py-2.5 rounded-xl shadow-lg" style={{ maxWidth: 440, background: avisoTxt ? C.red : C.ink, color: "#fff" }}>

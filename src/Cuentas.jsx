@@ -3,7 +3,7 @@
 //  - Cada usuario puede cambiar su propia contraseña y cerrar sesión.
 import { useState } from "react";
 import { supabase } from "./supabase";
-import { C } from "./Vortex";
+import { C, CUENTAS, RESUMEN } from "./Vortex";
 import { inp, Campo, Boton, Error } from "./ui";
 
 const msg = (e) => (e && e.message ? e.message.replace(/^.*?ERROR:\s*/i, "") : String(e));
@@ -85,7 +85,7 @@ export function AccionesUsuario({ u, onHecho, recargar, sesion }) {
   );
 }
 
-export function MenuCuenta({ sesion, onClose }) {
+export function MenuCuenta({ sesion, onClose, vista }) {
   const [pass, setPass] = useState("");
   const [ok, setOk] = useState("");
   const [err, setErr] = useState("");
@@ -98,11 +98,20 @@ export function MenuCuenta({ sesion, onClose }) {
   };
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(30,27,58,.55)" }} onClick={onClose}>
-      <div className="w-full rounded-t-3xl p-5 space-y-4" style={{ background: C.card, maxWidth: 480, paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))" }} onClick={(e) => e.stopPropagation()}>
+      <div className="w-full rounded-t-3xl p-5 space-y-4 overflow-y-auto" style={{ background: C.card, maxWidth: 480, maxHeight: "92vh", paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))" }} onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-start">
           <div><div className="font-bold" style={{ color: C.ink }}>{sesion.nombre}</div><div className="text-xs" style={{ color: C.mute }}>{sesion.email} · {sesion.rol === "admin" ? "Administrador" : "Agente"}</div></div>
           <button onClick={onClose} className="text-xl" style={{ color: C.mute }}>✕</button>
         </div>
+        {vista && <div className="rounded-2xl p-3 space-y-2" style={{ background: C.lilaSoft }}>
+          <div className="text-sm font-semibold" style={{ color: C.lilaDk }}>👁 Ver la app como</div>
+          <div className="grid grid-cols-3 gap-1.5">{CUENTAS.map(([k, l]) => (
+            <button key={k} onClick={() => vista.setSim(k)} className="py-2 rounded-xl text-xs font-semibold" style={{ background: vista.sim === k ? C.lila : "#fff", color: vista.sim === k ? "#fff" : C.ink }}>{l}</button>))}</div>
+          <div className="text-xs" style={{ color: C.ink }}>{RESUMEN[vista.sim]}</div>
+          {vista.sim === "prueba" && <button onClick={vista.terminarPrueba} className="w-full py-2 rounded-xl text-xs font-semibold" style={{ background: "#fff", color: C.amber }}>⏩ Terminar la prueba (ver cómo pasa a Gratuito)</button>}
+          {vista.sim !== "admin" && <div className="text-xs" style={{ color: C.amber }}>Vista previa: lo que publiques o registres se guarda con tu usuario de administrador. Para volver al panel elige SuperAdmin.</div>}
+          <button onClick={onClose} className="w-full py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: C.grad }}>Ver la app</button>
+        </div>}
         <Campo l="Cambiar mi contraseña"><div className="flex gap-2"><input type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="Nueva contraseña" className="flex-1 rounded-xl px-3 py-2 text-sm" style={inp} /><button onClick={cambiar} className="px-4 rounded-xl text-sm font-semibold text-white" style={{ background: C.lila }}>Guardar</button></div></Campo>
         {ok && <div className="text-xs" style={{ color: C.ok }}>✓ {ok}</div>}
         <Error t={err} />

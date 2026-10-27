@@ -6,6 +6,7 @@ import { inp, Campo, Boton, Error } from "./ui";
 const traducir = (m = "") =>
   /invalid login credentials/i.test(m) ? "Correo o contraseña incorrectos."
   : /email not confirmed/i.test(m) ? "Este correo aún no está confirmado. En Supabase, al crear el usuario marca «Auto Confirm User»."
+  : /database error|querying schema|converting null/i.test(m) ? "Esta cuenta tiene datos incompletos en Supabase. Ejecuta el archivo 6_reparar_cuentas.sql y vuelve a intentar."
   : /fetch|network/i.test(m) ? "No hay conexión con el servidor. Revisa tu internet o los datos de config.js."
   : m;
 
