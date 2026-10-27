@@ -7,7 +7,7 @@ import { aviso } from "./datos";
 let subiendo = 0;
 const marcar = (d) => { subiendo += d; window.dispatchEvent(new CustomEvent("vortex-subiendo", { detail: subiendo })); };
 
-async function comprimir(file, max = 1600) {
+export async function comprimir(file, max = 1600) {
   if (!file.type.startsWith("image/") || file.type === "image/gif" || file.type === "image/svg+xml") return file;
   try {
     const img = await new Promise((ok, mal) => { const i = new Image(); i.onload = () => ok(i); i.onerror = mal; i.src = URL.createObjectURL(file); });

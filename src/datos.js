@@ -86,6 +86,18 @@ export async function cargarTodo() {
   return out;
 }
 
+// ── catálogo público para visitantes sin cuenta (solo datos básicos) ──
+export async function cargarPublico() {
+  const out = { perfiles: [], cfg: null };
+  Object.keys(TABLAS).forEach((t) => { out[t] = []; });
+  const { data, error } = await supabase.rpc("catalogo_publico");
+  if (error) throw new Error(/catalogo_publico/.test(error.message) ? "Falta ejecutar el archivo 5_acceso_libre.sql en Supabase (SQL Editor)." : error.message);
+  out.propiedades = (data || []).map((r) => desde("propiedades", r.datos || {}, r));
+  const cfg = await supabase.from("ajustes").select("valor").eq("clave", "cfg").maybeSingle();
+  out.cfg = cfg.data ? cfg.data.valor : null;
+  return out;
+}
+
 // ── escribir cambios de una lista ──
 async function escribir(t, cambios, borrar, ses) {
   const admin = ses.rol === "admin";
@@ -138,6 +150,7 @@ export function useSync(t, inicial, ses) {
     if (ocupado.current) { timer.current = setTimeout(() => { timer.current = null; guardar(); }, 300); return; }
     ocupado.current = true;
     const nuevo = mapa(t, valRef.current);
+    if (!ses.uid) { base.current = nuevo; ocupado.current = false; pendientes[t] = false; return; } // visitante: no guarda nada
     try {
       const cambios = [], borrar = [];
       for (const [k, v] of nuevo) { const b = base.current.get(k); if (!b || b.json !== v.json) cambios.push({ k, obj: v.obj, prev: b && b.obj }); }
@@ -186,6 +199,7 @@ export function useSyncObj(t, clave, inicial, ses) {
     clearTimeout(timer.current);
     timer.current = setTimeout(async () => {
       try {
+        if (!ses.uid) return; // visitante: no guarda nada
         if (t === "ajustes") {
           if (ses.rol !== "admin") return;
           const { error } = await supabase.from("ajustes").upsert({ clave, valor: val, actualizado_en: new Date().toISOString() }, { onConflict: "clave" });

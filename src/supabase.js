@@ -16,3 +16,7 @@ export const BUCKET = "vortex";
 export const supabase = configurado
   ? createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } })
   : null;
+
+// Cliente aparte, sin guardar sesión: se usa durante el registro para subir el carnet
+export const clienteTemporal = () =>
+  createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false, autoRefreshToken: false, storageKey: "vx-registro" } });

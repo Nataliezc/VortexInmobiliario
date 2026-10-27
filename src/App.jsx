@@ -2,9 +2,10 @@
 // carga los datos desde Supabase y muestra la app Vortex.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase, configurado } from "./supabase";
-import { cargarTodo, hayPendientes } from "./datos";
+import { cargarTodo, cargarPublico, hayPendientes } from "./datos";
 import Vortex, { fijarUsuario, C, LOGO_ISO } from "./Vortex";
 import Login from "./Login";
+import Registro from "./Registro";
 import { CrearUsuario, AccionesUsuario, MenuCuenta } from "./Cuentas";
 
 const Centro = ({ children }) => (
@@ -35,6 +36,9 @@ export default function App() {
   const [avisoTxt, setAvisoTxt] = useState("");
   const [subiendo, setSubiendo] = useState(0);
   const ultima = useRef(Date.now());
+  const [modo, setModo] = useState(null); // null = visitante | "login" | "registro"
+  const [publico, setPublico] = useState(null);
+  const [errPub, setErrPub] = useState("");
 
   // Sesión
   useEffect(() => {
@@ -69,6 +73,13 @@ export default function App() {
       }
     })();
     return () => { vivo = false; };
+  }, [sesion]);
+
+  // Catálogo público para visitantes sin cuenta
+  useEffect(() => {
+    if (!configurado || sesion !== null) return;
+    setModo(null);
+    cargarPublico().then((d) => { fijarUsuario(""); setPublico(d); setErrPub(""); }).catch((e) => setErrPub(e.message || String(e)));
   }, [sesion]);
 
   // Recarga periódica (para ver lo que hacen los demás usuarios)
@@ -110,7 +121,19 @@ export default function App() {
 
   if (!configurado) return <SinConfigurar />;
   if (sesion === undefined) return <Centro><div className="text-sm" style={{ color: C.mute }}>Cargando…</div></Centro>;
-  if (!sesion) return <Login />;
+  if (!sesion) {
+    if (modo === "login") return <Login onRegistro={() => setModo("registro")} onVolver={() => setModo(null)} />;
+    if (modo === "registro") return <Registro onLogin={() => setModo("login")} onVolver={() => setModo(null)} />;
+    if (errPub) return (
+      <Centro>
+        <div className="text-base font-bold" style={{ color: C.ink }}>Bienvenido a Vortex</div>
+        <div className="text-sm" style={{ color: C.mute, maxWidth: 340 }}>{errPub}</div>
+        <button onClick={() => setModo("login")} className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: C.lila }}>Iniciar sesión</button>
+      </Centro>
+    );
+    if (!publico) return <Centro><div className="text-sm" style={{ color: C.mute }}>Cargando propiedades…</div></Centro>;
+    return <Vortex key="visitante" inicial={publico} sesion={{ uid: null, nombre: "", email: "", rol: "visitante" }} onIngresar={() => setModo("login")} onRegistro={() => setModo("registro")} />;
+  }
   if (error) return (
     <Centro>
       <div className="text-base font-bold" style={{ color: C.red }}>No se pudo abrir Vortex</div>

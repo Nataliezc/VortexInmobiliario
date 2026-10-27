@@ -9,7 +9,7 @@ const traducir = (m = "") =>
   : /fetch|network/i.test(m) ? "No hay conexión con el servidor. Revisa tu internet o los datos de config.js."
   : m;
 
-export default function Login() {
+export default function Login({ onRegistro, onVolver }) {
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
@@ -29,6 +29,7 @@ export default function Login() {
       <div className="vx-frame relative flex flex-col overflow-y-auto" style={{ background: C.bg }}>
         <div style={{ height: 4, background: C.grad }} />
         <div className="flex-1 flex flex-col justify-center px-6 py-10 space-y-6" style={{ maxWidth: 400, width: "100%", margin: "0 auto" }}>
+          {onVolver && <button onClick={onVolver} className="text-sm self-start" style={{ color: C.brandDk }}>‹ Seguir como visitante</button>}
           <div className="flex flex-col items-center gap-3">
             <img src={LOGO_ISO} alt="Vortex" style={{ height: 72 }} />
             <img src={LOGO_WM} alt="Vortex" style={{ height: 26 }} />
@@ -41,6 +42,7 @@ export default function Login() {
             <Error t={err} />
             <Boton type="submit" disabled={cargando}>{cargando ? "Entrando…" : "Entrar"}</Boton>
             <button type="button" onClick={() => setOlvido(!olvido)} className="w-full text-xs underline" style={{ color: C.mute }}>¿Olvidaste tu contraseña?</button>
+            {onRegistro && <button type="button" onClick={onRegistro} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.lilaSoft, color: C.lilaDk }}>¿No tienes cuenta? Regístrate gratis</button>}
             {olvido && <div className="text-xs rounded-lg p-3" style={{ background: C.lilaSoft, color: C.lilaDk }}>Pide al administrador de Vortex que te asigne una nueva contraseña desde el panel de Usuarios.</div>}
           </form>
         </div>
