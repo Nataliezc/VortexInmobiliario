@@ -4,7 +4,58 @@
 import { useState } from "react";
 import { supabase } from "./supabase";
 import { C, CUENTAS, RESUMEN } from "./Vortex";
-import { inp, Campo, Boton, Error } from "./ui";
+import { inp, Campo, Boton, MsgError } from "./ui";
+import { useEffect } from "react";
+import { estadoPush, activarPush, desactivarPush, esIOS, instaladaComoApp } from "./push";
+import { LOGO_ISO } from "./Vortex";
+
+// Activar las notificaciones en este celular
+function PanelPush({ esAdmin }) {
+  const [est, setEst] = useState("…");
+  const [msg, setMsg] = useState("");
+  const [ocupado, setOcupado] = useState(false);
+  useEffect(() => { estadoPush().then(setEst).catch(() => setEst("no")); }, []);
+  const activar = async () => { setOcupado(true); setMsg(""); try { await activarPush(); setEst("activo"); setMsg("✓ Listo. Este celular recibirá las notificaciones."); } catch (e) { setMsg(e.message || String(e)); } setOcupado(false); };
+  const apagar = async () => { setOcupado(true); try { await desactivarPush(); setEst("inactivo"); setMsg("Notificaciones desactivadas en este celular."); } catch (e) { setMsg(e.message || String(e)); } setOcupado(false); };
+  return (
+    <div className="rounded-2xl p-3 space-y-2" style={{ background: C.brandSoft }}>
+      <div className="text-sm font-semibold" style={{ color: C.brandDk }}>🔔 Notificaciones en este celular</div>
+      <div className="text-xs" style={{ color: C.ink }}>{esAdmin ? "Te avisaremos al instante cuando llegue un pago o un nuevo registro por verificar." : "Te avisaremos cuando aprueben tu pago o tu cuenta, y cuando agenden una visita a tu propiedad."}</div>
+      {est === "activo" ? <><div className="text-xs font-semibold" style={{ color: C.ok }}>✓ Activadas</div><button onClick={apagar} disabled={ocupado} className="text-xs underline" style={{ color: C.mute }}>Desactivar en este celular</button></>
+        : est === "bloqueado" ? <div className="text-xs" style={{ color: C.red }}>Las bloqueaste en este navegador. Actívalas en los ajustes del navegador (candado junto a la dirección → Notificaciones → Permitir).</div>
+        : est === "no" && esIOS() && !instaladaComoApp() ? <div className="text-xs" style={{ color: C.amber }}>En iPhone: toca Compartir ⬆️ → «Agregar a inicio», abre Vortex desde ese ícono y vuelve aquí para activarlas.</div>
+        : est === "no" ? <div className="text-xs" style={{ color: C.amber }}>Este navegador no permite notificaciones. Usa Chrome en Android o instala la app en tu iPhone.</div>
+        : <button onClick={activar} disabled={ocupado} className="w-full py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: C.brand }}>{ocupado ? "Activando…" : "Activar notificaciones"}</button>}
+      {msg && <div className="text-xs" style={{ color: msg.startsWith("✓") ? C.ok : C.red }}>{msg}</div>}
+    </div>
+  );
+}
+
+// Pantalla para crear contraseña nueva (después del enlace del correo)
+export function NuevaClave({ onListo }) {
+  const [p1, setP1] = useState(""); const [p2, setP2] = useState("");
+  const [err, setErr] = useState(""); const [ok, setOk] = useState(false);
+  const guardar = async () => {
+    setErr("");
+    if (p1.length < 6) return setErr("La contraseña debe tener al menos 6 caracteres.");
+    if (p1 !== p2) return setErr("Las contraseñas no coinciden.");
+    const { error } = await supabase.auth.updateUser({ password: p1 });
+    if (error) return setErr(msg(error));
+    setOk(true);
+  };
+  return (
+    <div className="vx-shell"><div className="vx-frame flex flex-col justify-center p-6 space-y-4" style={{ background: C.bg }}>
+      <img src={LOGO_ISO} alt="Vortex" style={{ height: 56, alignSelf: "center" }} />
+      <div className="text-lg font-bold text-center" style={{ color: C.ink }}>Crea tu nueva contraseña</div>
+      {ok ? <><div className="text-sm text-center" style={{ color: C.ok }}>✓ Tu contraseña se actualizó.</div><Boton onClick={onListo}>Entrar a Vortex</Boton></> : <>
+        <Campo l="Nueva contraseña"><input type="password" value={p1} onChange={(e) => setP1(e.target.value)} className="w-full rounded-xl px-3 py-2.5 text-sm" style={inp} /></Campo>
+        <Campo l="Repetir contraseña"><input type="password" value={p2} onChange={(e) => setP2(e.target.value)} className="w-full rounded-xl px-3 py-2.5 text-sm" style={inp} /></Campo>
+        <MsgError t={err} />
+        <Boton onClick={guardar}>Guardar contraseña</Boton>
+      </>}
+    </div></div>
+  );
+}
 
 const msg = (e) => (e && e.message ? e.message.replace(/^.*?ERROR:\s*/i, "") : String(e));
 
@@ -46,7 +97,7 @@ export function CrearUsuario({ planes, corte, onCreado, recargar }) {
         <Campo l="Plan"><select value={f.plan} onChange={s("plan")} className="w-full rounded-xl px-2 py-2 text-sm" style={inp}><option value="Prueba">Prueba 48 h</option><option value="Gratuito">Gratuito</option>{planes.map((p) => <option key={p}>{p}</option>)}</select></Campo>
       </div>
       <div className="text-xs" style={{ color: C.mute }}>{f.plan === "Prueba" ? "Tendrá 48 horas de acceso completo; luego pasa a Gratuito." : f.plan === "Gratuito" ? "Acceso limitado hasta que pague un plan." : `Quedará activo hasta el próximo corte (${corte}) y no se le pedirá carnet.`}</div>
-      <Error t={err} />
+      <MsgError t={err} />
       <div className="grid grid-cols-2 gap-2">
         <Boton onClick={crear} disabled={cargando}>{cargando ? "Creando…" : "Crear usuario"}</Boton>
         <Boton tono="suave" onClick={() => { setAbierto(false); setErr(""); }}>Cancelar</Boton>
@@ -80,12 +131,12 @@ export function AccionesUsuario({ u, onHecho, recargar, sesion }) {
       </div>}
       {modo === "clave" && <div className="flex gap-2"><input value={pass} onChange={(e) => setPass(e.target.value)} placeholder="Nueva contraseña" className="flex-1 rounded-lg px-2 py-1.5 text-sm" style={inp} /><button onClick={cambiar} className="px-3 rounded-lg text-xs font-semibold text-white" style={{ background: C.lila }}>Guardar</button><button onClick={() => { setModo(null); setErr(""); }} className="px-2 text-xs" style={{ color: C.mute }}>✕</button></div>}
       {modo === "borrar" && <div className="rounded-lg p-2 space-y-2 text-xs" style={{ background: C.redSoft, color: C.red }}>¿Eliminar definitivamente la cuenta de {u.n}? Ya no podrá iniciar sesión.<div className="grid grid-cols-2 gap-2"><button onClick={eliminar} className="py-2 rounded-lg font-semibold text-white" style={{ background: C.red }}>Sí, eliminar</button><button onClick={() => setModo(null)} className="py-2 rounded-lg" style={{ background: "#fff", color: C.mute }}>Cancelar</button></div></div>}
-      <Error t={err} />
+      <MsgError t={err} />
     </div>
   );
 }
 
-export function MenuCuenta({ sesion, onClose, vista }) {
+export function MenuCuenta({ sesion, onClose, vista, onTerminos }) {
   const [pass, setPass] = useState("");
   const [ok, setOk] = useState("");
   const [err, setErr] = useState("");
@@ -112,9 +163,11 @@ export function MenuCuenta({ sesion, onClose, vista }) {
           {vista.sim !== "admin" && <div className="text-xs" style={{ color: C.amber }}>Vista previa: lo que publiques o registres se guarda con tu usuario de administrador. Para volver al panel elige SuperAdmin.</div>}
           <button onClick={onClose} className="w-full py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: C.grad }}>Ver la app</button>
         </div>}
+        <PanelPush esAdmin={sesion.rol === "admin"} />
         <Campo l="Cambiar mi contraseña"><div className="flex gap-2"><input type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="Nueva contraseña" className="flex-1 rounded-xl px-3 py-2 text-sm" style={inp} /><button onClick={cambiar} className="px-4 rounded-xl text-sm font-semibold text-white" style={{ background: C.lila }}>Guardar</button></div></Campo>
         {ok && <div className="text-xs" style={{ color: C.ok }}>✓ {ok}</div>}
-        <Error t={err} />
+        <MsgError t={err} />
+        {onTerminos && <button onClick={onTerminos} className="w-full text-xs underline" style={{ color: C.mute }}>Términos y política de privacidad</button>}
         <Boton tono="rojo" onClick={() => supabase.auth.signOut()}>Cerrar sesión</Boton>
       </div>
     </div>

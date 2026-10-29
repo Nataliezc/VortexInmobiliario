@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { useSync, useSyncObj } from "./datos";
-import { subir, subirVarios } from "./archivos";
+import { subir, subirVarios, borrarFotos, subirPrivado } from "./archivos";
+import { ImgSegura, TerminosModal, AdminCiudades, AdminVerificar, AdminMetricas, Plantillas, RespuestasRapidas, PLANTILLAS_BASE, TERMINOS_BASE } from "./Extras";
+import { notificar } from "./push";
 import { leerCopy, camposFaltantes, NOMBRES_CAMPOS } from "./leerCopy";
 
 // Fecha de hoy (a medianoche). Antes era una fecha fija de demostración.
@@ -105,7 +107,7 @@ function Detalle(a) {
   const ant = (a.users.find((x) => x.n === a.p.cap.n) || { ant: 0 }).ant;
   return DetalleInner({ ...a, ant });
 }
-function DetalleInner({ p, acceso, onBack, onVisit, onReport, ant, rate, onProfile, favs, toggleFav, clientes, onSub, perm, flash }) {
+function DetalleInner({ p, acceso, onBack, onVisit, onReport, ant, rate, onProfile, favs, toggleFav, clientes, onSub, perm, flash, onRespuestas }) {
   const [share, setShare] = useState(false);
   const v = vigencia(p, perm.vigDet);
   const locked = acceso === "vencido";
@@ -156,6 +158,7 @@ function DetalleInner({ p, acceso, onBack, onVisit, onReport, ant, rate, onProfi
             <button onClick={() => onProfile(p.cap.n)} className="text-xs px-2 py-1 rounded-md" style={{ background: C.lilaSoft, color: C.lilaDk }}>Ver perfil</button>
           </div>
           <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Colaboración 50/50: si cierras con tu cliente, la comisión se divide en partes iguales con el captador.</div>
+          {perm.auto && onRespuestas && <button onClick={() => onRespuestas({ propiedad: p.t, agente: ME })} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.brandSoft, color: C.brandDk }}>💬 Respuestas rápidas</button>}
           <button onClick={async () => { const ok = await copiarTexto(textoCopy(p, miTel())); flash && flash(ok ? (waNum(miTel()).length < 8 ? "Copy copiado. Tip: agrega tu WhatsApp en Mis datos para incluir tu enlace." : "Copy copiado con tu WhatsApp. Pégalo en el chat de tu cliente.") : "No se pudo copiar automáticamente."); }} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.lilaSoft, color: C.lilaDk }}>📋 Copiar copy para enviar a un cliente</button>
           <div className={`grid ${perm.share ? "grid-cols-2" : "grid-cols-1"} gap-2`}>
             <button onClick={() => window.open(`https://wa.me/${p.cap.tel.replace(/\D/g, "")}?text=${encodeURIComponent("Hola " + p.cap.n + ", vi tu captación en Vortex: " + p.t)}`, "_blank")} className="py-3 rounded-xl font-semibold text-white" style={{ background: "#1FA855" }}>Escribir por WhatsApp</button>
@@ -195,7 +198,7 @@ function Buscar({ acceso, open, props, rate, favs, perm, goSub, busq, setBusq })
       <div className="flex gap-2 overflow-x-auto pb-1">{["Todas", "Venta", "Alquiler", "Anticrético", "Preventa"].map((o) => <Chip key={o} on={op === o} onClick={() => setOp(o)}>{o}</Chip>)}</div>
       <div className="flex gap-2">
         <select value={ciu} onChange={(e) => setCiu(e.target.value)} className="flex-1 rounded-xl px-3 py-2 text-sm" style={{ border: `1px solid ${C.line}`, background: C.card, color: C.ink }}>
-          {["Todas", "Cochabamba", "La Paz", "Santa Cruz"].map((c) => <option key={c}>{c}</option>)}
+          {["Todas", ...Object.keys(ZONAS)].map((c) => <option key={c}>{c}</option>)}
         </select>
         <input value={max} onChange={(e) => setMax(e.target.value.replace(/\D/g, ""))} placeholder="Máx. USD" disabled={!perm.filtros} inputMode="numeric" className="w-28 rounded-xl px-3 py-2 text-sm" style={{ border: `1px solid ${C.line}`, background: C.card }} />
         <Chip on={gar} disabled={!perm.filtros} onClick={() => setGar(!gar)}>Garaje</Chip>
@@ -291,7 +294,11 @@ function Clientes({ acceso, open, props, clientes, setClientes, favs, toggleFav,
   );
 }
 
-function Visitas({ visitas, setVisitas, props, clientes, flash, notify, users, perm, autos }) {
+function Visitas({ visitas, setVisitas, props, clientes, flash, notify, users, perm, autos, onRespuestas }) {
+  const [segDe, setSegDe] = useState(null);
+  const [segF, setSegF] = useState({ dias: 1, hora: "10:00", txt: "", tel: "" });
+  const abrirSeg = (x, pp) => { setSegDe(x.id); setSegF(x.seg ? { ...x.seg } : { dias: 1, hora: "10:00", tel: x.clTel || "", txt: plantillaSeg({ cl: x.cl, pt: pp ? pp.t : x.pTxt || "la propiedad", fecha: fechaL(isoD(x.f)), yo: ME }) }); };
+  const guardarSeg = (x) => { if (waNum(segF.tel).length < 8) { flash("Escribe el WhatsApp del cliente para el seguimiento."); return; } setVisitas((vs) => vs.map((y) => (y.id === x.id ? { ...y, seg: { ...segF, env: false }, clTel: y.clTel || segF.tel } : y))); setSegDe(null); flash(`Seguimiento programado: ${segF.dias} día${segF.dias > 1 ? "s" : ""} después de la visita, a las ${segF.hora}.`); };
   const reg = (n) => users.some((u) => u.n === n);
   const [vm, setVm] = useState({ y: HOY.getFullYear(), m: HOY.getMonth() });
   const [sel, setSel] = useState(isoOf(HOY));
@@ -325,7 +332,7 @@ function Visitas({ visitas, setVisitas, props, clientes, flash, notify, users, p
   const txtCli = v.txtCli ?? plantillaWa("cli", datosMsg);
   const txtAg = v.txtAg ?? plantillaWa("ag", datosMsg);
   const conAg = !!agNombre && agNombre !== ME;
-  const marcarWa = (id, k) => setVisitas((vs) => vs.map((y) => (y.id === id ? { ...y, wa: { ...y.wa, [k]: { ...y.wa[k], env: true, envF: Date.now() } } } : y)));
+  const marcarWa = (id, k) => setVisitas((vs) => vs.map((y) => (y.id !== id ? y : k === "seg" ? { ...y, seg: { ...y.seg, env: true, envF: Date.now() } } : { ...y, wa: { ...y.wa, [k]: { ...y.wa[k], env: true, envF: Date.now() } } })));
   const porEnviar = pendWa(visitas);
   const save = () => {
     if ((!prop && !(manual && v.ptxt.trim())) || !cNombre) { flash(manual ? "Escribe la descripción o dirección de la propiedad y el nombre del cliente." : "Elige la propiedad y el cliente, o escribe su nombre."); return; }
@@ -337,6 +344,7 @@ function Visitas({ visitas, setVisitas, props, clientes, flash, notify, users, p
     setVisitas([...visitas, { id: Date.now(), p: prop ? prop.id : null, ...(manual ? { pTxt: v.ptxt.trim() } : {}), cl: cNombre, clTel: telCli, f: sel, h: v.h || "10:00", ag, agTel: telAg, de: ME, rec: perm.recordatorios ? autos.recDef || 0 : 0, est: "Pendiente", ...(wa ? { wa } : {}) }]);
     notify("Visita agendada", `${cNombre} · ${prop ? prop.t : v.ptxt.trim()} · ${sd} ${MESES[sm - 1].toLowerCase()}, ${v.h}`, { tab: "visitas" });
     flash(ag === ME ? "Visita agendada." : reg(ag) ? `Visita agendada y también en el calendario de ${ag}. Le llegó una notificación.` : `Visita agendada. ${ag} no está en la app: avísale por WhatsApp.`);
+    if (prop && prop.cap.n !== ME && reg(prop.cap.n)) notificar("visita", { para: prop.cap.n, de: ME, prop: prop.t, fecha: fechaL(isoD(sel)), hora: v.h || "10:00" });
     if (wa) flash(v.waCuando === 0 ? "Visita agendada. Los mensajes de WhatsApp están listos arriba para enviar." : `Visita agendada. Los mensajes de WhatsApp quedan programados (${MOMENTOS_WA.find((m) => m[0] === v.waCuando)[1].toLowerCase()}).`);
     setNuevo(false); setV({ ...v, pid: "", ptxt: "", modo: "Captador de la propiedad", cid: "", otro: "", cotro: "", tel: "", agTel: "", txtCli: null, txtAg: null });
   };
@@ -346,7 +354,7 @@ function Visitas({ visitas, setVisitas, props, clientes, flash, notify, users, p
         <div className="text-sm font-bold" style={{ color: "#0F7A3D" }}>📲 Mensajes de WhatsApp listos para enviar ({porEnviar.length})</div>
         {porEnviar.map(({ x, k, m }) => (
           <div key={x.id + k} className="rounded-xl p-2.5 space-y-1.5" style={{ background: "#fff" }}>
-            <div className="text-xs font-semibold" style={{ color: C.ink }}>{k === "cli" ? `Al cliente: ${x.cl}` : `Al agente: ${x.ag}`} · visita {fechaL(isoD(x.f))}, {x.h}</div>
+            <div className="text-xs font-semibold" style={{ color: C.ink }}>{k === "seg" ? `📩 Seguimiento a ${x.cl}` : k === "cli" ? `Al cliente: ${x.cl}` : `Al agente: ${x.ag}`} · visita {fechaL(isoD(x.f))}, {x.h}</div>
             <div className="text-xs" style={{ color: C.mute }}>{m.txt}</div>
             <a href={waLink(m.tel, m.txt)} target="_blank" rel="noreferrer" onClick={() => marcarWa(x.id, k)} className="block text-center py-2 rounded-lg text-sm font-semibold text-white" style={{ background: "#25D366" }}>Enviar por WhatsApp</a>
           </div>
@@ -406,6 +414,19 @@ function Visitas({ visitas, setVisitas, props, clientes, flash, notify, users, p
             <div className="flex items-center justify-between"><span className="font-semibold text-sm" style={{ color: C.ink }}>{x.h}</span><span className="text-xs px-2 py-0.5 rounded-md" style={{ background: col[x.est][1], color: col[x.est][0] }}>{x.est}</span></div>
             <div className="text-sm" style={{ color: C.ink }}>{p ? p.t : x.pTxt ? <>✏️ {x.pTxt}</> : "Propiedad"}</div>
             <div className="text-xs" style={{ color: C.mute }}>Cliente: {x.cl}{x.clTel ? ` (${x.clTel})` : ""} · Agente: {x.ag}</div>
+            {x.est !== "Cancelada" && (x.de === ME || !x.de) && (perm.match || perm.auto) && <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+              {perm.match && <button onClick={() => (segDe === x.id ? setSegDe(null) : abrirSeg(x, p))} className="underline font-semibold" style={{ color: C.lilaDk }}>📩 {x.seg ? "Editar seguimiento" : "Programar seguimiento"}</button>}
+              {perm.auto && onRespuestas && <button onClick={() => onRespuestas({ cliente: x.cl, tel: x.clTel, propiedad: p ? p.t : x.pTxt, agente: ME })} className="underline font-semibold" style={{ color: C.lilaDk }}>💬 Respuestas rápidas</button>}
+            </div>}
+            {x.seg && segDe !== x.id && <div className="text-xs rounded-lg px-2 py-1.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>📩 Seguimiento: {x.seg.env ? "✓ enviado" : `${x.seg.dias} día${x.seg.dias > 1 ? "s" : ""} después de la visita, a las ${x.seg.hora}`}</div>}
+            {segDe === x.id && <div className="rounded-xl p-2.5 space-y-2" style={{ background: "#fff", border: `1.5px solid ${C.lila}` }}>
+              <div className="text-xs font-semibold" style={{ color: C.lilaDk }}>📩 Mensaje de seguimiento por WhatsApp</div>
+              <div className="flex flex-wrap gap-1.5">{[1, 2, 3, 5, 7].map((d) => <Chip key={d} on={segF.dias === d} onClick={() => setSegF({ ...segF, dias: d })}>{d} día{d > 1 ? "s" : ""} después</Chip>)}</div>
+              <div className="grid grid-cols-2 gap-2"><Fld l="Hora de envío"><input type="time" value={segF.hora} onChange={(e) => setSegF({ ...segF, hora: e.target.value })} className="w-full rounded-lg px-2 py-1.5 text-sm" style={inp} /></Fld><Fld l="WhatsApp del cliente"><input value={segF.tel} onChange={(e) => setSegF({ ...segF, tel: e.target.value })} inputMode="tel" placeholder="70012345" className="w-full rounded-lg px-2 py-1.5 text-sm" style={inp} /></Fld></div>
+              <textarea rows={5} value={segF.txt} onChange={(e) => setSegF({ ...segF, txt: e.target.value })} className="w-full rounded-lg px-2 py-1.5 text-xs" style={inp} />
+              <div className="text-xs" style={{ color: C.mute }}>A esa hora el mensaje aparecerá arriba en Visitas y en Alertas, listo para enviarlo con un toque.</div>
+              <div className="grid grid-cols-2 gap-2"><button onClick={() => guardarSeg(x)} className="py-2 rounded-lg text-xs font-semibold text-white" style={{ background: C.lila }}>Guardar seguimiento</button><button onClick={() => setSegDe(null)} className="py-2 rounded-lg text-xs" style={{ border: `1px solid ${C.line}`, color: C.mute }}>Cancelar</button></div>
+            </div>}
             {x.wa && (x.de === ME || !x.de) && ["cli", "ag"].filter((k) => x.wa[k]).map((k) => <div key={k} className="flex items-center justify-between gap-2 text-xs rounded-lg px-2 py-1.5" style={{ background: "#E7F8EE", color: "#0F7A3D" }}><span>📲 {k === "cli" ? "Cliente" : x.ag.split(" ")[0]}: {x.wa[k].env ? "✓ mensaje enviado" : `programado · ${(MOMENTOS_WA.find((m) => m[0] === x.wa.cuando) || [0, ""])[1].toLowerCase()}`}</span><a href={waLink(x.wa[k].tel, x.wa[k].txt)} target="_blank" rel="noreferrer" onClick={() => marcarWa(x.id, k)} className="underline font-semibold shrink-0">{x.wa[k].env ? "Reenviar" : "Enviar ahora"}</a></div>)}
             {x.de && x.de !== ME ? <div className="text-xs" style={{ color: C.lilaDk }}>📥 Agendada por {x.de} directamente en tu calendario</div> : x.ag === ME ? null : reg(x.ag) ? <div className="text-xs" style={{ color: C.ok }}>✓ También agendada en el calendario de {x.ag}</div> : <div className="text-xs" style={{ color: C.amber }}>⚠️ {x.ag} no está en la app · <a href={waLink(x.agTel, `Hola ${x.ag}, te confirmo la visita del ${fechaL(isoD(x.f))} a las ${x.h} con mi cliente ${x.cl}${p ? " en " + p.t : ""}. — ${ME}`)} target="_blank" rel="noreferrer" className="underline">Avisar por WhatsApp</a></div>}
             <div className="flex gap-2 pt-1">
@@ -421,11 +442,11 @@ function Visitas({ visitas, setVisitas, props, clientes, flash, notify, users, p
   );
 }
 
-function Alertas({ go, notifs, visitas, props, clientes, perm, autos, goSub }) {
+function Alertas({ go, notifs, visitas, props, clientes, perm, autos, goSub, avisos = [] }) {
   const ahora = new Date();
   const extra = [];
   if (perm.recordatorios) visitas.filter((v) => v.rec && !["Cancelada", "Realizada"].includes(v.est)).forEach((v) => { const dt = new Date(`${v.f}T${v.h}:00`); if (dt > ahora && dt - v.rec * 6e4 <= ahora) { const pp = props.find((q) => q.id === v.p); extra.push({ id: "r" + v.id, ic: "⏰", t: `Recordatorio: visita ${v.f} a las ${v.h}`, s: `${v.cl}${pp ? " · " + pp.t : v.pTxt ? " · " + v.pTxt : ""}`, to: { tab: "visitas" }, h: "Recordatorio de agenda" }); } });
-  pendWa(visitas).forEach(({ x, k }) => extra.push({ id: `w${x.id}${k}`, ic: "📲", t: `Enviar confirmación por WhatsApp a ${k === "cli" ? x.cl : x.ag}`, s: `Visita ${fechaL(isoD(x.f))}, ${x.h} · toca para abrir Visitas y enviarlo`, to: { tab: "visitas" }, h: "Mensaje programado" }));
+  pendWa(visitas).forEach(({ x, k }) => extra.push({ id: `w${x.id}${k}`, ic: k === "seg" ? "📩" : "📲", t: k === "seg" ? `Es hora de enviar el seguimiento a ${x.cl}` : `Enviar confirmación por WhatsApp a ${k === "cli" ? x.cl : x.ag}`, s: `Visita ${fechaL(isoD(x.f))}, ${x.h} · toca para abrir Visitas y enviarlo`, to: { tab: "visitas" }, h: "Mensaje programado" }));
   if (perm.auto) {
     const act = props.filter((p) => p.cap.n === ME && ["Disponible", "Reservado"].includes(p.est || "Disponible"));
     if (autos.vig.on) act.filter((p) => p.dias >= autos.vig.n).forEach((p) => extra.push({ id: "a1" + p.id, ic: "🤖", t: "Captación sin confirmar", s: `${p.t} lleva ${p.dias} días sin confirmarse`, to: { tab: "perfil" }, h: "Automatización" }));
@@ -435,8 +456,8 @@ function Alertas({ go, notifs, visitas, props, clientes, perm, autos, goSub }) {
   return (
     <div className="p-4 space-y-2">
       <h2 className="font-semibold text-lg" style={{ color: C.ink }}>Notificaciones</h2>
-      {[...extra, ...notifs].map((n) => { const bloq = n.pro && !perm.auto; return (
-        <button key={n.id} onClick={() => (bloq ? goSub && goSub() : go(n.to))} className="w-full text-left rounded-2xl p-3 flex gap-3" style={{ background: C.card, border: `1px solid ${bloq ? C.lilaSoft : C.line}` }}>
+      {[...avisos, ...extra, ...notifs].map((n) => { const bloq = n.pro && !perm.auto; return (
+        <button key={n.id} onClick={() => (n.sus || bloq ? goSub && goSub() : go(n.to))} className="w-full text-left rounded-2xl p-3 flex gap-3" style={{ background: C.card, border: `1px solid ${bloq ? C.lilaSoft : C.line}` }}>
           <span className="text-xl">{bloq ? "🔒" : n.ic}</span>
           <div className="flex-1 min-w-0"><div className="text-sm font-semibold" style={{ color: C.ink }}>{bloq ? n.tPro || n.t : n.t}</div>
             {bloq ? <><div className="text-xs select-none" style={{ color: C.mute, filter: "blur(4px)" }}>{n.s}</div><div className="text-xs mt-1 font-semibold" style={{ color: C.lilaDk }}>Mejora a Premium para ver el detalle completo ›</div></>
@@ -497,6 +518,7 @@ function Cierre({ p, props, setProps, ops, setOps, reviews, setReviews, flash, o
         <div className="text-xs" style={{ color: C.mute }}>Si hubo mal trabajo, además de calificar puedes reportarlo con pruebas desde Perfil → Cierres.</div>
       </div>
       {err && <div className="text-sm" style={{ color: C.red }}>{err}</div>}
+      {p.fotos && p.fotos.length > 0 && <div className="text-xs rounded-xl p-2.5" style={{ background: C.amberSoft, color: C.amber }}>📷 Al cerrar, las {p.fotos.length} foto{p.fotos.length > 1 ? "s" : ""} de esta captación se eliminarán para ahorrar espacio. Si la vuelves a publicar, podrás subir fotos nuevas.</div>}
       <button onClick={save} className="w-full py-3 rounded-xl font-semibold text-white" style={{ background: C.grad }}>Confirmar cierre</button>
     </div>
   );
@@ -654,7 +676,20 @@ export const fijarUsuario = (nombre) => { ME = nombre; };
 // Datos del perfil propio (teléfono, bio, ciudades). Vortex los actualiza en cada render.
 const PERFIL = { datos: null, guardar: () => {} };
 const miTel = () => (PERFIL.datos && PERFIL.datos.tel) || "";
-const ZONAS = { Cochabamba: ["Norte", "Sur", "Centro", "Cala Cala"], "La Paz": ["Sopocachi", "Calacoto", "San Miguel", "Miraflores"], "Santa Cruz": ["Equipetrol", "Urubó", "Las Palmas", "Centro"] };
+const ZONAS_BASE = {
+  "La Paz": ["Sopocachi", "Calacoto", "San Miguel", "Miraflores", "Achumani", "Obrajes", "Irpavi", "Cota Cota", "Los Pinos", "Centro", "San Pedro", "Mallasa"],
+  "El Alto": ["Ciudad Satélite", "Villa Adela", "16 de Julio", "La Ceja", "Río Seco", "Senkata", "Villa Dolores"],
+  Cochabamba: ["Norte", "Sur", "Centro", "Cala Cala", "Queru Queru", "Sarco", "Tupuraya", "Temporal", "Tiquipaya", "Sacaba", "Quillacollo"],
+  "Santa Cruz": ["Equipetrol", "Urubó", "Las Palmas", "Centro", "Norte", "Sirari", "Las Brisas", "Urbarí", "Hamacas", "Plan 3000", "Villa 1ro de Mayo"],
+  Sucre: ["Centro", "Recoleta", "Zona Alta", "Mesa Verde", "Villa Armonía"],
+  Tarija: ["Centro", "San Roque", "Las Panosas", "El Molino", "San Luis"],
+  Oruro: ["Centro", "Zona Norte", "Zona Sur", "Vinto"],
+  Potosí: ["Centro", "San Roque", "Zona Alta", "Villa Copacabana"],
+  Trinidad: ["Centro", "Pompeya", "San Antonio"],
+  Cobija: ["Centro", "Mapajo", "Junín"],
+};
+// Lista activa de ciudades: la define el administrador (Panel → Cobros → Ciudades). Vortex la actualiza en cada render.
+let ZONAS = ZONAS_BASE;
 const ESTADOS = ["Disponible", "Reservado", "En pausa", "Cerrado", "Caído"];
 const EMO = { Disponible: "🟢", Reservado: "🟡", "En pausa": "⏸️", Cerrado: "🔴", Caído: "⚫" };
 const inp = { border: `1px solid ${C.line}`, background: C.card, color: C.ink };
@@ -731,7 +766,7 @@ function Form({ onSave, init, maxFotos = 3, autoCopy = false }) {
   );
 }
 
-function Perfil({ acceso, props, setProps, flash, ops, setOps, reports, favs, reviews, setReviews, onReport, sugs, setSugs, users, setUsers, pagos, setPagos, cfg, subInit, clearSub, perm, nivel, goSub, onPublicada, trial, setReports, clientes, visitas, autos, setAutos }) {
+function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, setProps, flash, ops, setOps, reports, favs, reviews, setReviews, onReport, sugs, setSugs, users, setUsers, pagos, setPagos, cfg, subInit, clearSub, perm, nivel, goSub, onPublicada, trial, setReports, clientes, visitas, autos, setAutos }) {
   const [nueva, setNueva] = useState(false); // false | true | captación a editar
   const [sub, setSub] = useState("capt");
   const [pre, setPre] = useState(null);
@@ -748,7 +783,7 @@ function Perfil({ acceso, props, setProps, flash, ops, setOps, reports, favs, re
     <div className="p-4 space-y-3">
       <button onClick={() => setNueva(false)} className="text-sm" style={{ color: C.brandDk }}>‹ Volver a mi perfil</button>
       <h2 className="font-semibold text-lg" style={{ color: C.ink }}>{nueva === true ? "Nueva captación" : nueva._repub ? "Volver a publicar captación" : "Editar captación"}</h2>
-      {nueva !== true && nueva._repub && <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Revisa y actualiza los datos. Al guardar, la captación vuelve a estar Disponible en el buscador.</div>}
+      {nueva !== true && nueva._repub && <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Revisa y actualiza los datos y sube fotos nuevas (las anteriores se eliminaron al cerrarla). Al guardar, la captación vuelve a estar Disponible en el buscador.</div>}
       <Form autoCopy={!!perm.match} maxFotos={perm.maxFotos || 3} init={nueva === true ? null : nueva} onSave={(p) => { if (nueva === true) { if (bloq) { flash("Alcanzaste el límite de captaciones de tu plan."); return; } const np = { ...p, creada: Date.now() }; setProps([np, ...props]); onPublicada(np); flash("Captación publicada. Confírmala cada cierto tiempo para mantenerla visible."); } else if (nueva._repub) { if (bloq) { flash("Alcanzaste el límite de captaciones activas de tu plan."); return; } const { _repub, ...limpio } = p; setProps(props.map((x) => (x.id === p.id ? { ...limpio, est: "Disponible", opPend: false, dias: 0, creada: Date.now() } : x))); flash("Captación publicada de nuevo. Ya aparece en el buscador."); setSub("capt"); } else { setProps(props.map((x) => (x.id === p.id ? p : x))); flash("Cambios guardados."); } setNueva(false); }} />
     </div>
   );
@@ -769,9 +804,10 @@ function Perfil({ acceso, props, setProps, flash, ops, setOps, reports, favs, re
           <div key={a} className="rounded-xl py-2" style={{ background: C.lilaSoft }}><div className="font-semibold" style={{ ...serif, color: C.lilaDk, fontSize: 20 }}>{b}</div><div className="text-xs" style={{ color: C.mute }}>{a}</div></div>
         ))}
       </div>
-      <div className="flex gap-2 overflow-x-auto">{[["capt", "Captaciones"], ["sus", "Suscripción"], ["dash", "Dashboard"], ["inf", "Informes"], ["auto", "Automatiz."], ["ops", "Cierres"], ["rep", "Reportes"], ["sug", "Sugerencias"], ["datos", "Mis datos"]].map(([k, l]) => <Chip key={k} on={sub === k} onClick={() => setSub(k)}>{l}</Chip>)}</div>
+      <div className="flex gap-2 overflow-x-auto">{[["capt", "Captaciones"], ["sus", "Suscripción"], ["dash", "Dashboard"], ["inf", "Informes"], ["auto", "Automatiz."], ["plant", "Plantillas"], ["ops", "Cierres"], ["rep", "Reportes"], ["sug", "Sugerencias"], ["datos", "Mis datos"]].map(([k, l]) => <Chip key={k} on={sub === k} onClick={() => setSub(k)}>{l}</Chip>)}</div>
       {sub === "sus" && <Sus acceso={acceso} users={users} setUsers={setUsers} pagos={pagos} setPagos={setPagos} cfg={cfg} flash={flash} nivel={nivel} trial={trial} />}
-      {sub !== "capt" && sub !== "sus" && <Extra onRepublicar={(p) => setNueva({ ...p, _repub: true })} sub={sub} ops={ops} setOps={setOps} props={props} setProps={setProps} reports={reports} flash={flash} reviews={reviews} setReviews={setReviews} onReport={onReport} pre={pre} clearPre={() => setPre(null)} sugs={sugs} setSugs={setSugs} perm={perm} goSub={goSub} nivel={nivel} setReports={setReports} cfg={cfg} clientes={clientes} visitas={visitas} favs={favs} autos={autos} setAutos={setAutos} pagos={pagos} />}
+      {sub === "plant" && (perm.auto ? <Plantillas plantillas={plantillas} setPlantillas={setPlantillas} agente={ME} flash={flash} /> : <Lock t="Plantillas de respuestas rápidas" plan="Premium" go={goSub} />)}
+      {sub !== "capt" && sub !== "sus" && sub !== "plant" && <Extra onRepublicar={(p) => setNueva({ ...p, _repub: true })} sub={sub} ops={ops} setOps={setOps} props={props} setProps={setProps} reports={reports} flash={flash} reviews={reviews} setReviews={setReviews} onReport={onReport} pre={pre} clearPre={() => setPre(null)} sugs={sugs} setSugs={setSugs} perm={perm} goSub={goSub} nivel={nivel} setReports={setReports} cfg={cfg} clientes={clientes} visitas={visitas} favs={favs} autos={autos} setAutos={setAutos} pagos={pagos} />}
       {sub === "capt" && <>
       <div className="flex items-center justify-between pt-1">
         <h2 className="font-semibold" style={{ color: C.ink }}>Mis captaciones</h2>
@@ -807,7 +843,7 @@ function Perfil({ acceso, props, setProps, flash, ops, setOps, reports, favs, re
   );
 }
 
-function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, ops, sugs, setSugs, pagos, setPagos, cfg, setCfg, flash, cuentas }) {
+function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, ops, sugs, setSugs, pagos, setPagos, cfg, setCfg, flash, cuentas, visitas = [], reviews = [] }) {
   const [s, setS] = useState("pag");
   const [rej, setRej] = useState(null);
   const [mot, setMot] = useState("");
@@ -827,6 +863,7 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
   const pend = reports.filter((r) => r.est === "Pendiente" || r.est === "En revisión").length;
   const nuevas = sugs.filter((x) => x.est === "Nueva").length;
   const pPend = pagos.filter((p) => p.est === "Pendiente");
+  const porVerificar = users.filter((u) => u.est === "Verificación").length;
   const aprobar = (p) => {
     const u = users.find((x) => x.n === p.de);
     const base = p.tipo === "Renovación" && u && u.venc ? isoD(u.venc) : null;
@@ -835,10 +872,12 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
     setPagos(pagos.map((x) => (x.id === p.id ? { ...x, est: "Aprobado", revF: isoOf(HOY), hasta: isoOf(fin) } : x)));
     log(`Pago aprobado: ${p.de} · ${p.plan} · ${bs(p.monto)}. Habilitado hasta ${fechaL(fin)}`);
     flash(`Aprobado. ${p.de} habilitado hasta el ${fechaL(fin)}.`);
+    notificar("pago_revisado", { para: p.de, est: "Aprobado", plan: p.plan });
   };
   const rechazar = (p) => {
     setPagos(pagos.map((x) => (x.id === p.id ? { ...x, est: "Rechazado", mot: mot || "sin motivo indicado", revF: isoOf(HOY) } : x)));
     log(`Pago rechazado: ${p.de} · ${bs(p.monto)} (${mot || "sin motivo"})`);
+    notificar("pago_revisado", { para: p.de, est: "Rechazado", mot: mot || "" });
     setRej(null); setMot(""); flash("Pago rechazado. Se notificó al agente.");
   };
   const renombrar = (i, nuevo) => { const viejo = cfg.planes[i].nombre; setCfg({ ...cfg, planes: cfg.planes.map((q, j) => (j === i ? { ...q, nombre: nuevo } : q)) }); setUsers(users.map((u) => (u.plan === viejo ? { ...u, plan: nuevo } : u))); setPagos(pagos.map((p) => (p.plan === viejo ? { ...p, plan: nuevo } : p))); };
@@ -858,8 +897,9 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
   return (
     <div className="p-4 space-y-3">
       <style>{`@keyframes vp{0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,.55)}50%{box-shadow:0 0 0 9px rgba(220,38,38,0)}}.vpulse{animation:vp 1.6s infinite}`}</style>
+      {porVerificar > 0 && s !== "ver" && <button onClick={() => setS("ver")} className="w-full rounded-2xl p-3 text-left text-white" style={{ background: "linear-gradient(135deg,#7928CA,#4F46E5)" }}><div className="font-bold">🪪 {porVerificar} registro{porVerificar > 1 ? "s" : ""} por verificar</div><div className="text-xs opacity-90">Revisa el carnet para activar su prueba de 48 h ›</div></button>}
       {pPend.length > 0 ? <button onClick={() => setS("pag")} className="w-full rounded-2xl p-3 text-left text-white vpulse" style={{ background: "linear-gradient(135deg,#F59E0B,#DC2626)" }}><div className="flex justify-between items-center"><div><div className="font-bold">🔔 {pPend.length} pago{pPend.length > 1 ? "s" : ""} por aprobar</div><div className="text-xs opacity-90">{bs(pPend.reduce((a, p) => a + p.monto, 0))} esperando tu verificación</div></div><span className="text-sm font-semibold underline">Revisar ›</span></div></button> : <div className="rounded-xl p-2 text-xs text-center" style={{ background: C.okSoft, color: C.ok }}>✓ Sin pagos pendientes de aprobar</div>}
-      <div className="flex gap-2 overflow-x-auto">{[["pag", `💳 Pagos (${pPend.length})`], ["fin", "📊 Finanzas"], ["cfg", "⚙️ Cobros"], ["rep", `Reportes (${pend})`], ["sug", `Sugerencias (${nuevas})`], ["usr", "Usuarios"], ["res", "Resumen"], ["aud", "Auditoría"]].map(([k, l]) => <Chip key={k} on={s === k} onClick={() => setS(k)}>{l}</Chip>)}</div>
+      <div className="flex gap-2 overflow-x-auto">{[["pag", `💳 Pagos (${pPend.length})`], ["ver", `🪪 Verificar (${porVerificar})`], ["met", "📈 Métricas"], ["fin", "📊 Finanzas"], ["cfg", "⚙️ Configuración"], ["rep", `Reportes (${pend})`], ["sug", `Sugerencias (${nuevas})`], ["usr", "Usuarios"], ["res", "Resumen"], ["aud", "Auditoría"]].map(([k, l]) => <Chip key={k} on={s === k} onClick={() => setS(k)}>{l}</Chip>)}</div>
       {s === "pag" && <>
         {!pPend.length && <div className="text-center py-6 text-sm" style={{ color: C.mute }}>No hay pagos pendientes. Cuando un agente envíe su comprobante aparecerá aquí.</div>}
         {pPend.map((p) => (
@@ -928,7 +968,7 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
         </div>
       </>}
       {s === "cfg" && <>
-        <div className="rounded-xl p-2.5 text-xs" style={{ background: C.amberSoft, color: C.amber }}>Los datos de la cuenta y el QR son de ejemplo. Define los tuyos.</div>
+        <div className="text-sm font-semibold" style={{ color: C.ink }}>💳 Cobros</div>
         <Fld l="Día de corte de todos los pagos"><select value={cfg.dia} onChange={(e) => { setCfg({ ...cfg, dia: +e.target.value }); log(`Día de corte cambiado a ${e.target.value}`); }} className="w-full rounded-xl px-3 py-2 text-sm" style={inp}>{Array.from({ length: 28 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>Día {d} de cada mes</option>)}</select></Fld>
         <div className="space-y-2"><div className="text-xs font-medium" style={{ color: C.mute }}>Precio de cada plan de pago (Bs por mes)</div>{cfg.planes.map((pl, i) => <div key={i} className="grid grid-cols-5 gap-2"><div className="col-span-3 rounded-xl px-3 py-2 text-sm" style={{ ...inp, background: C.lilaSoft }}>{pl.nombre}</div><input value={pl.precio} onChange={(e) => setCfg({ ...cfg, planes: cfg.planes.map((q, j) => (j === i ? { ...q, precio: +e.target.value.replace(/\D/g, "") || 0 } : q)) })} inputMode="numeric" className="col-span-2 rounded-xl px-3 py-2 text-sm" style={inp} /></div>)}<div className="text-xs" style={{ color: C.mute }}>Los nombres de los planes están fijos porque determinan los permisos de cada nivel.</div></div>
         <div className="rounded-xl p-3 text-xs space-y-1" style={{ background: C.lilaSoft, color: C.lilaDk }}>{cfg.planes.map((pl) => { const x = prorrateo(pl.precio, cfg.dia); return <div key={pl.nombre}>Si alguien se suscribe hoy a {pl.nombre}: paga {bs(x.monto)} ({x.resta} de {x.ciclo} días) hasta el {fechaL(x.fin)}.</div>; })}</div>
@@ -938,6 +978,16 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
         <div className="grid grid-cols-2 gap-3"><Fld l="WhatsApp de soporte prioritario"><input value={cfg.waSoporte} onChange={(e) => setCfg({ ...cfg, waSoporte: e.target.value })} placeholder="591..." inputMode="tel" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld><Fld l="Respuesta objetivo (horas)"><input value={cfg.slaPrio} onChange={(e) => setCfg({ ...cfg, slaPrio: e.target.value.replace(/\D/g, "") })} inputMode="numeric" placeholder="Opcional" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld></div>
         <label className="block w-full py-3 rounded-xl text-sm text-center cursor-pointer" style={{ border: `1px dashed ${C.mute}`, color: C.mute }}>{cfg.qr ? "✓ QR cargado (cambiar)" : "📷 Subir imagen del QR de cobro"}<input type="file" accept="image/*" className="hidden" onChange={async (e) => { const u = e.target.files[0] && await subir(e.target.files[0]); if (u) setCfg((x) => ({ ...x, qr: u })); }} /></label>
         {cfg.qr && <img src={cfg.qr} alt="QR" className="rounded-xl mx-auto" style={{ width: 140, height: 140, objectFit: "cover" }} />}
+        <div style={{ height: 1, background: C.line }} />
+        <AdminCiudades ciudades={cfg.ciudades && Object.keys(cfg.ciudades).length ? cfg.ciudades : ZONAS_BASE} setCiudades={(c) => setCfg({ ...cfg, ciudades: c })} log={log} />
+        <div style={{ height: 1, background: C.line }} />
+        <div className="text-sm font-semibold" style={{ color: C.ink }}>📄 Términos y política de privacidad</div>
+        <div className="text-xs" style={{ color: C.mute }}>Este texto lo aceptan los agentes al registrarse. Te recomendamos que un abogado lo revise.{cfg.terminosF ? ` Versión vigente desde el ${fechaL(isoD(cfg.terminosF))}.` : ""}</div>
+        <textarea rows={8} value={cfg.terminos ?? TERMINOS_BASE} onChange={(e) => setCfg({ ...cfg, terminos: e.target.value })} className="w-full rounded-xl px-3 py-2 text-xs" style={inp} />
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={() => { setCfg({ ...cfg, terminosF: isoOf(HOY) }); log("Nueva versión de términos publicada"); flash("Listo. Todos los usuarios deberán aceptar los términos al volver a entrar."); }} className="py-2 rounded-xl text-xs font-semibold text-white" style={{ background: C.lila }}>Pedir que todos acepten de nuevo</button>
+          <button onClick={() => setCfg({ ...cfg, terminos: TERMINOS_BASE })} className="py-2 rounded-xl text-xs" style={{ border: `1px solid ${C.line}`, color: C.mute }}>Restaurar texto sugerido</button>
+        </div>
       </>}
       {s === "rep" && <>
         <div className="text-xs" style={{ color: C.mute }}>Solo tras resolver y confirmar, el antecedente se muestra en el perfil del agente.</div>
@@ -988,6 +1038,8 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
           {cuentas && u._uid && <cuentas.Acciones u={u} onHecho={(t) => { log(`${u.n}: ${t}`); flash(t); }} />}
         </div>
       ))}
+      {s === "ver" && <AdminVerificar users={users} setU={setU} />}
+      {s === "met" && <AdminMetricas users={users} pagos={pagos} props={props} ops={ops} cfg={cfg} flash={flash} respaldo={{ perfiles: users, propiedades: props, pagos, operaciones: ops, visitas, reportes: reports, sugerencias: sugs, resenas: reviews, auditoria: audit, cfg }} />}
       {s === "res" && <div className="grid grid-cols-2 gap-2">
         {[["Agentes", users.length], ["Propiedades activas", act.length], ["Sin confirmar", act.filter((p) => vigencia(p).n === 2).length], ["Cierres", ops.length], ["Reportes abiertos", pend], ["Cuentas vencidas", users.filter((u) => u.est === "Vencido").length]].map(([a, b]) => (
           <div key={a} className="rounded-xl p-3" style={{ background: C.lilaSoft }}><div style={{ ...serif, color: C.lilaDk, fontSize: 26, fontWeight: 700 }}>{b}</div><div className="text-xs" style={{ color: C.mute }}>{a}</div></div>
@@ -1143,8 +1195,14 @@ const plantillaWa = (k, d) => k === "cli"
   : `Hola ${d.ag} 👋, te confirmo la visita a *${d.pt}* el ${d.fecha} a las ${d.h} con mi cliente ${d.cl}. ¿Me confirmas? — ${d.yo}, Vortex`;
 const momentoWa = (x) => (x.wa && x.wa.cuando ? new Date(`${x.f}T${x.h}:00`).getTime() - x.wa.cuando * 6e4 : 0);
 // Mensajes programados que ya llegó la hora de enviar (solo de visitas que agendé yo)
+const plantillaSeg = (d) => `Hola ${d.cl}, ¿cómo estás? Te saluda ${d.yo}. Quería saber qué te pareció *${d.pt}*, que visitamos el ${d.fecha}. Si tienes alguna consulta, quieres una segunda visita o prefieres ver otras opciones similares, con gusto te ayudo. Quedo atento(a) a tus comentarios. ¡Saludos!`;
 const pendWa = (visitas) => {
   const ahora = Date.now(), out = [];
+  visitas.filter((x) => x.seg && !x.seg.env && x.est !== "Cancelada" && (x.de === ME || !x.de)).forEach((x) => {
+    const d = isoD(x.f); const [hh, mm] = String(x.seg.hora || "10:00").split(":").map(Number);
+    const t = new Date(d.getFullYear(), d.getMonth(), d.getDate() + (x.seg.dias || 1), hh || 0, mm || 0).getTime();
+    if (ahora >= t && ahora <= t + 3 * 864e5) out.push({ x, k: "seg", m: { tel: x.seg.tel, txt: x.seg.txt } });
+  });
   visitas.filter((x) => x.wa && (x.de === ME || !x.de) && !["Cancelada", "Realizada"].includes(x.est)).forEach((x) => {
     const fin = new Date(`${x.f}T${x.h}:00`).getTime() + 36e5;
     if (ahora < momentoWa(x) || ahora > fin) return;
@@ -1267,7 +1325,7 @@ const tBasico = (p) => `${p.tipo} en ${p.zona}, ${p.ciudad}`;
 const Lock = ({ t, plan, go }) => <div className="rounded-2xl p-4 text-center space-y-2" style={{ background: C.lilaSoft }}><div className="text-2xl">🔒</div><div className="text-sm font-semibold" style={{ color: C.lilaDk }}>{t}</div><div className="text-xs" style={{ color: C.mute }}>Disponible desde el plan {plan}.</div><button onClick={go} className="px-4 py-2 rounded-xl text-sm font-semibold text-white" style={{ background: C.lila }}>Ver planes</button></div>;
 const precioDe = (cfg, n) => (cfg.planes.find((p) => p.nombre === n) || { precio: 0 }).precio;
 const notaPr = (precio) => { const x = prorrateo(precio, 5); return `${x.resta} de ${x.ciclo} días (prorrateo hasta ${fechaL(x.fin)})`; };
-const Ci = ({ ci }) => ci ? <div className="flex gap-2">{[["front", "Anverso"], ["back", "Reverso"]].map(([k, l]) => ci[k] ? <img key={k} src={ci[k]} alt={l} className="rounded-lg object-cover" style={{ width: 84, height: 58 }} /> : <div key={k} className="flex items-center justify-center rounded-lg text-center" style={{ width: 84, height: 58, border: `1px dashed ${C.mute}`, color: C.mute, fontSize: 10 }}>🪪 {l}{ci.demo ? " (ej.)" : ""}</div>)}</div> : <span className="text-xs" style={{ color: C.amber }}>🪪 Sin carnet cargado</span>;
+const Ci = ({ ci }) => ci ? <div className="flex gap-2">{[["front", "Anverso"], ["back", "Reverso"]].map(([k, l]) => ci[k] ? <ImgSegura key={k} src={ci[k]} alt={l} className="rounded-lg object-cover" style={{ width: 84, height: 58 }} /> : <div key={k} className="flex items-center justify-center rounded-lg text-center" style={{ width: 84, height: 58, border: `1px dashed ${C.mute}`, color: C.mute, fontSize: 10 }}>🪪 {l}{ci.demo ? " (ej.)" : ""}</div>)}</div> : <span className="text-xs" style={{ color: C.amber }}>🪪 Sin carnet cargado</span>;
 const CFG0 = { dia: 5, planes: [{ nombre: "Inicial", precio: 49 }, { nombre: "Profesional", precio: 99 }, { nombre: "Premium", precio: 169 }], titular: "Titular de ejemplo", banco: "Banco de ejemplo", cuenta: "000-000000-0", qr: null, waSoporte: "", slaPrio: "" };
 const PAGOS0 = [
   ...[["Carla Rojas", "Profesional", "05"], ["Marcelo Vargas", "Premium", "05"], ["Paola Egüez", "Profesional", "06"], ["Iván Suárez", "Premium", "06"], ["Daniela Soria", "Profesional", "07"], ["Lucía Terán", "Inicial", "08"]].flatMap(([de, plan, desde]) => ["05", "06", "07", "08", "09", "10"].filter((m) => m >= desde && !(de === "Daniela Soria" && m === "10")).map((m) => ({ id: `${de}-${m}`, de, plan, monto: PRECIOS[plan], iso: `2026-${m}-05`, tipo: "Renovación", metodo: de.length % 2 ? "QR" : "Cuenta", ref: "", est: "Aprobado", comp: null }))),
@@ -1300,6 +1358,7 @@ function Sus({ acceso, users, setUsers, pagos, setPagos, cfg, flash, nivel, tria
     if (necesitaCi && !(ci.front && ci.back)) { flash("Sube la foto de tu carnet (anverso y reverso) para continuar."); return; }
     if (!f.comp) { flash("Sube la foto del comprobante (baucher) para continuar."); return; }
     setUsers(users.map((u) => (u.n === ME ? { ...u, ...(ci.front && ci.back && !u.ci ? { ci: { front: ci.front, back: ci.back } } : {}), ...(u.insc ? {} : { insc: { plan, f: isoOf(HOY) } }) } : u)));
+    notificar("pago", { de: ME, monto: Math.round(monto), plan: accion === "renov" ? planRen : plan });
     setPagos([{ id: "n" + Date.now(), de: ME, plan: accion === "renov" ? planRen : plan, monto, iso: isoOf(HOY), tipo: TIPOS_PAGO[accion], metodo: metodo === "QR" ? "QR" : "Cuenta", ref: f.ref.trim(), est: "Pendiente", comp: f.comp, nota: accion === "renov" ? "Mes completo" : accion === "mejora" ? `Diferencia entre planes · ${pr.resta} de ${pr.ciclo} días` : `${pr.resta} de ${pr.ciclo} días (prorrateo hasta ${fechaL(pr.fin)})` }, ...pagos]);
     setF({ ref: "", comp: null });
     flash("Comprobante enviado. Te avisaremos cuando se verifique el pago.");
@@ -1327,7 +1386,7 @@ function Sus({ acceso, users, setUsers, pagos, setPagos, cfg, flash, nivel, tria
         {necesitaCi ? <div className="rounded-xl p-3 space-y-2" style={{ background: C.card, border: `1px solid ${C.line}` }}>
           <div className="text-sm font-semibold" style={{ color: C.ink }}>🪪 Verificación de identidad (solo esta vez)</div>
           <div className="text-xs" style={{ color: C.mute }}>Como es tu primera inscripción, necesitamos una foto de tu carnet por ambos lados. Solo la ve el equipo administrador y no se volverá a pedir.</div>
-          <div className="grid grid-cols-2 gap-2">{[["front", "Anverso"], ["back", "Reverso"]].map(([k, l]) => <label key={k} className="flex items-center justify-center rounded-xl text-xs text-center cursor-pointer overflow-hidden" style={{ height: 96, border: `1px dashed ${C.mute}`, color: C.mute }}>{ci[k] ? <img src={ci[k]} alt={l} className="w-full h-full object-cover" /> : `📷 ${l}`}<input type="file" accept="image/*" className="hidden" onChange={async (e) => { const u = e.target.files[0] && await subir(e.target.files[0]); if (u) setCi((x) => ({ ...x, [k]: u })); }} /></label>)}</div>
+          <div className="grid grid-cols-2 gap-2">{[["front", "Anverso"], ["back", "Reverso"]].map(([k, l]) => <label key={k} className="flex items-center justify-center rounded-xl text-xs text-center cursor-pointer overflow-hidden" style={{ height: 96, border: `1px dashed ${C.mute}`, color: C.mute }}>{ci[k] ? <img src={ci[k]} alt={l} className="w-full h-full object-cover" /> : `📷 ${l}`}<input type="file" accept="image/*" className="hidden" onChange={async (e) => { const u = e.target.files[0] && await subirPrivado(e.target.files[0]); if (u) setCi((x) => ({ ...x, [k]: u })); }} /></label>)}</div>
         </div> : <div className="rounded-xl p-2.5 text-xs" style={{ background: C.okSoft, color: C.ok }}>🪪 Identidad ya verificada · no necesitas volver a subir tu carnet.</div>}
         <Seg o={["QR", "Cuenta bancaria"]} v={metodo} set={setMetodo} />
         {metodo === "QR" ? <div className="flex flex-col items-center gap-2">{cfg.qr ? <img src={cfg.qr} alt="QR de pago" className="rounded-xl" style={{ width: 170, height: 170, objectFit: "cover" }} /> : <div className="flex items-center justify-center rounded-xl text-xs text-center" style={{ width: 170, height: 170, border: `1px dashed ${C.mute}`, color: C.mute }}>QR de ejemplo<br />(lo sube el administrador)</div>}<div className="text-sm" style={{ color: C.ink }}>Escanea y paga exactamente <b>{bs(monto)}</b></div></div>
@@ -1450,11 +1509,16 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas, onIngresar, o
   const [cfg, setCfg] = useSyncObj("ajustes", "cfg", { ...CFG0, ...(inicial.cfg || {}) }, sesion);
   const [perfilSub, setPerfilSub] = useState(null);
   const [busq, setBusq] = useSync("busquedas", inicial.busquedas, sesion);
+  const [plantObj, setPlantObj] = useSyncObj("ajustes_usuario", "plantillas", { lista: PLANTILLAS_BASE, ...(inicial.plantillas || {}) }, sesion);
+  const plantillas = plantObj.lista || [];
+  const setPlantillas = (l) => setPlantObj((o) => ({ ...o, lista: l }));
+  const [rr, setRr] = useState(null);
   const [autos, setAutos] = useSyncObj("ajustes_usuario", "autos", { recDef: 0, vig: { on: true, n: 5 }, vis: { on: false, n: 30 }, req: { on: true, n: 7 }, ...(inicial.autos || {}) }, sesion);
   const [sugs, setSugs] = useSync("sugerencias", inicial.sugerencias, sesion);
   const [visitas, setVisitas] = useSync("visitas", inicial.visitas, sesion);
   const [toast, setToast] = useState("");
   const flash = (m) => { setToast(m); setTimeout(() => setToast(""), 2200); };
+  ZONAS = cfg.ciudades && Object.keys(cfg.ciudades).length ? cfg.ciudades : ZONAS_BASE;
   const mi = users.find((u) => u.n === ME) || {};
   PERFIL.datos = mi.perfil || null;
   PERFIL.guardar = (d) => setUsers((us) => us.map((u) => (u.n === ME ? { ...u, perfil: d } : u)));
@@ -1466,6 +1530,15 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas, onIngresar, o
   const acceso = nivel === "gratuito" ? "vencido" : ["Inicial", "Profesional", "Premium"].includes(nivel) ? "suscrito" : nivel;
   useEffect(() => { setUsers((us) => (us.some((u) => u.est === "Prueba" && u.prueba && now > u.prueba.fin) ? us.map((u) => (u.est === "Prueba" && u.prueba && now > u.prueba.fin ? { ...u, est: "Vencido" } : u)) : us)); }, [now]);
   const onPublicada = (p) => { if (!perm.inversa) return; clientes.forEach((r) => { if (match(r, p)) notify("Nueva propiedad compatible", `${p.t} coincide con el requerimiento de ${r.n}`, { tab: "buscar", p: p.id }, "🔔"); }); };
+  // Al cerrar una captación propia se eliminan sus fotos (no ocupan espacio en la base de datos)
+  useEffect(() => {
+    if (visitante) return;
+    const cerradas = props.filter((p) => p.cap && p.cap.n === ME && p.est === "Cerrado" && p.fotos && p.fotos.length);
+    if (!cerradas.length) return;
+    const ids = new Set(cerradas.map((p) => p.id));
+    cerradas.forEach((p) => borrarFotos(p.fotos));
+    setProps((ps) => ps.map((p) => (ids.has(p.id) ? { ...p, fotos: [] } : p)));
+  }, [props]);
   useEffect(() => { setSel(null); if (sim === "prueba") setFin(Date.now() + 48 * 36e5); }, [sim]);
   useEffect(() => { if (finPrueba) setFin(Date.now() - 1000); }, [finPrueba]);
   const goSub = () => { if (visitante) { onRegistro && onRegistro(); return; } setSel(null); setTab("perfil"); setPerfilSub("sus"); };
@@ -1496,8 +1569,23 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas, onIngresar, o
       }
     }
     for (const k of Object.keys(f)) if (!ids.has(k)) { delete f[k]; cambio = true; }
+    // Resumen semanal (Premium): una vez por semana
+    const lun = new Date(HOY); lun.setDate(lun.getDate() - ((lun.getDay() + 6) % 7));
+    const semKey = isoOf(lun);
+    let semNueva = null;
+    if (vig.sem !== semKey) {
+      semNueva = semKey; cambio = true;
+      if (vig.ini && perm.auto && !visitante) {
+        const dom = new Date(lun); dom.setDate(dom.getDate() + 6);
+        const lunAnt = new Date(lun); lunAnt.setDate(lunAnt.getDate() - 7);
+        const vSem = visitas.filter((x) => (x.de === ME || x.ag === ME) && x.est !== "Cancelada" && isoD(x.f) >= lun && isoD(x.f) <= dom).length;
+        const porConf = props.filter((p) => p.cap.n === ME && p.est !== "Cerrado" && vigencia(p).n > 0).length;
+        const cierres = ops.filter((o) => (!o.de || o.de === ME) && o.iso && isoD(o.iso) >= lunAnt && isoD(o.iso) < lun).length;
+        nuevos.push({ ic: "📊", t: "Tu resumen de la semana", s: `${vSem} visita${vSem !== 1 ? "s" : ""} agendada${vSem !== 1 ? "s" : ""} esta semana · ${porConf} captación${porConf !== 1 ? "es" : ""} por confirmar · ${clientes.length} requerimiento${clientes.length !== 1 ? "s" : ""} activo${clientes.length !== 1 ? "s" : ""} · ${cierres} cierre${cierres !== 1 ? "s" : ""} la semana pasada`, to: { tab: "visitas" } });
+      }
+    }
     if (nuevos.length) setNotifs((n) => [...nuevos.map((x, i) => ({ id: Date.now() + i, h: "Ahora", ...x })), ...n]);
-    if (cambio) setVig({ ini: true, f });
+    if (cambio) setVig((v0) => ({ ...v0, ini: true, f, ...(semNueva ? { sem: semNueva } : {}) }));
   }, [props]);
   const notify = (t, s, to, ic = "📅") => setNotifs((n) => [{ id: Date.now(), ic, t, s, to, h: "Ahora" }, ...n]);
   const open = (p) => { setSel(p); if (!visitante && p.cap.n !== ME) setProps((ps) => ps.map((x) => (x.id === p.id ? { ...x, vistas: (x.vistas || 0) + 1 } : x))); };
@@ -1508,7 +1596,16 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas, onIngresar, o
   const agendar = (p) => { const m = new Date(HOY.getFullYear(), HOY.getMonth(), HOY.getDate() + 1); setVisitas([...visitas, { id: Date.now(), p: p.id, cl: clientes[0] ? clientes[0].n : "Cliente", f: isoOf(m), h: "09:00", ag: p.cap.n, est: "Pendiente" }]); notify("Visita agendada", `${p.t} · ${fechaL(m)}, 09:00`, { tab: "visitas" }); flash(`Visita agendada para mañana (${fechaL(m)}) a las 09:00. Puedes cambiarla en Visitas.`); };
   const rem = Math.max(0, fin - now), cd = [Math.floor(rem / 3.6e6), Math.floor(rem / 6e4) % 60, Math.floor(rem / 1e3) % 60].map((x) => String(x).padStart(2, "0")).join(":");
   const tabs = [["buscar", "🔍", "Buscar"], ["clientes", "👤", "Requerim."], ["visitas", "📅", "Visitas"], ["alertas", "🔔", "Alertas"], ["perfil", "🧑‍💼", "Perfil"]];
-  const banner = visitante ? ["👋 Estás como visitante (plan Gratuito) · Regístrate gratis y prueba 48 h con acceso completo", C.lilaSoft, C.lilaDk] : acceso === "prueba" ? [`⏱ Prueba gratuita · te quedan ${cd}`, C.brandSoft, C.brandDk] : acceso === "vencido" ? ["Plan Gratuito · acceso limitado", C.amberSoft, C.amber] : null;
+  const avisosPlan = [];
+  if (!visitante && sim !== "admin") {
+    if (planUser && mi.venc) {
+      const dv = Math.round((isoD(mi.venc) - HOY) / 864e5), precioPl = (cfg.planes.find((q) => q.nombre === mi.plan) || {}).precio;
+      if (dv <= 5) avisosPlan.push({ id: "venc", sus: true, ic: "⏳", t: dv <= 0 ? `Tu plan ${mi.plan} vence hoy` : `Tu plan ${mi.plan} vence en ${dv} día${dv > 1 ? "s" : ""}`, s: `Fecha de corte: ${fechaL(isoD(mi.venc))}${precioPl ? ` · ${bs(precioPl)}` : ""}. Renueva a tiempo para no perder el acceso. Toca para pagar.`, h: "Aviso de vencimiento" });
+    }
+    if (acceso === "prueba" && fin - now < 12 * 36e5) avisosPlan.push({ id: "finprueba", sus: true, ic: "⏱", t: "Tu prueba gratuita está por terminar", s: `Te quedan ${cd}. Elige un plan para seguir con acceso completo.`, h: "Aviso de vencimiento" });
+  }
+  const diasVenc = planUser && mi.venc ? Math.round((isoD(mi.venc) - HOY) / 864e5) : 99;
+  const banner = visitante ? ["👋 Estás como visitante (plan Gratuito) · Regístrate gratis y prueba 48 h con acceso completo", C.lilaSoft, C.lilaDk] : sim === "auto" && mi.est === "Verificación" ? ["🪪 Tu cuenta está en verificación. Cuando revisemos tu carnet se activarán tus 48 h de prueba", C.lilaSoft, C.lilaDk] : sim === "auto" && mi.est === "Rechazado" ? [`⚠️ No pudimos verificar tu identidad${mi.motRech ? ` (${mi.motRech})` : ""}. Escríbenos o elige un plan`, C.redSoft, C.red] : diasVenc <= 3 ? [`⏳ Tu plan ${mi.plan} vence ${diasVenc <= 0 ? "hoy" : `en ${diasVenc} día${diasVenc > 1 ? "s" : ""}`} · Renueva a tiempo`, C.amberSoft, C.amber] : acceso === "prueba" ? [`⏱ Prueba gratuita · te quedan ${cd}`, C.brandSoft, C.brandDk] : acceso === "vencido" ? ["Plan Gratuito · acceso limitado", C.amberSoft, C.amber] : null;
 
   return (
     <div className="vx-shell" style={{ fontFamily: "'Montserrat', 'Avenir Next', 'Segoe UI', system-ui, sans-serif" }}>
@@ -1521,16 +1618,18 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas, onIngresar, o
         <div style={{ height: 3, background: C.grad }} />
         {banner && <button onClick={goSub} className="w-full text-left text-xs px-4 py-2 font-medium" style={{ background: banner[1], color: banner[2] }}>{banner[0]}{visitante ? " ›" : " · Ver planes ›"}</button>}
         <div className="flex-1 overflow-y-auto">
-          {acceso === "admin" ? <Admin reports={reports} setReports={setReports} users={users} setUsers={setUsers} audit={audit} setAudit={setAudit} props={props} ops={ops} sugs={sugs} setSugs={setSugs} pagos={pagos} setPagos={setPagos} cfg={cfg} setCfg={setCfg} flash={flash} cuentas={cuentas} />
-            : sel ? <Detalle p={sel} acceso={acceso} onBack={() => setSel(null)} onVisit={agendar} onReport={setReportando} users={users} onSub={goSub} perm={perm} rate={rate} onProfile={setPerfilDe} favs={favs} toggleFav={toggleFav} clientes={clientes} flash={flash} />
+          {acceso === "admin" ? <Admin reports={reports} setReports={setReports} users={users} setUsers={setUsers} audit={audit} setAudit={setAudit} props={props} ops={ops} sugs={sugs} setSugs={setSugs} pagos={pagos} setPagos={setPagos} cfg={cfg} setCfg={setCfg} flash={flash} cuentas={cuentas} visitas={visitas} reviews={reviews} />
+            : sel ? <Detalle p={sel} acceso={acceso} onBack={() => setSel(null)} onVisit={agendar} onReport={setReportando} users={users} onSub={goSub} perm={perm} rate={rate} onProfile={setPerfilDe} favs={favs} toggleFav={toggleFav} clientes={clientes} flash={flash} onRespuestas={setRr} />
             : visitante && tab !== "buscar" ? <Invitacion tab={tab} onRegistro={onRegistro} onIngresar={onIngresar} />
             : tab === "buscar" ? <Buscar acceso={acceso} open={open} props={props} rate={rate} favs={favs} perm={perm} goSub={goSub} busq={busq} setBusq={setBusq} />
             : tab === "clientes" ? (perm.req ? <Clientes acceso={acceso} open={open} props={props} clientes={clientes} setClientes={setClientes} favs={favs} toggleFav={toggleFav} delCliente={delCliente} perm={perm} visitas={visitas} goSub={goSub} /> : <div className="p-4"><Lock t="Requerimientos de clientes" plan="Inicial" go={goSub} /></div>)
-            : tab === "visitas" ? (perm.vis ? <Visitas visitas={visitas} setVisitas={setVisitas} props={props} clientes={clientes} flash={flash} notify={notify} users={users} perm={perm} autos={autos} /> : <div className="p-4"><Lock t="Agenda de visitas" plan="Inicial" go={goSub} /></div>)
-            : tab === "alertas" ? <Alertas go={go} notifs={notifs} visitas={visitas} props={props} clientes={clientes} perm={perm} autos={autos} goSub={goSub} />
-            : <Perfil acceso={acceso} props={props} setProps={setProps} flash={flash} ops={ops} setOps={setOps} reports={reports} favs={favs} reviews={reviews} setReviews={setReviews} onReport={setReportando} sugs={sugs} setSugs={setSugs} users={users} setUsers={setUsers} pagos={pagos} setPagos={setPagos} cfg={cfg} subInit={perfilSub} clearSub={() => setPerfilSub(null)} perm={perm} nivel={nivel} goSub={goSub} onPublicada={onPublicada} trial={{ inicio: fin - 48 * 36e5, fin }} setReports={setReports} clientes={clientes} visitas={visitas} autos={autos} setAutos={setAutos} />}
+            : tab === "visitas" ? (perm.vis ? <Visitas visitas={visitas} setVisitas={setVisitas} props={props} clientes={clientes} flash={flash} notify={notify} users={users} perm={perm} autos={autos} onRespuestas={setRr} /> : <div className="p-4"><Lock t="Agenda de visitas" plan="Inicial" go={goSub} /></div>)
+            : tab === "alertas" ? <Alertas go={go} notifs={notifs} visitas={visitas} props={props} clientes={clientes} perm={perm} autos={autos} goSub={goSub} avisos={avisosPlan} />
+            : <Perfil plantillas={plantillas} setPlantillas={setPlantillas} acceso={acceso} props={props} setProps={setProps} flash={flash} ops={ops} setOps={setOps} reports={reports} favs={favs} reviews={reviews} setReviews={setReviews} onReport={setReportando} sugs={sugs} setSugs={setSugs} users={users} setUsers={setUsers} pagos={pagos} setPagos={setPagos} cfg={cfg} subInit={perfilSub} clearSub={() => setPerfilSub(null)} perm={perm} nivel={nivel} goSub={goSub} onPublicada={onPublicada} trial={{ inicio: fin - 48 * 36e5, fin }} setReports={setReports} clientes={clientes} visitas={visitas} autos={autos} setAutos={setAutos} />}
         </div>
         {perfilDe && <Ficha n={perfilDe} props={props} users={users} rate={rate} onClose={() => setPerfilDe(null)} />}
+        {rr && <RespuestasRapidas plantillas={plantillas} datos={rr} onClose={() => setRr(null)} flash={flash} />}
+        {!visitante && mi.n && (!mi.terminos || (cfg.terminosF && mi.terminos < cfg.terminosF)) && <TerminosModal texto={cfg.terminos} onAceptar={() => setUsers((us) => us.map((u) => (u.n === ME ? { ...u, terminos: isoOf(HOY) } : u)))} />}
         {reportando && <Reportar p={reportando} onClose={() => setReportando(null)} onSend={(r) => { setReports([{ ...r, prio: nivel === "Premium" }, ...reports]); setReportando(null); flash(nivel === "Premium" ? "Reporte enviado con prioridad." : "Reporte enviado. Un administrador lo revisará."); }} />}
         {toast && <div className="absolute left-4 right-4 bottom-20 text-sm text-white px-3 py-2 rounded-xl text-center" style={{ background: C.lila }}>{toast}</div>}
         <div className="grid grid-cols-5" style={{ display: acceso === "admin" ? "none" : undefined, background: C.card, borderTop: `1px solid ${C.line}` }}>
@@ -1545,4 +1644,4 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas, onIngresar, o
   );
 }
 
-export { LOGO_ISO, LOGO_WM, C, CUENTAS, RESUMEN };
+export { LOGO_ISO, LOGO_WM, C, CUENTAS, RESUMEN, Chip, Fld, inp, fechaL, isoOf, isoD, bs, waLink, waNum, HOY, serif, copiarTexto, money };

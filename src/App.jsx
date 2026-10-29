@@ -6,7 +6,8 @@ import { cargarTodo, cargarPublico, hayPendientes } from "./datos";
 import Vortex, { fijarUsuario, C, LOGO_ISO } from "./Vortex";
 import Login from "./Login";
 import Registro from "./Registro";
-import { CrearUsuario, AccionesUsuario, MenuCuenta } from "./Cuentas";
+import { CrearUsuario, AccionesUsuario, MenuCuenta, NuevaClave } from "./Cuentas";
+import { TerminosModal } from "./Extras";
 
 const Centro = ({ children }) => (
   <div className="vx-shell"><div className="vx-frame flex flex-col items-center justify-center text-center p-6 space-y-4" style={{ background: C.bg }}>
@@ -38,7 +39,9 @@ export default function App() {
   const ultima = useRef(Date.now());
   const [sim, setSim] = useState("admin");       // "Ver la app como" (solo administradores)
   const [finPrueba, setFinPrueba] = useState(0);
-  const [modo, setModo] = useState(null); // null = visitante | "login" | "registro"
+  const [modo, setModo] = useState(null);
+  const [recuperar, setRecuperar] = useState(false);
+  const [verTerminos, setVerTerminos] = useState(false); // null = visitante | "login" | "registro"
   const [publico, setPublico] = useState(null);
   const [errPub, setErrPub] = useState("");
 
@@ -46,7 +49,9 @@ export default function App() {
   useEffect(() => {
     if (!configurado) return;
     supabase.auth.getSession().then(({ data }) => setSesion(data.session || null));
+    if (/type=recovery/.test(window.location.hash)) setRecuperar(true);
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+      if (_e === "PASSWORD_RECOVERY") setRecuperar(true);
       setSesion((prev) => (prev && s && prev.user.id === s.user.id ? prev : s || null));
     });
     return () => sub.subscription.unsubscribe();
@@ -122,10 +127,13 @@ export default function App() {
   }), [recargar]);
 
   if (!configurado) return <SinConfigurar />;
+  const textoTerminos = (datos && datos.cfg && datos.cfg.terminos) || (publico && publico.cfg && publico.cfg.terminos) || null;
+  const modalTerminos = verTerminos && <TerminosModal texto={textoTerminos} onClose={() => setVerTerminos(false)} />;
+  if (recuperar && sesion) return <NuevaClave onListo={() => { setRecuperar(false); window.history.replaceState(null, "", window.location.pathname); }} />;
   if (sesion === undefined) return <Centro><div className="text-sm" style={{ color: C.mute }}>Cargando…</div></Centro>;
   if (!sesion) {
-    if (modo === "login") return <Login onRegistro={() => setModo("registro")} onVolver={() => setModo(null)} />;
-    if (modo === "registro") return <Registro onLogin={() => setModo("login")} onVolver={() => setModo(null)} />;
+    if (modo === "login") return <>{<Login onRegistro={() => setModo("registro")} onVolver={() => setModo(null)} onTerminos={() => setVerTerminos(true)} />}{modalTerminos}</>;
+    if (modo === "registro") return <Registro onLogin={() => setModo("login")} onVolver={() => setModo(null)} terminos={textoTerminos} />;
     if (errPub) return (
       <Centro>
         <div className="text-base font-bold" style={{ color: C.ink }}>Bienvenido a Vortex</div>
@@ -148,7 +156,8 @@ export default function App() {
   return (
     <>
       <Vortex key={perfil.uid} inicial={datos} sesion={perfil} onMenu={() => setMenu(true)} cuentas={perfil.rol === "admin" ? cuentas : null} sim={sim} setSim={setSim} finPrueba={finPrueba} />
-      {menu && <MenuCuenta sesion={perfil} onClose={() => setMenu(false)} vista={perfil.rol === "admin" ? { sim, setSim, terminarPrueba: () => { setFinPrueba(Date.now()); setMenu(false); } } : null} />}
+      {modalTerminos}
+      {menu && <MenuCuenta onTerminos={() => { setMenu(false); setVerTerminos(true); }} sesion={perfil} onClose={() => setMenu(false)} vista={perfil.rol === "admin" ? { sim, setSim, terminarPrueba: () => { setFinPrueba(Date.now()); setMenu(false); } } : null} />}
       {(avisoTxt || subiendo > 0) && (
         <div className="fixed left-0 right-0 z-50 flex justify-center px-4" style={{ top: "calc(12px + env(safe-area-inset-top, 0px))" }}>
           <div className="text-sm px-4 py-2.5 rounded-xl shadow-lg" style={{ maxWidth: 440, background: avisoTxt ? C.red : C.ink, color: "#fff" }}>

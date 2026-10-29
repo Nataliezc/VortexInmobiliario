@@ -47,10 +47,12 @@ export function leerCopy(copy, ZONAS) {
 
   // Ciudad y zona
   const CIUDADES = Object.keys(ZONAS);
-  const alias = { cochabamba: "Cochabamba", cbba: "Cochabamba", "la paz": "La Paz", lpz: "La Paz", "santa cruz": "Santa Cruz", scz: "Santa Cruz" };
-  d.ciudad = primero(t, Object.entries(alias).filter(([, c]) => CIUDADES.includes(c)).map(([a, c]) => [new RegExp(`\\b${a}\\b`), c]));
+  const alias = { cbba: "Cochabamba", cocha: "Cochabamba", lpz: "La Paz", scz: "Santa Cruz", "santa cruz de la sierra": "Santa Cruz" };
+  CIUDADES.forEach((c) => { alias[quitarTildes(c.toLowerCase())] = c; });
+  const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  d.ciudad = primero(t, Object.entries(alias).filter(([, c]) => CIUDADES.includes(c)).map(([a, c]) => [new RegExp(`\\b${esc(a)}\\b`), c]));
   const zonasPosibles = d.ciudad ? ZONAS[d.ciudad] : [...new Set(Object.values(ZONAS).flat())];
-  let zona = primero(t, zonasPosibles.map((z) => [new RegExp(`\\b${quitarTildes(z.toLowerCase())}\\b`), z]));
+  let zona = primero(t, zonasPosibles.map((z) => [new RegExp(`\\b${esc(quitarTildes(z.toLowerCase()))}\\b`), z]));
   if (zona && !d.ciudad) { const c = CIUDADES.filter((c) => ZONAS[c].includes(zona)); if (c.length === 1) d.ciudad = c[0]; }
   if (!zona) {
     const m = original.match(/(?:zona|barrio|urbanizaci[oó]n|urb\.|ubicad[oa] en|ubicaci[oó]n:?)\s*:?\s*([A-ZÁÉÍÓÚÑa-záéíóúñ0-9][A-Za-zÁÉÍÓÚÑáéíóúñ0-9 .]{2,28}?)(?=[,.;\n\r(]|\s+-|\s+(?:a |cerca|sobre|con|y )|$)/i);

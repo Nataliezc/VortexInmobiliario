@@ -38,7 +38,7 @@ const haceCuanto = (t) => {
 
 // Lo que llega de la base de datos → como lo usa la app
 function desde(t, datos, fila) {
-  if (t === "perfiles") return { ...(fila.datos || {}), n: fila.nombre, _uid: fila.id, _email: fila.email, _rol: fila.rol };
+  if (t === "perfiles") return { ...(fila.datos || {}), n: fila.nombre, _uid: fila.id, _email: fila.email, _rol: fila.rol, _alta: fila.creado_en };
   if (t === "propiedades" && datos._conf) return { ...datos, dias: Math.max(0, Math.floor((Date.now() - datos._conf) / DIA)) };
   if (t === "notificaciones" && datos._t) return { ...datos, h: haceCuanto(datos._t) };
   return datos;
@@ -46,7 +46,7 @@ function desde(t, datos, fila) {
 
 // Lo que tiene la app → como se guarda en la base de datos
 function hacia(t, x, prev) {
-  if (t === "perfiles") { const { n, _uid, _email, _rol, ...resto } = x; return resto; }
+  if (t === "perfiles") { const { n, _uid, _email, _rol, _alta, ...resto } = x; return resto; }
   if (t === "propiedades") {
     const conf = x._conf == null || !prev || prev.dias !== x.dias ? Date.now() - (x.dias || 0) * DIA : x._conf;
     return { ...x, _conf: conf };
@@ -75,7 +75,7 @@ export async function cargarTodo() {
     if (error) throw new Error(`No se pudo leer "${t}": ${error.message}`);
     out[t] = data.map((r) => desde(t, r.datos || {}, r));
   }));
-  const pf = await supabase.from("perfiles").select("id, nombre, email, rol, datos").order("creado_en", { ascending: true });
+  const pf = await supabase.from("perfiles").select("id, nombre, email, rol, datos, creado_en").order("creado_en", { ascending: true });
   if (pf.error) throw new Error(`No se pudo leer "perfiles": ${pf.error.message}`);
   out.perfiles = pf.data.map((r) => desde("perfiles", null, r));
   const cfg = await supabase.from("ajustes").select("valor").eq("clave", "cfg").maybeSingle();

@@ -11,4 +11,4 @@ export const Boton = ({ children, tono = "grad", ...r }) => (
     {children}
   </button>
 );
-export const Error = ({ t }) => (t ? <div className="text-xs rounded-lg px-3 py-2" style={{ background: C.redSoft, color: C.red }}>{t}</div> : null);
+export const MsgError = ({ t }) => (t ? <div className="text-xs rounded-lg px-3 py-2" style={{ background: C.redSoft, color: C.red }}>{t}</div> : null);
