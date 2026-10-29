@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { useSync, useSyncObj } from "./datos";
 import { subir, subirVarios, borrarFotos, subirPrivado } from "./archivos";
-import { ImgSegura, TerminosModal, AdminCiudades, AdminVerificar, AdminMetricas, Plantillas, RespuestasRapidas, PLANTILLAS_BASE, TERMINOS_BASE } from "./Extras";
+import { ImgSegura, TerminosModal, AdminCiudades, AdminVerificar, AdminMetricas, AdminBorrarTodo, Plantillas, RespuestasRapidas, PLANTILLAS_BASE, TERMINOS_BASE } from "./Extras";
+import { supabase } from "./supabase";
 import { notificar } from "./push";
 import { leerCopy, camposFaltantes, NOMBRES_CAMPOS } from "./leerCopy";
 
@@ -214,19 +215,20 @@ function Buscar({ acceso, open, props, rate, favs, perm, goSub, busq, setBusq })
   );
 }
 
-function Clientes({ acceso, open, props, clientes, setClientes, favs, toggleFav, delCliente, perm, visitas, goSub }) {
+function Clientes({ acceso, open, props, clientes, setClientes, favs, toggleFav, delCliente, perm, visitas, goSub, flash }) {
+  const [vistaReq, setVistaReq] = useState("mios");
   const [conf, setConf] = useState(false);
   const [nota, setNota] = useState("");
   const [sel, setSel] = useState(clientes[0] ? clientes[0].id : null);
   const [nuevo, setNuevo] = useState(false);
   const [err, setErr] = useState("");
-  const [f, setF] = useState({ n: "", op: "Alquiler", ciudad: "Cochabamba", zona: "", max: "", mon: "USD", dorm: "2", garaje: "Indiferente", mascotas: "Indiferente", amoblado: "Indiferente" });
+  const [f, setF] = useState({ n: "", op: "Alquiler", ciudad: "Cochabamba", zona: "", max: "", mon: "USD", dorm: "2", garaje: "Indiferente", mascotas: "Indiferente", amoblado: "Indiferente", compartir: true });
   const s = (k) => (v) => setF({ ...f, [k]: v });
   const num = (k) => (e) => s(k)(e.target.value.replace(/\D/g, ""));
   const tri = ["Obligatorio", "Preferido", "Indiferente"];
   const save = () => {
     if (!f.n || !f.max) { setErr("Indica el nombre del cliente y su presupuesto máximo."); return; }
-    const c = { id: Date.now(), n: f.n, op: f.op, ciudad: f.ciudad, zona: f.zona, max: +f.max, mon: f.mon, dorm: +f.dorm || 0, garaje: f.garaje, mascotas: f.mascotas, amoblado: f.amoblado, etapa: "Nuevo", mov: isoOf(HOY), notas: [], prox: null };
+    const c = { id: Date.now(), n: f.n, op: f.op, ciudad: f.ciudad, zona: f.zona, max: +f.max, mon: f.mon, dorm: +f.dorm || 0, garaje: f.garaje, mascotas: f.mascotas, amoblado: f.amoblado, etapa: "Nuevo", mov: isoOf(HOY), notas: [], prox: null, priv: !f.compartir };
     setClientes([...clientes, c]); setSel(c.id); setNuevo(false); setErr("");
   };
   if (nuevo) return (
@@ -245,6 +247,7 @@ function Clientes({ acceso, open, props, clientes, setClientes, favs, toggleFav,
       <Fld l="Garaje"><Seg o={tri} v={f.garaje} set={s("garaje")} /></Fld>
       <Fld l="Mascotas"><Seg o={["Sí", "No", "Indiferente"]} v={f.mascotas} set={s("mascotas")} /></Fld>
       <Fld l="Amoblado"><Seg o={tri} v={f.amoblado} set={s("amoblado")} /></Fld>
+      <label className="flex gap-2 items-start text-sm rounded-xl p-3 cursor-pointer" style={{ background: C.lilaSoft, color: C.lilaDk }}><input type="checkbox" checked={f.compartir} onChange={(e) => s("compartir")(e.target.checked)} className="mt-1" /><span>🌐 Compartir con otros agentes<span className="block text-xs" style={{ color: C.mute }}>Verán lo que busca tu cliente (sin su nombre) y podrán ofrecerte propiedades.</span></span></label>
       {err && <div className="text-sm" style={{ color: C.red }}>{err}</div>}
       <button onClick={save} className="w-full py-3 rounded-xl font-semibold text-white" style={{ background: C.grad }}>Guardar requerimiento</button>
     </div>
@@ -255,6 +258,8 @@ function Clientes({ acceso, open, props, clientes, setClientes, favs, toggleFav,
   const guardadas = r ? favs.filter((x) => x.cid === r.id).map((x) => props.find((p) => p.id === x.pid)).filter(Boolean) : [];
   return (
     <div className="p-4 space-y-3">
+      <div className="flex gap-2"><Chip on={vistaReq === "mios"} onClick={() => setVistaReq("mios")}>Mis requerimientos ({clientes.length})</Chip><Chip on={vistaReq === "red"} onClick={() => setVistaReq("red")}>🌐 De la red</Chip></div>
+      {vistaReq === "red" ? <ReqRed props={props} perm={perm} flash={flash} /> : <>
       <div className="flex items-center justify-between"><h2 className="font-semibold text-lg" style={{ color: C.ink }}>Mis requerimientos</h2><button onClick={() => setNuevo(true)} className="text-sm px-3 py-1.5 rounded-full text-white" style={{ background: C.grad }}>+ Nuevo requerimiento</button></div>
       {!r && <div className="text-center py-10 text-sm" style={{ color: C.mute }}>Aún no tienes requerimientos. Registra lo que busca tu primer cliente.</div>}
       {r && <>
@@ -262,6 +267,7 @@ function Clientes({ acceso, open, props, clientes, setClientes, favs, toggleFav,
         <div className="rounded-xl p-3 text-sm" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.ink }}>
           <b>{r.op}</b> en {r.ciudad}{r.zona ? `, zona ${r.zona}` : ""} · hasta {r.mon} {r.max.toLocaleString("es-BO")} · {r.dorm}+ dorm<br />
           <span style={{ color: C.mute }}>Garaje: {r.garaje} · Mascotas: {r.mascotas} · Amoblado: {r.amoblado}</span>
+          <button onClick={() => upd(r.id, { priv: !r.priv })} className="block mt-1.5 text-xs underline" style={{ color: C.lilaDk }}>{r.priv ? "🔒 Solo tú lo ves · Compartir con la red" : "🌐 Visible para otros agentes (sin el nombre del cliente) · Hacer privado"}</button>
         </div>
         {perm.seg && <div className="rounded-2xl p-3 space-y-2" style={{ background: C.card, border: `1px solid ${C.line}` }}>
           <div className="text-sm font-semibold" style={{ color: C.ink }}>Seguimiento de la oportunidad</div>
@@ -289,6 +295,7 @@ function Clientes({ acceso, open, props, clientes, setClientes, favs, toggleFav,
             </div>
           </button>
         ))}
+      </>}
       </>}
     </div>
   );
@@ -988,6 +995,9 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
           <button onClick={() => { setCfg({ ...cfg, terminosF: isoOf(HOY) }); log("Nueva versión de términos publicada"); flash("Listo. Todos los usuarios deberán aceptar los términos al volver a entrar."); }} className="py-2 rounded-xl text-xs font-semibold text-white" style={{ background: C.lila }}>Pedir que todos acepten de nuevo</button>
           <button onClick={() => setCfg({ ...cfg, terminos: TERMINOS_BASE })} className="py-2 rounded-xl text-xs" style={{ border: `1px solid ${C.line}`, color: C.mute }}>Restaurar texto sugerido</button>
         </div>
+        <div style={{ height: 1, background: C.line }} />
+        <div className="text-sm font-semibold" style={{ color: C.red }}>Zona de cuidado</div>
+        <AdminBorrarTodo />
       </>}
       {s === "rep" && <>
         <div className="text-xs" style={{ color: C.mute }}>Solo tras resolver y confirmar, el antecedente se muestra en el perfil del agente.</div>
@@ -1172,6 +1182,50 @@ const PLAN_BEN = {
   Premium: ["Hasta 40 captaciones activas", "Hasta 8 fotos por captación", "Confirmaciones de visita programadas por WhatsApp", "Todo lo de Profesional", "Estadísticas de captaciones y cierres", "Informes avanzados con exportación CSV", "Automatizaciones configurables", "Soporte prioritario"],
 };
 const TIPOS_PAGO = { alta: "Primer pago (prorrateo)", renov: "Renovación", mejora: "Mejora de plan" };
+function ReqRed({ props, perm, flash }) {
+  const [lista, setLista] = useState(null);
+  const [err, setErr] = useState("");
+  const [ciudad, setCiudad] = useState("Todas");
+  const [op, setOp] = useState("Todas");
+  const cargar = async () => {
+    setErr("");
+    const { data, error } = await supabase.rpc("requerimientos_red");
+    if (error) { setErr(/requerimientos_red/.test(error.message) ? "Falta ejecutar el archivo 8 en Supabase." : error.message); setLista([]); return; }
+    setLista((data || []).map((r) => ({ ...r.datos, id: r.id, agente: r.agente, tel: r.tel, creado: r.creado_en, max: +r.datos.max || 0, dorm: +r.datos.dorm || 0 })));
+  };
+  useEffect(() => { cargar(); }, []);
+  const mias = props.filter((p) => p.cap.n === ME && ["Disponible", "Reservado"].includes(p.est || "Disponible"));
+  const vista = (lista || []).filter((r) => (ciudad === "Todas" || r.ciudad === ciudad) && (op === "Todas" || r.op === op));
+  const hace = (t) => { const d = Math.floor((Date.now() - new Date(t).getTime()) / 864e5); return d <= 0 ? "hoy" : d === 1 ? "ayer" : `hace ${d} días`; };
+  return (
+    <div className="space-y-3">
+      <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>🌐 Lo que buscan los clientes de otros agentes. Si tienes una propiedad que encaja, escríbele al agente. El nombre del cliente es privado.</div>
+      <div className="flex gap-2">
+        <select value={ciudad} onChange={(e) => setCiudad(e.target.value)} className="flex-1 rounded-xl px-2 py-2 text-sm" style={inp}>{["Todas", ...Object.keys(ZONAS)].map((c) => <option key={c}>{c}</option>)}</select>
+        <select value={op} onChange={(e) => setOp(e.target.value)} className="flex-1 rounded-xl px-2 py-2 text-sm" style={inp}>{["Todas", "Venta", "Alquiler", "Anticrético", "Preventa"].map((c) => <option key={c}>{c}</option>)}</select>
+        <button onClick={cargar} title="Actualizar" className="px-3 rounded-xl text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }}>↻</button>
+      </div>
+      {err && <div className="text-xs" style={{ color: C.red }}>{err}</div>}
+      {lista === null && <div className="text-center py-6 text-sm" style={{ color: C.mute }}>Cargando…</div>}
+      {lista && !vista.length && !err && <div className="text-center py-6 text-sm" style={{ color: C.mute }}>No hay requerimientos de otros agentes con esos filtros.</div>}
+      {vista.map((r) => {
+        const compat = perm.match ? mias.map((p) => ({ p, m: match(r, p) })).filter((x) => x.m).sort((a, b) => b.m.pct - a.m.pct) : [];
+        const mejor = compat[0];
+        const msg = mejor ? `Hola ${r.agente.split(" ")[0]}, vi en Vortex que tu cliente busca ${r.op.toLowerCase()} en ${r.zona || r.ciudad}. Tengo *${mejor.p.t}* (${money(mejor.p)}, ${mejor.p.zona}) que podría interesarle. ¿Coordinamos? — ${ME}` : `Hola ${r.agente.split(" ")[0]}, vi en Vortex que tu cliente busca ${r.op.toLowerCase()} en ${r.zona || r.ciudad} hasta ${r.mon} ${r.max.toLocaleString("es-BO")}. Tengo opciones que podrían interesarle. ¿Hablamos? — ${ME}`;
+        return (
+          <div key={r.agente + r.id} className="rounded-2xl p-3 space-y-1.5" style={{ background: C.card, border: `1px solid ${C.line}` }}>
+            <div className="flex justify-between gap-2"><span className="text-sm font-semibold" style={{ color: C.ink }}>{r.op} en {r.ciudad}{r.zona ? `, ${r.zona}` : ""}</span><span className="text-sm font-bold shrink-0" style={{ color: C.ink }}>hasta {r.mon} {r.max.toLocaleString("es-BO")}</span></div>
+            <div className="text-xs" style={{ color: C.mute }}>{r.dorm ? `${r.dorm}+ dorm · ` : ""}Garaje: {r.garaje} · Mascotas: {r.mascotas} · Amoblado: {r.amoblado}</div>
+            <div className="text-xs" style={{ color: C.mute }}>Cliente de <b style={{ color: C.ink }}>{r.agente}</b> · {hace(r.creado)}</div>
+            {compat.length > 0 && <div className="text-xs rounded-lg px-2 py-1.5" style={{ background: C.okSoft, color: C.ok }}>✓ {compat.length === 1 ? "Tienes 1 propiedad compatible" : `Tienes ${compat.length} propiedades compatibles`}: {compat.slice(0, 2).map((x) => `${x.p.t} (${x.m.pct}%)`).join(" · ")}</div>}
+            {waNum(r.tel).length >= 8 ? <a href={waLink(r.tel, msg)} target="_blank" rel="noreferrer" className="block text-center py-2 rounded-lg text-sm font-semibold text-white" style={{ background: "#25D366" }}>📲 {mejor ? "Ofrecerle mi propiedad" : "Escribir al agente"}</a>
+              : <div className="text-xs" style={{ color: C.mute }}>Este agente aún no registró su WhatsApp.</div>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 const ETAPAS = ["Nuevo", "Contactado", "Visita agendada", "Negociación", "Cerrado ganado", "Perdido"];
 const RECS = [[0, "Sin recordatorio"], [1440, "1 día antes"], [120, "2 horas antes"], [30, "30 min antes"]];
 const REP_TIPOS = {
@@ -1622,7 +1676,7 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas, onIngresar, o
             : sel ? <Detalle p={sel} acceso={acceso} onBack={() => setSel(null)} onVisit={agendar} onReport={setReportando} users={users} onSub={goSub} perm={perm} rate={rate} onProfile={setPerfilDe} favs={favs} toggleFav={toggleFav} clientes={clientes} flash={flash} onRespuestas={setRr} />
             : visitante && tab !== "buscar" ? <Invitacion tab={tab} onRegistro={onRegistro} onIngresar={onIngresar} />
             : tab === "buscar" ? <Buscar acceso={acceso} open={open} props={props} rate={rate} favs={favs} perm={perm} goSub={goSub} busq={busq} setBusq={setBusq} />
-            : tab === "clientes" ? (perm.req ? <Clientes acceso={acceso} open={open} props={props} clientes={clientes} setClientes={setClientes} favs={favs} toggleFav={toggleFav} delCliente={delCliente} perm={perm} visitas={visitas} goSub={goSub} /> : <div className="p-4"><Lock t="Requerimientos de clientes" plan="Inicial" go={goSub} /></div>)
+            : tab === "clientes" ? (perm.req ? <Clientes acceso={acceso} open={open} props={props} clientes={clientes} setClientes={setClientes} favs={favs} toggleFav={toggleFav} delCliente={delCliente} perm={perm} visitas={visitas} goSub={goSub}  flash={flash} /> : <div className="p-4"><Lock t="Requerimientos de clientes" plan="Inicial" go={goSub} /></div>)
             : tab === "visitas" ? (perm.vis ? <Visitas visitas={visitas} setVisitas={setVisitas} props={props} clientes={clientes} flash={flash} notify={notify} users={users} perm={perm} autos={autos} onRespuestas={setRr} /> : <div className="p-4"><Lock t="Agenda de visitas" plan="Inicial" go={goSub} /></div>)
             : tab === "alertas" ? <Alertas go={go} notifs={notifs} visitas={visitas} props={props} clientes={clientes} perm={perm} autos={autos} goSub={goSub} avisos={avisosPlan} />
             : <Perfil plantillas={plantillas} setPlantillas={setPlantillas} acceso={acceso} props={props} setProps={setProps} flash={flash} ops={ops} setOps={setOps} reports={reports} favs={favs} reviews={reviews} setReviews={setReviews} onReport={setReportando} sugs={sugs} setSugs={setSugs} users={users} setUsers={setUsers} pagos={pagos} setPagos={setPagos} cfg={cfg} subInit={perfilSub} clearSub={() => setPerfilSub(null)} perm={perm} nivel={nivel} goSub={goSub} onPublicada={onPublicada} trial={{ inicio: fin - 48 * 36e5, fin }} setReports={setReports} clientes={clientes} visitas={visitas} autos={autos} setAutos={setAutos} />}

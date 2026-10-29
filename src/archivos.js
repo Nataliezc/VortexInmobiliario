@@ -82,3 +82,17 @@ export async function urlSegura(ref) {
   cacheFirmas[ruta] = { url: data.signedUrl, hasta: Date.now() + 50 * 6e4 };
   return data.signedUrl;
 }
+
+// Vacía por completo una carpeta del almacenamiento (solo administradores)
+export async function vaciarCarpeta(bucket) {
+  let borrados = 0;
+  const quitar = async (rutas) => { for (let i = 0; i < rutas.length; i += 100) { const { error } = await supabase.storage.from(bucket).remove(rutas.slice(i, i + 100)); if (!error) borrados += Math.min(100, rutas.length - i); } };
+  const listar = async (dir) => { const { data } = await supabase.storage.from(bucket).list(dir, { limit: 1000 }); return data || []; };
+  const raiz = await listar("");
+  await quitar(raiz.filter((x) => x.id).map((x) => x.name));
+  for (const carpeta of raiz.filter((x) => !x.id)) {
+    const archivos = await listar(carpeta.name);
+    await quitar(archivos.filter((x) => x.id).map((x) => `${carpeta.name}/${x.name}`));
+  }
+  return borrados;
+}

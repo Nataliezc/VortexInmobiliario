@@ -247,3 +247,46 @@ export function RespuestasRapidas({ plantillas, datos, onClose, flash }) {
     </div>
   );
 }
+
+// ───────── Borrar todos los datos de prueba (solo administradores) ─────────
+export function AdminBorrarTodo() {
+  const [abierto, setAbierto] = useState(false);
+  const [usuarios, setUsuarios] = useState(true);
+  const [config, setConfig] = useState(false);
+  const [conf, setConf] = useState("");
+  const [paso, setPaso] = useState("");
+  const [err, setErr] = useState("");
+  const borrar = async () => {
+    setErr("");
+    if (conf.trim().toUpperCase() !== "BORRAR TODO") { setErr('Escribe exactamente BORRAR TODO para confirmar.'); return; }
+    try {
+      const { supabase } = await import("./supabase");
+      const { vaciarCarpeta } = await import("./archivos");
+      setPaso("Borrando datos…");
+      const { data, error } = await supabase.rpc("admin_borrar_todo", { p_confirmacion: "BORRAR TODO", p_usuarios: usuarios, p_config: config });
+      if (error) throw error;
+      setPaso("Borrando fotos…");
+      const f1 = await vaciarCarpeta("vortex");
+      setPaso("Borrando carnets…");
+      const f2 = await vaciarCarpeta("carnets").catch(() => 0);
+      setPaso(`✓ ${data} · ${f1 + f2} archivos eliminados. Recargando…`);
+      setTimeout(() => window.location.reload(), 2500);
+    } catch (e) { setErr(e.message || String(e)); setPaso(""); }
+  };
+  if (!abierto) return <button onClick={() => setAbierto(true)} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.redSoft, color: C.red }}>🗑 Borrar todos los datos de prueba</button>;
+  return (
+    <div className="rounded-2xl p-3 space-y-2.5" style={{ background: C.redSoft, border: `2px solid ${C.red}` }}>
+      <div className="text-sm font-bold" style={{ color: C.red }}>⚠️ Borrar todos los datos</div>
+      <div className="text-xs" style={{ color: C.ink }}>Se eliminan para siempre: propiedades, fotos, requerimientos, visitas, cierres, pagos, reportes, reseñas, sugerencias, notificaciones y auditoría. <b>Tu cuenta de administrador se conserva.</b> Esto no se puede deshacer: si quieres guardar algo, descarga antes el respaldo en 📈 Métricas.</div>
+      <label className="flex gap-2 text-xs items-start" style={{ color: C.ink }}><input type="checkbox" checked={usuarios} onChange={(e) => setUsuarios(e.target.checked)} className="mt-0.5" />Eliminar también todas las cuentas de agentes (se conservan los administradores)</label>
+      <label className="flex gap-2 text-xs items-start" style={{ color: C.ink }}><input type="checkbox" checked={config} onChange={(e) => setConfig(e.target.checked)} className="mt-0.5" />Restablecer también la configuración de cobros (precios, banco, QR). Las ciudades y los términos se reinician igual si marcas esta opción.</label>
+      <input value={conf} onChange={(e) => setConf(e.target.value)} placeholder="Escribe BORRAR TODO" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} />
+      {err && <div className="text-xs" style={{ color: C.red }}>{err}</div>}
+      {paso && <div className="text-xs font-semibold" style={{ color: paso.startsWith("✓") ? C.ok : C.ink }}>{paso}</div>}
+      <div className="grid grid-cols-2 gap-2">
+        <button disabled={!!paso} onClick={borrar} className="py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: C.red, opacity: paso ? 0.6 : 1 }}>Borrar todo</button>
+        <button disabled={!!paso} onClick={() => { setAbierto(false); setConf(""); setErr(""); }} className="py-2.5 rounded-xl text-sm" style={{ background: "#fff", color: C.mute }}>Cancelar</button>
+      </div>
+    </div>
+  );
+}
