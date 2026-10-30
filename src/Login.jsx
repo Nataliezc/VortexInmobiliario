@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { supabase } from "./supabase";
 import { C, LOGO_ISO, LOGO_WM } from "./Vortex";
-import { inp, Campo, Boton, MsgError } from "./ui";
+import { inp, Campo, Boton, MsgError, ClaveInput } from "./ui";
 
 const traducir = (m = "") =>
   /invalid login credentials/i.test(m) ? "Correo o contraseña incorrectos."
@@ -40,7 +40,7 @@ export default function Login({ onRegistro, onVolver, onTerminos }) {
           <form onSubmit={entrar} className="rounded-2xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.line}` }}>
             <div className="text-lg font-bold" style={{ color: C.ink }}>Iniciar sesión</div>
             <Campo l="Correo electrónico"><input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-xl px-3 py-2.5 text-sm" style={inp} required /></Campo>
-            <Campo l="Contraseña"><input type="password" autoComplete="current-password" value={pass} onChange={(e) => setPass(e.target.value)} className="w-full rounded-xl px-3 py-2.5 text-sm" style={inp} required /></Campo>
+            <Campo l="Contraseña"><ClaveInput autoComplete="current-password" value={pass} onChange={(e) => setPass(e.target.value)} /></Campo>
             <MsgError t={err} />
             <Boton type="submit" disabled={cargando}>{cargando ? "Entrando…" : "Entrar"}</Boton>
             <button type="button" onClick={() => setOlvido(!olvido)} className="w-full text-xs underline" style={{ color: C.mute }}>¿Olvidaste tu contraseña?</button>

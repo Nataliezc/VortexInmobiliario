@@ -3,6 +3,7 @@ import { useSync, useSyncObj } from "./datos";
 import { subir, subirVarios, borrarFotos, subirPrivado } from "./archivos";
 import { ImgSegura, TerminosModal, AdminCiudades, AdminVerificar, AdminMetricas, AdminBorrarTodo, Plantillas, RespuestasRapidas, PLANTILLAS_BASE, TERMINOS_BASE } from "./Extras";
 import { supabase } from "./supabase";
+import { useAtras } from "./atras";
 import { notificar } from "./push";
 import { leerCopy, camposFaltantes, NOMBRES_CAMPOS } from "./leerCopy";
 
@@ -10,7 +11,9 @@ import { leerCopy, camposFaltantes, NOMBRES_CAMPOS } from "./leerCopy";
 const hoy0 = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); };
 
 const C = { ink: "#10142C", bg: "#F6F4FC", card: "#FFFFFF", line: "#E4E0F0", mute: "#6B6F8A", brand: "#08BFC5", brandDk: "#07868C", brandSoft: "#D6F6F7", lila: "#7928CA", lila2: "#B76AF2", lilaSoft: "#F0E6FB", lilaDk: "#5A1E9E", grad: "linear-gradient(135deg, #08BFC5, #7928CA)", amber: "#B45309", amberSoft: "#FDF0D5", red: "#B42318", redSoft: "#FDE7E4", ok: "#15803D", okSoft: "#DCF5E4" };
-const BOB = 6.96;
+let BOB = 6.96; // tipo de cambio (lo define el administrador en Configuración)
+let MONEDA = "BOB"; // moneda en la que el usuario ve los precios: "BOB" (Bs) o "USD"
+const leerMoneda = () => { try { return localStorage.getItem("vx-moneda"); } catch { return null; } };
 const serif = { fontFamily: "'Montserrat', 'Segoe UI', system-ui, sans-serif" };
 
 const PROPS = [
@@ -48,7 +51,11 @@ function vigencia(p, det = true) {
 }
 const usd = (p) => (p.mon === "USD" ? p.precio : p.precio / BOB);
 const reqUsd = (r) => (r.mon === "USD" ? r.max : r.max / BOB);
-const money = (p) => `${p.mon === "USD" ? "USD" : "Bs"} ${p.precio.toLocaleString("es-BO")}`;
+// Precio tal como lo publicó el captador
+const moneyOrig = (p) => `${p.mon === "USD" ? "USD" : "Bs"} ${Number(p.precio || 0).toLocaleString("es-BO")}`;
+// Precio en la moneda elegida por el usuario (convertido si hace falta)
+const money = (p) => (p.mon === MONEDA || !p.mon ? moneyOrig(p) : `≈ ${MONEDA === "USD" ? "USD" : "Bs"} ${Math.round(p.mon === "USD" ? p.precio * BOB : p.precio / BOB).toLocaleString("es-BO")}`);
+const enMoneda = (p) => (p.mon === MONEDA ? p.precio : MONEDA === "USD" ? p.precio / BOB : p.precio * BOB);
 
 function match(r, p) {
   const strict = [
@@ -88,7 +95,7 @@ function Card({ p, onOpen, locked, rate, perm }) {
   const v = vigencia(p, perm.vigDet), est = p.est || "Disponible";
   return (
     <button onClick={() => onOpen(p)} className="text-left w-full rounded-2xl p-3 flex gap-3" style={{ background: C.card, border: `1px solid ${C.line}`, opacity: v.n === 2 || est === "En pausa" || est === "Caído" ? 0.7 : 1 }}>
-      <div style={{ width: 92, flexShrink: 0 }}><Photo hue={p.hue} h={92} src={locked ? null : p.fotos?.[0]} /></div>
+      <div style={{ width: 92, flexShrink: 0 }}><Photo hue={p.hue} h={92} src={p.fotos?.[0]} /></div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 text-xs" style={{ color: C.mute }}><span>{p.op}</span><span>{p.tipo}</span></div>
         <div className="font-semibold leading-snug" style={{ color: C.ink, fontSize: 15 }}>{locked ? tBasico(p) : p.t}</div>
@@ -117,10 +124,11 @@ function DetalleInner({ p, acceso, onBack, onVisit, onReport, ant, rate, onProfi
   return (
     <div className="p-4 pb-8 space-y-3">
       <button onClick={onBack} className="text-sm" style={{ color: C.brandDk }}>‹ Volver a resultados</button>
-      {!locked && p.fotos && p.fotos.length ? <Galeria fotos={p.fotos} titulo={p.t} texto={`${p.t} · ${money(p)} · ${p.zona}, ${p.ciudad}`} /> : <Photo hue={p.hue} h={190} src={null} label={locked ? "Fotos con suscripción" : "Sin fotos"} />}
+      {p.fotos && p.fotos.length ? <Galeria fotos={p.fotos} titulo={locked ? tBasico(p) : p.t} texto={`${p.t} · ${moneyOrig(p)} · ${p.zona}, ${p.ciudad}`} soloVer={locked} /> : <Photo hue={p.hue} h={190} src={null} label="Sin fotos" />}
       <div className="flex items-center justify-between"><span className="text-sm" style={{ color: C.mute }}>{p.op} · {p.tipo}</span><span className="flex gap-1 items-center"><EstBadge est={p.est || "Disponible"} /><Badge v={v} /></span></div>
       <h2 className="font-semibold text-xl leading-snug" style={{ color: C.ink }}>{locked ? tBasico(p) : p.t}</h2>
       <div style={{ ...serif, fontSize: 28, fontWeight: 700, color: C.ink }}>{money(p)}</div>
+      {p.mon && p.mon !== MONEDA && <div className="text-xs -mt-2" style={{ color: C.mute }}>Precio publicado: {moneyOrig(p)} · cambio {BOB}</div>}
       {perm.fav && <div className="flex gap-2 overflow-x-auto items-center">
         <Chip on={isFav(null)} onClick={() => toggleFav(p.id, null)}>{isFav(null) ? "♥ Guardada" : "♡ Guardar"}</Chip>
         {perm.cliente && clientes.map((c) => <Chip key={c.id} on={isFav(c.id)} onClick={() => toggleFav(p.id, c.id)}>Para {c.n.split(" ")[0]}</Chip>)}
@@ -185,7 +193,7 @@ function DetalleInner({ p, acceso, onBack, onVisit, onReport, ant, rate, onProfi
   );
 }
 
-function Buscar({ acceso, open, props, rate, favs, perm, goSub, busq, setBusq }) {
+function Buscar({ acceso, open, props, rate, favs, perm, goSub, busq, setBusq, moneda, setMoneda }) {
   const [op, setOp] = useState("Todas");
   const [ciu, setCiu] = useState("Todas");
   const [max, setMax] = useState("");
@@ -193,15 +201,16 @@ function Buscar({ acceso, open, props, rate, favs, perm, goSub, busq, setBusq })
   const [fv, setFv] = useState(false);
   const [dorm, setDorm] = useState("Todos");
   const [masc, setMasc] = useState(false);
-  const list = useMemo(() => props.filter((p) => (p.est || "Disponible") !== "Cerrado" && (dorm === "Todos" || (dorm === "4+" ? p.dorm >= 4 : p.dorm === Number(dorm))) && (!masc || p.mascotas !== "No") && (!fv || favs.some((f) => f.pid === p.id)) && (op === "Todas" || p.op === op) && (ciu === "Todas" || p.ciudad === ciu) && (!gar || p.garaje) && (!max || usd(p) <= Number(max))).sort((a, b) => RK[a.est || "Disponible"] - RK[b.est || "Disponible"] || vigencia(a).n - vigencia(b).n || a.dias - b.dias), [op, ciu, max, gar, fv, dorm, masc, favs, props]);
+  const list = useMemo(() => props.filter((p) => (p.est || "Disponible") !== "Cerrado" && (dorm === "Todos" || (dorm === "4+" ? p.dorm >= 4 : p.dorm === Number(dorm))) && (!masc || p.mascotas !== "No") && (!fv || favs.some((f) => f.pid === p.id)) && (op === "Todas" || p.op === op) && (ciu === "Todas" || p.ciudad === ciu) && (!gar || p.garaje) && (!max || enMoneda(p) <= Number(max))).sort((a, b) => RK[a.est || "Disponible"] - RK[b.est || "Disponible"] || vigencia(a).n - vigencia(b).n || a.dias - b.dias), [op, ciu, max, gar, fv, dorm, masc, favs, props]);
   return (
     <div className="p-4 space-y-3">
+      {setMoneda && <div className="flex items-center justify-end gap-1.5 text-xs" style={{ color: C.mute }}>Ver precios en <span className="inline-flex rounded-full p-0.5" style={{ background: C.lilaSoft }}>{[["BOB", "Bs"], ["USD", "$us"]].map(([k, l]) => <button key={k} onClick={() => setMoneda(k)} className="px-2.5 py-0.5 rounded-full font-semibold" style={{ background: moneda === k ? C.lila : "transparent", color: moneda === k ? "#fff" : C.lilaDk }}>{l}</button>)}</span></div>}
       <div className="flex gap-2 overflow-x-auto pb-1">{["Todas", "Venta", "Alquiler", "Anticrético", "Preventa"].map((o) => <Chip key={o} on={op === o} onClick={() => setOp(o)}>{o}</Chip>)}</div>
       <div className="flex gap-2">
         <select value={ciu} onChange={(e) => setCiu(e.target.value)} className="flex-1 rounded-xl px-3 py-2 text-sm" style={{ border: `1px solid ${C.line}`, background: C.card, color: C.ink }}>
           {["Todas", ...Object.keys(ZONAS)].map((c) => <option key={c}>{c}</option>)}
         </select>
-        <input value={max} onChange={(e) => setMax(e.target.value.replace(/\D/g, ""))} placeholder="Máx. USD" disabled={!perm.filtros} inputMode="numeric" className="w-28 rounded-xl px-3 py-2 text-sm" style={{ border: `1px solid ${C.line}`, background: C.card }} />
+        <input value={max} onChange={(e) => setMax(e.target.value.replace(/\D/g, ""))} placeholder={`Máx. ${MONEDA === "USD" ? "USD" : "Bs"}`} disabled={!perm.filtros} inputMode="numeric" className="w-28 rounded-xl px-3 py-2 text-sm" style={{ border: `1px solid ${C.line}`, background: C.card }} />
         <Chip on={gar} disabled={!perm.filtros} onClick={() => setGar(!gar)}>Garaje</Chip>
         <Chip on={fv} disabled={!perm.fav} onClick={() => setFv(!fv)}>♥</Chip>
       </div>
@@ -221,8 +230,10 @@ function Clientes({ acceso, open, props, clientes, setClientes, favs, toggleFav,
   const [nota, setNota] = useState("");
   const [sel, setSel] = useState(clientes[0] ? clientes[0].id : null);
   const [nuevo, setNuevo] = useState(false);
+  useAtras(nuevo, () => setNuevo(false));
+  useAtras(vistaReq === "red", () => setVistaReq("mios"));
   const [err, setErr] = useState("");
-  const [f, setF] = useState({ n: "", op: "Alquiler", ciudad: "Cochabamba", zona: "", max: "", mon: "USD", dorm: "2", garaje: "Indiferente", mascotas: "Indiferente", amoblado: "Indiferente", compartir: true });
+  const [f, setF] = useState({ n: "", op: "Alquiler", ciudad: Object.keys(ZONAS)[0] || "La Paz", zona: "", max: "", mon: MONEDA, dorm: "2", garaje: "Indiferente", mascotas: "Indiferente", amoblado: "Indiferente", compartir: true });
   const s = (k) => (v) => setF({ ...f, [k]: v });
   const num = (k) => (e) => s(k)(e.target.value.replace(/\D/g, ""));
   const tri = ["Obligatorio", "Preferido", "Indiferente"];
@@ -241,7 +252,7 @@ function Clientes({ acceso, open, props, clientes, setClientes, favs, toggleFav,
       <Fld l="Zona preferida"><input value={f.zona} onChange={(e) => s("zona")(e.target.value)} placeholder="Ej. Norte" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
       <div className="grid grid-cols-2 gap-3">
         <Fld l="Presupuesto máximo"><input value={f.max} onChange={num("max")} inputMode="numeric" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
-        <Fld l="Moneda"><Seg o={["USD", "BOB"]} v={f.mon} set={s("mon")} /></Fld>
+        <Fld l="Moneda"><Seg o={["Bs", "USD"]} v={f.mon === "BOB" ? "Bs" : f.mon} set={(x) => s("mon")(x === "Bs" ? "BOB" : "USD")} /></Fld>
         <Fld l="Dormitorios (mín.)"><input value={f.dorm} onChange={num("dorm")} inputMode="numeric" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
       </div>
       <Fld l="Garaje"><Seg o={tri} v={f.garaje} set={s("garaje")} /></Fld>
@@ -303,6 +314,7 @@ function Clientes({ acceso, open, props, clientes, setClientes, favs, toggleFav,
 
 function Visitas({ visitas, setVisitas, props, clientes, flash, notify, users, perm, autos, onRespuestas }) {
   const [segDe, setSegDe] = useState(null);
+  useAtras(segDe !== null, () => setSegDe(null));
   const [segF, setSegF] = useState({ dias: 1, hora: "10:00", txt: "", tel: "" });
   const abrirSeg = (x, pp) => { setSegDe(x.id); setSegF(x.seg ? { ...x.seg } : { dias: 1, hora: "10:00", tel: x.clTel || "", txt: plantillaSeg({ cl: x.cl, pt: pp ? pp.t : x.pTxt || "la propiedad", fecha: fechaL(isoD(x.f)), yo: ME }) }); };
   const guardarSeg = (x) => { if (waNum(segF.tel).length < 8) { flash("Escribe el WhatsApp del cliente para el seguimiento."); return; } setVisitas((vs) => vs.map((y) => (y.id === x.id ? { ...y, seg: { ...segF, env: false }, clTel: y.clTel || segF.tel } : y))); setSegDe(null); flash(`Seguimiento programado: ${segF.dias} día${segF.dias > 1 ? "s" : ""} después de la visita, a las ${segF.hora}.`); };
@@ -310,6 +322,7 @@ function Visitas({ visitas, setVisitas, props, clientes, flash, notify, users, p
   const [vm, setVm] = useState({ y: HOY.getFullYear(), m: HOY.getMonth() });
   const [sel, setSel] = useState(isoOf(HOY));
   const [nuevo, setNuevo] = useState(false);
+  useAtras(nuevo, () => setNuevo(false));
   const [v, setV] = useState({ pid: "", cid: "", h: "10:00", modo: "Captador de la propiedad", otro: "", cotro: "", ptxt: "", tel: "", agTel: "", waCli: true, waAg: true, waCuando: 1440, txtCli: null, txtAg: null });
   const next = { Pendiente: "Confirmada", Confirmada: "Realizada", Realizada: "Pendiente", Cancelada: "Pendiente", Reprogramada: "Confirmada" };
   const col = { Pendiente: [C.amber, C.amberSoft], Confirmada: [C.brandDk, C.brandSoft], Realizada: [C.ok, C.okSoft], Cancelada: [C.red, C.redSoft], Reprogramada: [C.amber, C.amberSoft] };
@@ -721,7 +734,7 @@ function Form({ onSave, init, maxFotos = 3, autoCopy = false }) {
     const fal = camposFaltantes(nuevo);
     setInfo(fal.length ? `✨ Listo: llenamos los datos que encontramos en tu copy. Completa ${fal.length === 1 ? "el campo marcado" : `los ${fal.length} campos marcados`} en amarillo: ${fal.map((k) => NOMBRES_CAMPOS[k]).join(", ")}.` : "✨ ¡Encontramos todos los datos! Revísalos antes de publicar.");
   };
-  const [f, setF] = useState(init ? toF(init) : { op: "Alquiler", tipo: "Departamento", tipoOtro: "", ciudad: "La Paz", zona: "", t: "", precio: "", mon: "USD", dorm: "2", ban: "1", m2: "", garaje: "No", gTipo: "Independiente", gAparte: "No", gPrecio: "", mascotas: "No", mascCond: "", amoblado: "Vacío", com: "", condComp: "", desc: "", fotos: [] });
+  const [f, setF] = useState(init ? toF(init) : { op: "Alquiler", tipo: "Departamento", tipoOtro: "", ciudad: "La Paz", zona: "", t: "", precio: "", mon: MONEDA, dorm: "2", ban: "1", m2: "", garaje: "No", gTipo: "Independiente", gAparte: "No", gPrecio: "", mascotas: "No", mascCond: "", amoblado: "Vacío", com: "", condComp: "", desc: "", fotos: [] });
   const [err, setErr] = useState("");
   const s = (k) => (v) => setF({ ...f, [k]: v });
   const num = (k) => (e) => s(k)(e.target.value.replace(/\D/g, ""));
@@ -750,7 +763,7 @@ function Form({ onSave, init, maxFotos = 3, autoCopy = false }) {
       <Fld l={lb("zona", "Zona o barrio")} x={falta("zona")}><input list="zonas" value={f.zona} onChange={(e) => s("zona")(e.target.value)} placeholder="Escribe la zona exacta" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /><datalist id="zonas">{(ZONAS[f.ciudad] || []).map((z) => <option key={z} value={z} />)}</datalist></Fld>
       <div className="grid grid-cols-2 gap-3">
         <Fld l={lb("precio", "Precio")} x={falta("precio")}><input value={f.precio} onChange={num("precio")} inputMode="numeric" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
-        <Fld l={lb("mon", "Moneda")} x={falta("mon")}><Seg o={["USD", "BOB"]} v={f.mon} set={s("mon")} /></Fld>
+        <Fld l={lb("mon", "Moneda")} x={falta("mon")}><Seg o={["Bs", "USD"]} v={f.mon === "BOB" ? "Bs" : f.mon} set={(x) => s("mon")(x === "Bs" ? "BOB" : "USD")} /></Fld>
         {vivienda && <Fld l={lb("dorm", "Dormitorios")} x={falta("dorm")}><input value={f.dorm} onChange={num("dorm")} inputMode="numeric" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>}
         {vivienda && <Fld l={lb("ban", "Baños")} x={falta("ban")}><input value={f.ban} onChange={num("ban")} inputMode="numeric" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>}
         <Fld l={lb("m2", "Superficie (m²)")} x={falta("m2")}><input value={f.m2} onChange={num("m2")} inputMode="numeric" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
@@ -778,6 +791,9 @@ function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, s
   const [sub, setSub] = useState("capt");
   const [pre, setPre] = useState(null);
   const [cerrando, setCerrando] = useState(null);
+  useAtras(!!nueva, () => setNueva(false));
+  useAtras(!!cerrando, () => setCerrando(null));
+  useAtras(sub !== "capt", () => setSub("capt"));
   useEffect(() => { if (subInit) { setSub(subInit); clearSub(); } }, [subInit]);
   const mine = props.filter((p) => p.cap.n === ME);
   const enLista = mine.filter((p) => p.est !== "Cerrado");
@@ -975,6 +991,13 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
         </div>
       </>}
       {s === "cfg" && <>
+        <div className="text-sm font-semibold" style={{ color: C.ink }}>💱 Moneda</div>
+        <div className="grid grid-cols-2 gap-2">
+          <Fld l="Moneda principal de la app"><Seg o={["Bs", "USD"]} v={(cfg.moneda || "BOB") === "BOB" ? "Bs" : "USD"} set={(x) => setCfg({ ...cfg, moneda: x === "Bs" ? "BOB" : "USD" })} /></Fld>
+          <Fld l="Tipo de cambio (Bs por 1 USD)"><input value={cfg.tc ?? 6.96} onChange={(e) => setCfg({ ...cfg, tc: e.target.value.replace(/[^\d.]/g, "") })} inputMode="decimal" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
+        </div>
+        <div className="text-xs" style={{ color: C.mute }}>Cada usuario puede cambiar en el buscador si ve los precios en Bs o en dólares. Las propiedades conservan la moneda en que se publicaron.</div>
+        <div style={{ height: 1, background: C.line }} />
         <div className="text-sm font-semibold" style={{ color: C.ink }}>💳 Cobros</div>
         <Fld l="Día de corte de todos los pagos"><select value={cfg.dia} onChange={(e) => { setCfg({ ...cfg, dia: +e.target.value }); log(`Día de corte cambiado a ${e.target.value}`); }} className="w-full rounded-xl px-3 py-2 text-sm" style={inp}>{Array.from({ length: 28 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>Día {d} de cada mes</option>)}</select></Fld>
         <div className="space-y-2"><div className="text-xs font-medium" style={{ color: C.mute }}>Precio de cada plan de pago (Bs por mes)</div>{cfg.planes.map((pl, i) => <div key={i} className="grid grid-cols-5 gap-2"><div className="col-span-3 rounded-xl px-3 py-2 text-sm" style={{ ...inp, background: C.lilaSoft }}>{pl.nombre}</div><input value={pl.precio} onChange={(e) => setCfg({ ...cfg, planes: cfg.planes.map((q, j) => (j === i ? { ...q, precio: +e.target.value.replace(/\D/g, "") || 0 } : q)) })} inputMode="numeric" className="col-span-2 rounded-xl px-3 py-2 text-sm" style={inp} /></div>)}<div className="text-xs" style={{ color: C.mute }}>Los nombres de los planes están fijos porque determinan los permisos de cada nivel.</div></div>
@@ -1211,7 +1234,7 @@ function ReqRed({ props, perm, flash }) {
       {vista.map((r) => {
         const compat = perm.match ? mias.map((p) => ({ p, m: match(r, p) })).filter((x) => x.m).sort((a, b) => b.m.pct - a.m.pct) : [];
         const mejor = compat[0];
-        const msg = mejor ? `Hola ${r.agente.split(" ")[0]}, vi en Vortex que tu cliente busca ${r.op.toLowerCase()} en ${r.zona || r.ciudad}. Tengo *${mejor.p.t}* (${money(mejor.p)}, ${mejor.p.zona}) que podría interesarle. ¿Coordinamos? — ${ME}` : `Hola ${r.agente.split(" ")[0]}, vi en Vortex que tu cliente busca ${r.op.toLowerCase()} en ${r.zona || r.ciudad} hasta ${r.mon} ${r.max.toLocaleString("es-BO")}. Tengo opciones que podrían interesarle. ¿Hablamos? — ${ME}`;
+        const msg = mejor ? `Hola ${r.agente.split(" ")[0]}, vi en Vortex que tu cliente busca ${r.op.toLowerCase()} en ${r.zona || r.ciudad}. Tengo *${mejor.p.t}* (${moneyOrig(mejor.p)}, ${mejor.p.zona}) que podría interesarle. ¿Coordinamos? — ${ME}` : `Hola ${r.agente.split(" ")[0]}, vi en Vortex que tu cliente busca ${r.op.toLowerCase()} en ${r.zona || r.ciudad} hasta ${r.mon} ${r.max.toLocaleString("es-BO")}. Tengo opciones que podrían interesarle. ¿Hablamos? — ${ME}`;
         return (
           <div key={r.agente + r.id} className="rounded-2xl p-3 space-y-1.5" style={{ background: C.card, border: `1px solid ${C.line}` }}>
             <div className="flex justify-between gap-2"><span className="text-sm font-semibold" style={{ color: C.ink }}>{r.op} en {r.ciudad}{r.zona ? `, ${r.zona}` : ""}</span><span className="text-sm font-bold shrink-0" style={{ color: C.ink }}>hasta {r.mon} {r.max.toLocaleString("es-BO")}</span></div>
@@ -1282,7 +1305,7 @@ const textoCopy = (p, tel) => {
     const d = leerCopy(desc, ZONAS); // lo que el copy ya dice
     const extra = [
       !d.op || !d.tipo ? `🏠 ${p.op} · ${p.tipo}` : "",
-      !d.precio ? `💰 ${money(p)}` : "",
+      !d.precio ? `💰 ${moneyOrig(p)}` : "",
       !d.zona ? `📍 ${p.zona}, ${p.ciudad}` : "",
       [!d.dorm ? dormTxt : "", !d.ban ? banTxt : "", !d.m2 ? m2Txt : ""].filter(Boolean).join(" · "),
       !d.garaje && p.garaje !== undefined ? gar : "",
@@ -1295,7 +1318,7 @@ const textoCopy = (p, tel) => {
   return [
     `🏠 *${p.t}*`,
     `${p.op} · ${p.tipo}`,
-    `💰 ${money(p)}`,
+    `💰 ${moneyOrig(p)}`,
     `📍 ${p.zona}, ${p.ciudad}`,
     [dormTxt, banTxt, m2Txt].filter(Boolean).join(" · "),
     gar, masc,
@@ -1332,7 +1355,7 @@ async function compartirFotos(urls, base, texto) {
   } catch (e) { if (e && e.name === "AbortError") return true; }
   return false;
 }
-function Galeria({ fotos, titulo, texto }) {
+function Galeria({ fotos, titulo, texto, soloVer = false }) {
   const [i, setI] = useState(0);
   const [ocup, setOcup] = useState("");
   const base = nombreArchivo(titulo);
@@ -1345,14 +1368,14 @@ function Galeria({ fotos, titulo, texto }) {
         <img src={fotos[j]} alt={`Foto ${j + 1}`} className="w-full h-full object-cover" />
         {n > 1 && <button onClick={() => setI((j - 1 + n) % n)} className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full text-lg" style={btn}>‹</button>}
         {n > 1 && <button onClick={() => setI((j + 1) % n)} className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full text-lg" style={btn}>›</button>}
-        <button onClick={() => descargarFotos([fotos[j]], base, j + 1)} title="Descargar esta foto" className="absolute top-2 right-2 px-2.5 py-1 rounded-lg text-xs" style={btn}>⬇ Esta foto</button>
+        {!soloVer && <button onClick={() => descargarFotos([fotos[j]], base, j + 1)} title="Descargar esta foto" className="absolute top-2 right-2 px-2.5 py-1 rounded-lg text-xs" style={btn}>⬇ Esta foto</button>}
         <span className="absolute bottom-2 right-2 text-xs px-2 py-0.5 rounded-md" style={btn}>{j + 1} / {n}</span>
       </div>
       {n > 1 && <div className="flex gap-1.5 overflow-x-auto">{fotos.map((u, k) => <button key={u} onClick={() => setI(k)} className="shrink-0 rounded-lg overflow-hidden" style={{ width: 52, height: 52, border: `2px solid ${k === j ? C.lila : "transparent"}` }}><img src={u} alt="" className="w-full h-full object-cover" /></button>)}</div>}
-      <div className={`grid gap-2 ${compartible ? "grid-cols-2" : "grid-cols-1"}`}>
+      {!soloVer && <div className={`grid gap-2 ${compartible ? "grid-cols-2" : "grid-cols-1"}`}>
         <button disabled={!!ocup} onClick={async () => { setOcup("d"); await descargarFotos(fotos, base); setOcup(""); }} className="py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.brandSoft, color: C.brandDk }}>{ocup === "d" ? "Descargando…" : `⬇ Descargar ${n > 1 ? `las ${n} fotos` : "la foto"}`}</button>
         {compartible && <button disabled={!!ocup} onClick={async () => { setOcup("c"); const ok = await compartirFotos(fotos, base, texto); if (!ok) await descargarFotos(fotos, base); setOcup(""); }} className="py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.lilaSoft, color: C.lilaDk }}>{ocup === "c" ? "Preparando…" : "📤 Enviar fotos"}</button>}
-      </div>
+      </div>}
     </div>
   );
 }
@@ -1559,6 +1582,12 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas, onIngresar, o
   const [users, setUsers] = useSync("perfiles", inicial.perfiles, sesion);
   const [audit, setAudit] = useSync("auditoria", inicial.auditoria, sesion);
   const [reportando, setReportando] = useState(null);
+  const [moneda, setMonedaSt] = useState(() => leerMoneda() || (inicial.cfg && inicial.cfg.moneda) || "BOB");
+  const setMoneda = (m) => { setMonedaSt(m); try { localStorage.setItem("vx-moneda", m); } catch {} };
+  useAtras(tab !== "buscar", () => { setTab("buscar"); setSel(null); });
+  useAtras(!!sel, () => setSel(null));
+  useAtras(!!perfilDe, () => setPerfilDe(null));
+  useAtras(!!reportando, () => setReportando(null));
   const [pagos, setPagos] = useSync("pagos", inicial.pagos, sesion);
   const [cfg, setCfg] = useSyncObj("ajustes", "cfg", { ...CFG0, ...(inicial.cfg || {}) }, sesion);
   const [perfilSub, setPerfilSub] = useState(null);
@@ -1567,12 +1596,15 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas, onIngresar, o
   const plantillas = plantObj.lista || [];
   const setPlantillas = (l) => setPlantObj((o) => ({ ...o, lista: l }));
   const [rr, setRr] = useState(null);
+  useAtras(!!rr, () => setRr(null));
   const [autos, setAutos] = useSyncObj("ajustes_usuario", "autos", { recDef: 0, vig: { on: true, n: 5 }, vis: { on: false, n: 30 }, req: { on: true, n: 7 }, ...(inicial.autos || {}) }, sesion);
   const [sugs, setSugs] = useSync("sugerencias", inicial.sugerencias, sesion);
   const [visitas, setVisitas] = useSync("visitas", inicial.visitas, sesion);
   const [toast, setToast] = useState("");
   const flash = (m) => { setToast(m); setTimeout(() => setToast(""), 2200); };
   ZONAS = cfg.ciudades && Object.keys(cfg.ciudades).length ? cfg.ciudades : ZONAS_BASE;
+  BOB = +cfg.tc > 0 ? +cfg.tc : 6.96;
+  MONEDA = moneda;
   const mi = users.find((u) => u.n === ME) || {};
   PERFIL.datos = mi.perfil || null;
   PERFIL.guardar = (d) => setUsers((us) => us.map((u) => (u.n === ME ? { ...u, perfil: d } : u)));
@@ -1675,7 +1707,7 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas, onIngresar, o
           {acceso === "admin" ? <Admin reports={reports} setReports={setReports} users={users} setUsers={setUsers} audit={audit} setAudit={setAudit} props={props} ops={ops} sugs={sugs} setSugs={setSugs} pagos={pagos} setPagos={setPagos} cfg={cfg} setCfg={setCfg} flash={flash} cuentas={cuentas} visitas={visitas} reviews={reviews} />
             : sel ? <Detalle p={sel} acceso={acceso} onBack={() => setSel(null)} onVisit={agendar} onReport={setReportando} users={users} onSub={goSub} perm={perm} rate={rate} onProfile={setPerfilDe} favs={favs} toggleFav={toggleFav} clientes={clientes} flash={flash} onRespuestas={setRr} />
             : visitante && tab !== "buscar" ? <Invitacion tab={tab} onRegistro={onRegistro} onIngresar={onIngresar} />
-            : tab === "buscar" ? <Buscar acceso={acceso} open={open} props={props} rate={rate} favs={favs} perm={perm} goSub={goSub} busq={busq} setBusq={setBusq} />
+            : tab === "buscar" ? <Buscar acceso={acceso} open={open} props={props} rate={rate} favs={favs} perm={perm} goSub={goSub} busq={busq} setBusq={setBusq} moneda={moneda} setMoneda={setMoneda} />
             : tab === "clientes" ? (perm.req ? <Clientes acceso={acceso} open={open} props={props} clientes={clientes} setClientes={setClientes} favs={favs} toggleFav={toggleFav} delCliente={delCliente} perm={perm} visitas={visitas} goSub={goSub}  flash={flash} /> : <div className="p-4"><Lock t="Requerimientos de clientes" plan="Inicial" go={goSub} /></div>)
             : tab === "visitas" ? (perm.vis ? <Visitas visitas={visitas} setVisitas={setVisitas} props={props} clientes={clientes} flash={flash} notify={notify} users={users} perm={perm} autos={autos} onRespuestas={setRr} /> : <div className="p-4"><Lock t="Agenda de visitas" plan="Inicial" go={goSub} /></div>)
             : tab === "alertas" ? <Alertas go={go} notifs={notifs} visitas={visitas} props={props} clientes={clientes} perm={perm} autos={autos} goSub={goSub} avisos={avisosPlan} />

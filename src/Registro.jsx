@@ -6,7 +6,7 @@ import { comprimir, BUCKET_PRIV } from "./archivos";
 import { notificar } from "./push";
 import { TerminosModal } from "./Extras";
 import { C, LOGO_ISO } from "./Vortex";
-import { inp, Campo, Boton, MsgError } from "./ui";
+import { inp, Campo, Boton, MsgError, ClaveInput } from "./ui";
 
 const limpiarMsg = (m = "") => m.replace(/^.*?ERROR:\s*/i, "");
 
@@ -73,8 +73,8 @@ export default function Registro({ onLogin, onVolver, terminos }) {
             <Campo l="WhatsApp"><input value={f.tel} onChange={s("tel")} inputMode="tel" placeholder="Ej. 70012345" className="w-full rounded-xl px-3 py-2.5 text-sm" style={inp} /></Campo>
             <Campo l="Correo electrónico"><input type="email" value={f.email} onChange={s("email")} autoComplete="email" className="w-full rounded-xl px-3 py-2.5 text-sm" style={inp} /></Campo>
             <div className="grid grid-cols-2 gap-2">
-              <Campo l="Contraseña"><input type="password" value={f.pass} onChange={s("pass")} autoComplete="new-password" className="w-full rounded-xl px-3 py-2.5 text-sm" style={inp} /></Campo>
-              <Campo l="Repetir contraseña"><input type="password" value={f.pass2} onChange={s("pass2")} autoComplete="new-password" className="w-full rounded-xl px-3 py-2.5 text-sm" style={inp} /></Campo>
+              <Campo l="Contraseña"><ClaveInput value={f.pass} onChange={s("pass")} autoComplete="new-password" /></Campo>
+              <Campo l="Repetir contraseña"><ClaveInput value={f.pass2} onChange={s("pass2")} autoComplete="new-password" /></Campo>
             </div>
             <div className="space-y-1.5">
               <div className="text-xs font-medium" style={{ color: C.mute }}>🪪 Foto de tu carnet de identidad (solo la ve el administrador)</div>

@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { supabase } from "./supabase";
 import { C, CUENTAS, RESUMEN } from "./Vortex";
-import { inp, Campo, Boton, MsgError } from "./ui";
+import { inp, Campo, Boton, MsgError, ClaveInput } from "./ui";
 import { useEffect } from "react";
 import { estadoPush, activarPush, desactivarPush, esIOS, instaladaComoApp } from "./push";
 import { LOGO_ISO } from "./Vortex";
@@ -48,8 +48,8 @@ export function NuevaClave({ onListo }) {
       <img src={LOGO_ISO} alt="Vortex" style={{ height: 56, alignSelf: "center" }} />
       <div className="text-lg font-bold text-center" style={{ color: C.ink }}>Crea tu nueva contraseña</div>
       {ok ? <><div className="text-sm text-center" style={{ color: C.ok }}>✓ Tu contraseña se actualizó.</div><Boton onClick={onListo}>Entrar a Vortex</Boton></> : <>
-        <Campo l="Nueva contraseña"><input type="password" value={p1} onChange={(e) => setP1(e.target.value)} className="w-full rounded-xl px-3 py-2.5 text-sm" style={inp} /></Campo>
-        <Campo l="Repetir contraseña"><input type="password" value={p2} onChange={(e) => setP2(e.target.value)} className="w-full rounded-xl px-3 py-2.5 text-sm" style={inp} /></Campo>
+        <Campo l="Nueva contraseña"><ClaveInput value={p1} onChange={(e) => setP1(e.target.value)} autoComplete="new-password" /></Campo>
+        <Campo l="Repetir contraseña"><ClaveInput value={p2} onChange={(e) => setP2(e.target.value)} autoComplete="new-password" /></Campo>
         <MsgError t={err} />
         <Boton onClick={guardar}>Guardar contraseña</Boton>
       </>}
@@ -164,7 +164,7 @@ export function MenuCuenta({ sesion, onClose, vista, onTerminos }) {
           <button onClick={onClose} className="w-full py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: C.grad }}>Ver la app</button>
         </div>}
         <PanelPush esAdmin={sesion.rol === "admin"} />
-        <Campo l="Cambiar mi contraseña"><div className="flex gap-2"><input type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="Nueva contraseña" className="flex-1 rounded-xl px-3 py-2 text-sm" style={inp} /><button onClick={cambiar} className="px-4 rounded-xl text-sm font-semibold text-white" style={{ background: C.lila }}>Guardar</button></div></Campo>
+        <Campo l="Cambiar mi contraseña"><div className="flex gap-2"><div className="flex-1"><ClaveInput value={pass} onChange={(e) => setPass(e.target.value)} placeholder="Nueva contraseña" autoComplete="new-password" className="w-full rounded-xl px-3 py-2 text-sm" /></div><button onClick={cambiar} className="px-4 rounded-xl text-sm font-semibold text-white" style={{ background: C.lila }}>Guardar</button></div></Campo>
         {ok && <div className="text-xs" style={{ color: C.ok }}>✓ {ok}</div>}
         <MsgError t={err} />
         {onTerminos && <button onClick={onTerminos} className="w-full text-xs underline" style={{ color: C.mute }}>Términos y política de privacidad</button>}

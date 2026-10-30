@@ -8,6 +8,7 @@ import Login from "./Login";
 import Registro from "./Registro";
 import { CrearUsuario, AccionesUsuario, MenuCuenta, NuevaClave } from "./Cuentas";
 import { TerminosModal } from "./Extras";
+import { useAtras, useTrampaAtras } from "./atras";
 
 const Centro = ({ children }) => (
   <div className="vx-shell"><div className="vx-frame flex flex-col items-center justify-center text-center p-6 space-y-4" style={{ background: C.bg }}>
@@ -41,6 +42,7 @@ export default function App() {
   const [finPrueba, setFinPrueba] = useState(0);
   const [modo, setModo] = useState(null);
   const [recuperar, setRecuperar] = useState(false);
+  useTrampaAtras();
   const [verTerminos, setVerTerminos] = useState(false); // null = visitante | "login" | "registro"
   const [publico, setPublico] = useState(null);
   const [errPub, setErrPub] = useState("");
@@ -100,8 +102,8 @@ export default function App() {
   }, []);
   useEffect(() => {
     if (!datos) return;
-    const tick = () => { if (document.visibilityState === "visible" && Date.now() - ultima.current > 30000) recargar(0); };
-    const i = setInterval(() => { if (document.visibilityState === "visible" && Date.now() - ultima.current > 90000) recargar(0); }, 15000);
+    const tick = () => { if (document.visibilityState === "visible" && Date.now() - ultima.current > 120000) recargar(0); };
+    const i = setInterval(() => { if (document.visibilityState === "visible" && Date.now() - ultima.current > 300000) recargar(0); }, 30000);
     document.addEventListener("visibilitychange", tick);
     window.addEventListener("focus", tick);
     return () => { clearInterval(i); document.removeEventListener("visibilitychange", tick); window.removeEventListener("focus", tick); };
@@ -119,6 +121,9 @@ export default function App() {
     return () => { window.removeEventListener("vortex-aviso", a); window.removeEventListener("vortex-subiendo", s); window.removeEventListener("beforeunload", salir); };
   }, []);
 
+  useAtras(menu, () => setMenu(false));
+  useAtras(verTerminos, () => setVerTerminos(false));
+  useAtras(!sesion && !!modo, () => setModo(null));
   const perfilRef = useRef(null);
   perfilRef.current = perfil;
   const cuentas = useMemo(() => ({
