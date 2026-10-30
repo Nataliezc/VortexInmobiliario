@@ -538,7 +538,7 @@ function Cierre({ p, props, setProps, ops, setOps, reviews, setReviews, flash, o
         <div className="text-xs" style={{ color: C.mute }}>Si hubo mal trabajo, además de calificar puedes reportarlo con pruebas desde Perfil → Cierres.</div>
       </div>
       {err && <div className="text-sm" style={{ color: C.red }}>{err}</div>}
-      {p.fotos && p.fotos.length > 0 && <div className="text-xs rounded-xl p-2.5" style={{ background: C.amberSoft, color: C.amber }}>📷 Al cerrar, las {p.fotos.length} foto{p.fotos.length > 1 ? "s" : ""} de esta captación se eliminarán para ahorrar espacio. Si la vuelves a publicar, podrás subir fotos nuevas.</div>}
+      {<div className="text-xs rounded-xl p-2.5" style={{ background: C.amberSoft, color: C.amber }}>📦 La captación cerrada se guardará en Cierres durante el tiempo que permite tu plan (Inicial 3 meses · Profesional 7 · Premium 12). Después se eliminan sus fotos y datos, y queda solo el registro del cierre.</div>}
       <button onClick={save} className="w-full py-3 rounded-xl font-semibold text-white" style={{ background: C.grad }}>Confirmar cierre</button>
     </div>
   );
@@ -578,7 +578,8 @@ function Reportar({ p, onClose, onSend }) {
   );
 }
 
-function Extra({ onRepublicar, sub, ops, setOps, props, setProps, reports, flash, reviews, setReviews, onReport, pre, clearPre, sugs, setSugs, perm, goSub, nivel, setReports, cfg, clientes, visitas, favs, autos, setAutos, pagos }) {
+function Extra({ onRepublicar, nivelReal, sub, ops, setOps, props, setProps, reports, flash, reviews, setReviews, onReport, pre, clearPre, sugs, setSugs, perm, goSub, nivel, setReports, cfg, clientes, visitas, favs, autos, setAutos, pagos }) {
+  const [borrarId, setBorrarId] = useState(null);
   const [nuevo, setNuevo] = useState(false);
   const [o, setO] = useState({ pid: "", monto: "", com: "", colab: "" });
   const [d, setD] = useState(() => ({ tel: "", bio: "", ciu: [], ...(PERFIL.datos || {}) }));
@@ -666,12 +667,18 @@ function Extra({ onRepublicar, sub, ops, setOps, props, setProps, reports, flash
       </div>
       <button onClick={() => setNuevo(true)} className="w-full py-2.5 rounded-xl font-semibold text-white" style={{ background: C.grad }}>+ Registrar cierre</button>
       {!perm.hist && <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>🔒 El historial de cierres y tu parte acumulada están disponibles desde el plan Profesional.</div>}
-      {(() => { const cerradas = props.filter((p) => p.cap.n === ME && p.est === "Cerrado" && !p.opPend); return cerradas.length > 0 && <>
-        <div className="text-sm font-semibold pt-1" style={{ color: C.ink }}>Mis captaciones cerradas ({cerradas.length})</div>
+      {(() => { const cerradas = props.filter((p) => p.cap.n === ME && p.est === "Cerrado" && !p.opPend); const meses = retencion(nivelReal || nivel); return <>
+        <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>📦 Las captaciones cerradas se guardan <b>{meses} meses</b> con tu plan actual (Inicial 3 · Profesional 7 · Premium 12). Pasado ese tiempo se eliminan sus fotos y datos para liberar espacio; el registro del cierre se conserva.</div>
+        {cerradas.length > 0 && <div className="text-sm font-semibold pt-1" style={{ color: C.ink }}>Mis captaciones cerradas ({cerradas.length})</div>}
         {cerradas.map((p) => <div key={p.id} className="rounded-2xl p-3 flex gap-3 items-center" style={{ background: C.card, border: `1px solid ${C.line}` }}>
           {p.fotos && p.fotos[0] ? <img src={p.fotos[0]} alt={p.t} className="rounded-xl object-cover shrink-0" style={{ width: 60, height: 60 }} /> : <div className="shrink-0 rounded-xl" style={{ width: 60, height: 60, background: `hsl(${p.hue || 260} 45% 90%)` }} />}
           <div className="flex-1 min-w-0"><div className="text-sm font-semibold" style={{ color: C.ink }}>{p.t}</div><div className="text-xs" style={{ color: C.mute }}>{p.op} · {money(p)} · {p.zona}</div>
-            <button onClick={() => onRepublicar && onRepublicar(p)} className="mt-1 text-xs font-semibold underline" style={{ color: C.lilaDk }}>✏️ Editar y volver a publicar</button></div>
+            {p.cerradaF && <div className="text-xs" style={{ color: C.mute }}>Se eliminará el {fechaL(new Date(sumarMeses(p.cerradaF, meses)))}</div>}
+            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+              <button onClick={() => onRepublicar && onRepublicar(p)} className="text-xs font-semibold underline" style={{ color: C.lilaDk }}>✏️ Editar y volver a publicar</button>
+              {borrarId === p.id ? <span className="text-xs flex gap-2"><button onClick={() => { borrarFotos(p.fotos); setProps(props.filter((x) => x.id !== p.id)); setBorrarId(null); flash("Captación eliminada. El registro del cierre se conserva."); }} className="font-semibold underline" style={{ color: C.red }}>Sí, eliminar</button><button onClick={() => setBorrarId(null)} className="underline" style={{ color: C.mute }}>No</button></span>
+                : <button onClick={() => setBorrarId(p.id)} className="text-xs underline" style={{ color: C.red }}>🗑 Eliminar ahora</button>}
+            </div></div>
         </div>)}
       </>; })()}
       {pend.map((p) => <div key={p.id} className="rounded-xl p-3 text-sm flex items-center justify-between gap-2" style={{ background: C.amberSoft, color: C.amber }}><span>Cerrada sin registrar: {p.t}</span><button onClick={() => { setO({ pid: String(p.id), monto: "", com: "", colab: "" }); setNuevo(true); }} className="px-3 py-1 rounded-lg text-white shrink-0" style={{ background: C.amber }}>Registrar</button></div>)}
@@ -806,8 +813,8 @@ function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, s
     <div className="p-4 space-y-3">
       <button onClick={() => setNueva(false)} className="text-sm" style={{ color: C.brandDk }}>‹ Volver a mi perfil</button>
       <h2 className="font-semibold text-lg" style={{ color: C.ink }}>{nueva === true ? "Nueva captación" : nueva._repub ? "Volver a publicar captación" : "Editar captación"}</h2>
-      {nueva !== true && nueva._repub && <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Revisa y actualiza los datos y sube fotos nuevas (las anteriores se eliminaron al cerrarla). Al guardar, la captación vuelve a estar Disponible en el buscador.</div>}
-      <Form autoCopy={!!perm.match} maxFotos={perm.maxFotos || 3} init={nueva === true ? null : nueva} onSave={(p) => { if (nueva === true) { if (bloq) { flash("Alcanzaste el límite de captaciones de tu plan."); return; } const np = { ...p, creada: Date.now() }; setProps([np, ...props]); onPublicada(np); flash("Captación publicada. Confírmala cada cierto tiempo para mantenerla visible."); } else if (nueva._repub) { if (bloq) { flash("Alcanzaste el límite de captaciones activas de tu plan."); return; } const { _repub, ...limpio } = p; setProps(props.map((x) => (x.id === p.id ? { ...limpio, est: "Disponible", opPend: false, dias: 0, creada: Date.now() } : x))); flash("Captación publicada de nuevo. Ya aparece en el buscador."); setSub("capt"); } else { setProps(props.map((x) => (x.id === p.id ? p : x))); flash("Cambios guardados."); } setNueva(false); }} />
+      {nueva !== true && nueva._repub && <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Revisa y actualiza los datos. Al guardar, la captación vuelve a estar Disponible en el buscador.</div>}
+      <Form autoCopy={!!perm.match} maxFotos={perm.maxFotos || 3} init={nueva === true ? null : nueva} onSave={(p) => { if (nueva === true) { if (bloq) { flash("Alcanzaste el límite de captaciones de tu plan."); return; } const np = { ...p, creada: Date.now() }; setProps([np, ...props]); onPublicada(np); flash("Captación publicada. Confírmala cada cierto tiempo para mantenerla visible."); } else if (nueva._repub) { if (bloq) { flash("Alcanzaste el límite de captaciones activas de tu plan."); return; } const { _repub, ...limpio } = p; setProps(props.map((x) => (x.id === p.id ? { ...limpio, est: "Disponible", opPend: false, dias: 0, creada: Date.now(), cerradaF: null } : x))); flash("Captación publicada de nuevo. Ya aparece en el buscador."); setSub("capt"); } else { setProps(props.map((x) => (x.id === p.id ? p : x))); flash("Cambios guardados."); } setNueva(false); }} />
     </div>
   );
   if (cerrando) return <Cierre p={cerrando} props={props} setProps={setProps} ops={ops} setOps={setOps} reviews={reviews} setReviews={setReviews} flash={flash} onDone={(hecho) => { setCerrando(null); if (hecho === true) setSub("ops"); }} />;
@@ -890,7 +897,9 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
   const aprobar = (p) => {
     const u = users.find((x) => x.n === p.de);
     const base = p.tipo === "Renovación" && u && u.venc ? isoD(u.venc) : null;
-    const fin = p.tipo === "Mejora de plan" && u && u.venc ? isoD(u.venc) : base ? new Date(base.getFullYear(), base.getMonth() + 1, cfg.dia) : proximoCorte(cfg.dia);
+    const m = p.meses > 1 ? p.meses : 1;
+    const pc = proximoCorte(cfg.dia);
+    const fin = p.tipo === "Mejora de plan" && u && u.venc ? isoD(u.venc) : base ? new Date(base.getFullYear(), base.getMonth() + m, cfg.dia) : m > 1 ? new Date(pc.getFullYear(), pc.getMonth() + m, cfg.dia) : pc;
     setUsers(users.map((x) => (x.n === p.de ? { ...x, est: "Activo", plan: p.plan, venc: isoOf(fin), planProx: null } : x)));
     setPagos(pagos.map((x) => (x.id === p.id ? { ...x, est: "Aprobado", revF: isoOf(HOY), hasta: isoOf(fin) } : x)));
     log(`Pago aprobado: ${p.de} · ${p.plan} · ${bs(p.monto)}. Habilitado hasta ${fechaL(fin)}`);
@@ -946,7 +955,7 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
           {!lista.length && <div className="text-center py-4 text-sm" style={{ color: C.mute }}>No hay pagos {filtro === "Todos" ? "revisados" : filtro.toLowerCase() + "s"} todavía.</div>}
           {lista.slice(0, cuantosPagos).map((p) => { const abierto = verPago === p.id; return (
             <div key={p.id} className="rounded-xl text-sm overflow-hidden" style={{ background: C.card, border: `1px solid ${abierto ? C.lila : C.line}`, color: C.ink }}>
-              <button onClick={() => setVerPago(abierto ? null : p.id)} className="w-full p-2.5 flex justify-between items-center text-left"><span>{p.de}<div className="text-xs" style={{ color: C.mute }}>{fechaL(isoD(p.iso))} · {p.plan} · {p.tipo}</div></span><span className="text-right"><b>{bs(p.monto)}</b><div className="text-xs" style={{ color: p.est === "Aprobado" ? C.ok : C.red }}>{p.est} {abierto ? "▲" : "▼"}</div></span></button>
+              <button onClick={() => setVerPago(abierto ? null : p.id)} className="w-full p-2.5 flex justify-between items-center text-left"><span>{p.de}<div className="text-xs" style={{ color: C.mute }}>{fechaL(isoD(p.iso))} · {p.plan} · {p.tipo}{p.meses > 1 ? ` · ${p.meses} meses` : ""}</div></span><span className="text-right"><b>{bs(p.monto)}</b><div className="text-xs" style={{ color: p.est === "Aprobado" ? C.ok : C.red }}>{p.est} {abierto ? "▲" : "▼"}</div></span></button>
               {abierto && <div className="px-3 pb-3 space-y-2 text-xs" style={{ borderTop: `1px solid ${C.line}` }}>
                 <div className="pt-2 grid grid-cols-2 gap-x-3 gap-y-1">
                   <span style={{ color: C.mute }}>Enviado</span><span>{fechaL(isoD(p.iso))}</span>
@@ -1190,20 +1199,27 @@ const prorrateo = (precio, dia) => { const fin = proximoCorte(dia); const ini = 
 const PRECIOS = { Inicial: 49, Profesional: 99, Premium: 169 };
 const ORD = { gratuito: 0, Inicial: 1, Profesional: 2, Premium: 3, prueba: 3, admin: 3 };
 const permisos = (n) => { const r = ORD[n] ?? 0; return { nivel: n, ficha: r >= 1, maxCapt: { Inicial: 5, Profesional: 20, Premium: 40 }[n] || null, maxFotos: { Inicial: 3, Profesional: 5 }[n] || (r >= 3 ? 8 : 3), req: r >= 1, fav: r >= 2, vis: r >= 1, share: r >= 2, report: r >= 1, cierre: r >= 1, filtros: r >= 1, match: r >= 2, matchAv: r >= 2, inversa: r >= 2, cliente: r >= 2, busq: r >= 2, vigDet: r >= 2, hist: r >= 2, seg: r >= 2, recordatorios: r >= 2, stats: r >= 3, informes: r >= 3, auto: r >= 3, soporte: r >= 3 }; };
+// Meses que se guardan las captaciones cerradas (fotos y datos). Después se eliminan y queda solo el registro del cierre.
+const RETENCION = { Inicial: 3, Profesional: 7, Premium: 12 };
+const retencion = (nivel) => RETENCION[nivel] || (nivel === "admin" ? 12 : 3);
+const sumarMeses = (ts, m) => { const d = new Date(ts); d.setMonth(d.getMonth() + m); return d.getTime(); };
 const CUENTAS = [["admin", "SuperAdmin"], ["prueba", "Prueba"], ["gratuito", "Gratuito"], ["Inicial", "Inicial"], ["Profesional", "Profesional"], ["Premium", "Premium"]];
 const RESUMEN = {
   admin: "Panel de administración: aprobar pagos, configurar cobros y planes, crear y gestionar usuarios, revisar reportes, sugerencias y auditoría.",
   prueba: "48 horas con acceso completo (igual que Premium). Al terminar, la cuenta pasa automáticamente a Gratuito hasta que pague un plan.",
   gratuito: "Solo puede buscar y ver datos básicos de las propiedades. Bloqueado: ficha completa, contacto con captadores, requerimientos, visitas, captaciones, reportes y todo lo de los planes.",
-  Inicial: "Hasta 5 captaciones · 3 fotos por captación · ficha completa y WhatsApp con captadores · requerimientos de clientes · agenda de visitas · reportes. Sin favoritos, coincidencias avanzadas ni estadísticas.",
-  Profesional: "Hasta 20 captaciones · 5 fotos por captación · todo lo de Inicial · coincidencias ponderadas e inversas · favoritos · compartir por WhatsApp · búsquedas guardadas · seguimiento · recordatorios. Sin estadísticas, informes ni automatizaciones.",
-  Premium: "Hasta 40 captaciones · 8 fotos por captación · confirmaciones de visita programadas por WhatsApp · todo lo de Profesional · estadísticas · informes con exportación CSV · automatizaciones · soporte prioritario.",
+  Inicial: "Hasta 5 captaciones · 3 fotos por captación · cerradas guardadas 3 meses · ficha completa y WhatsApp con captadores · requerimientos de clientes · agenda de visitas · reportes. Sin favoritos, coincidencias avanzadas ni estadísticas.",
+  Profesional: "Hasta 20 captaciones · 5 fotos por captación · cerradas guardadas 7 meses · todo lo de Inicial · coincidencias ponderadas e inversas · favoritos · compartir por WhatsApp · búsquedas guardadas · seguimiento · recordatorios. Sin estadísticas, informes ni automatizaciones.",
+  Premium: "Hasta 40 captaciones · 8 fotos por captación · cerradas guardadas 12 meses · confirmaciones de visita programadas por WhatsApp · todo lo de Profesional · estadísticas · informes con exportación CSV · automatizaciones · soporte prioritario.",
 };
 const PLAN_BEN = {
-  Inicial: ["Hasta 5 captaciones activas", "Hasta 3 fotos por captación", "Ficha completa y contacto por WhatsApp con captadores", "Registro de requerimientos de clientes", "Agenda de visitas", "Reportes y consultas"],
-  Profesional: ["Hasta 20 captaciones activas", "Hasta 5 fotos por captación", "Todo lo de Inicial", "Coincidencias ponderadas con explicación y coincidencia inversa", "Favoritos y guardar para clientes", "Compartir propiedades por WhatsApp", "Búsquedas guardadas", "Seguimiento de oportunidades", "Recordatorios de agenda", "Historial de cierres y vigencia detallada"],
-  Premium: ["Hasta 40 captaciones activas", "Hasta 8 fotos por captación", "Confirmaciones de visita programadas por WhatsApp", "Todo lo de Profesional", "Estadísticas de captaciones y cierres", "Informes avanzados con exportación CSV", "Automatizaciones configurables", "Soporte prioritario"],
+  Inicial: ["Hasta 5 captaciones activas", "Hasta 3 fotos por captación", "Captaciones cerradas guardadas 3 meses", "Ficha completa y contacto por WhatsApp con captadores", "Registro de requerimientos de clientes", "Agenda de visitas", "Reportes y consultas"],
+  Profesional: ["Hasta 20 captaciones activas", "Hasta 5 fotos por captación", "Captaciones cerradas guardadas 7 meses", "Todo lo de Inicial", "Coincidencias ponderadas con explicación y coincidencia inversa", "Favoritos y guardar para clientes", "Compartir propiedades por WhatsApp", "Búsquedas guardadas", "Seguimiento de oportunidades", "Recordatorios de agenda", "Historial de cierres y vigencia detallada"],
+  Premium: ["Hasta 40 captaciones activas", "Hasta 8 fotos por captación", "Captaciones cerradas guardadas 12 meses", "Confirmaciones de visita programadas por WhatsApp", "Todo lo de Profesional", "Estadísticas de captaciones y cierres", "Informes avanzados con exportación CSV", "Automatizaciones configurables", "Soporte prioritario"],
 };
+// Pago por varios meses: 6 meses pagas 5 (1 gratis) · 12 meses pagas 10 (2 gratis)
+const PERIODOS = [[1, "1 mes", 1], [6, "6 meses", 5], [12, "12 meses", 10]];
+const factorPeriodo = (m) => (PERIODOS.find((x) => x[0] === m) || PERIODOS[0])[2];
 const TIPOS_PAGO = { alta: "Primer pago (prorrateo)", renov: "Renovación", mejora: "Mejora de plan" };
 function ReqRed({ props, perm, flash }) {
   const [lista, setLista] = useState(null);
@@ -1414,6 +1430,7 @@ const PAGOS0 = [
 function Sus({ acceso, users, setUsers, pagos, setPagos, cfg, flash, nivel, trial }) {
   const [plan, setPlan] = useState(["Inicial", "Profesional", "Premium"].includes(nivel) ? nivel : "Profesional");
   const [metodo, setMetodo] = useState("QR");
+  const [meses, setMeses] = useState(1);
   const [f, setF] = useState({ ref: "", comp: null });
   const [ci, setCi] = useState({ front: null, back: null });
   const mi = users.find((u) => u.n === ME) || {};
@@ -1422,7 +1439,10 @@ function Sus({ acceso, users, setUsers, pagos, setPagos, cfg, flash, nivel, tria
   const pr = prorrateo(precioDe(cfg, plan), cfg.dia);
   const planRen = mi.planProx || planAct;
   const accion = !renov ? "alta" : plan === planAct ? "renov" : precioDe(cfg, plan) > precioDe(cfg, planAct) ? "mejora" : "baja";
-  const monto = accion === "alta" ? pr.monto : accion === "renov" ? precioDe(cfg, planRen) : accion === "mejora" ? Math.round(((precioDe(cfg, plan) - precioDe(cfg, planAct)) * pr.resta) / pr.ciclo) : 0;
+  const conPeriodo = accion === "alta" || accion === "renov";
+  const mesesPago = conPeriodo ? meses : 1;
+  const extraMeses = mesesPago > 1 ? precioDe(cfg, accion === "renov" ? planRen : plan) * factorPeriodo(mesesPago) : 0;
+  const monto = accion === "alta" ? (mesesPago > 1 ? pr.monto + extraMeses : pr.monto) : accion === "renov" ? (mesesPago > 1 ? extraMeses : precioDe(cfg, planRen)) : accion === "mejora" ? Math.round(((precioDe(cfg, plan) - precioDe(cfg, planAct)) * pr.resta) / pr.ciclo) : 0;
   const mios = pagos.filter((p) => p.de === ME).sort((a, b) => b.iso.localeCompare(a.iso));
   const pend = mios.find((p) => p.est === "Pendiente");
   const rech = mios[0] && mios[0].est === "Rechazado" ? mios[0] : null;
@@ -1436,7 +1456,7 @@ function Sus({ acceso, users, setUsers, pagos, setPagos, cfg, flash, nivel, tria
     if (!f.comp) { flash("Sube la foto del comprobante (baucher) para continuar."); return; }
     setUsers(users.map((u) => (u.n === ME ? { ...u, ...(ci.front && ci.back && !u.ci ? { ci: { front: ci.front, back: ci.back } } : {}), ...(u.insc ? {} : { insc: { plan, f: isoOf(HOY) } }) } : u)));
     notificar("pago", { de: ME, monto: Math.round(monto), plan: accion === "renov" ? planRen : plan });
-    setPagos([{ id: "n" + Date.now(), de: ME, plan: accion === "renov" ? planRen : plan, monto, iso: isoOf(HOY), tipo: TIPOS_PAGO[accion], metodo: metodo === "QR" ? "QR" : "Cuenta", ref: f.ref.trim(), est: "Pendiente", comp: f.comp, nota: accion === "renov" ? "Mes completo" : accion === "mejora" ? `Diferencia entre planes · ${pr.resta} de ${pr.ciclo} días` : `${pr.resta} de ${pr.ciclo} días (prorrateo hasta ${fechaL(pr.fin)})` }, ...pagos]);
+    setPagos([{ id: "n" + Date.now(), de: ME, plan: accion === "renov" ? planRen : plan, monto, iso: isoOf(HOY), tipo: TIPOS_PAGO[accion], meses: mesesPago, metodo: metodo === "QR" ? "QR" : "Cuenta", ref: f.ref.trim(), est: "Pendiente", comp: f.comp, nota: mesesPago > 1 ? `${mesesPago} meses (pagas ${factorPeriodo(mesesPago)}, ${mesesPago - factorPeriodo(mesesPago)} gratis)${accion === "alta" ? ` + ${pr.resta} días hasta el corte` : ""}` : accion === "renov" ? "Mes completo" : accion === "mejora" ? `Diferencia entre planes · ${pr.resta} de ${pr.ciclo} días` : `${pr.resta} de ${pr.ciclo} días (prorrateo hasta ${fechaL(pr.fin)})` }, ...pagos]);
     setF({ ref: "", comp: null });
     flash("Comprobante enviado. Te avisaremos cuando se verifique el pago.");
   };
@@ -1452,11 +1472,19 @@ function Sus({ acceso, users, setUsers, pagos, setPagos, cfg, flash, nivel, tria
         <button key={p} onClick={() => setPlan(p)} className="rounded-2xl p-3 text-left" style={{ background: C.card, border: `2px solid ${plan === p ? C.lila : C.line}` }}>
           <div className="font-semibold" style={{ color: C.ink }}>{p}{renov && planAct === p && <span className="text-xs ml-2 px-1.5 py-0.5 rounded-md" style={{ background: C.okSoft, color: C.ok }}>Tu plan</span>}</div>
           <div style={{ ...serif, color: C.ink, fontSize: 20, fontWeight: 700 }}>{bs(pl.precio)}<span className="text-xs" style={{ color: C.mute }}> /mes</span></div>
+          <div className="text-xs" style={{ color: C.ok }}>6 meses: {bs(pl.precio * 5)} (1 gratis) · 12 meses: {bs(pl.precio * 10)} (2 gratis)</div>
           <ul className="text-xs mt-1 space-y-0.5" style={{ color: C.mute }}>{(PLAN_BEN[p] || []).map((b) => <li key={b}>• {b}</li>)}</ul>
           <div className="text-xs mt-1 font-semibold" style={{ color: C.lilaDk }}>{!renov ? `Hoy pagas ${bs(x.monto)}` : p === planAct ? `Renovación: ${bs(precioDe(cfg, planRen))}` : pl.precio > precioDe(cfg, planAct) ? `Mejora hoy: ${bs(Math.round(((pl.precio - precioDe(cfg, planAct)) * x.resta) / x.ciclo))}` : "Sin pago ahora · desde el próximo corte"}</div>
         </button>); })}</div>
+      {conPeriodo && <div className="rounded-xl p-3 space-y-2" style={{ background: C.okSoft }}>
+        <div className="text-sm font-semibold" style={{ color: C.ok }}>¿Por cuánto tiempo quieres pagar?</div>
+        <div className="grid grid-cols-3 gap-2">{PERIODOS.map(([m, l, fx]) => (
+          <button key={m} onClick={() => setMeses(m)} className="rounded-xl p-2 text-center" style={{ background: meses === m ? C.ok : "#fff", color: meses === m ? "#fff" : C.ink }}>
+            <div className="text-sm font-bold">{l}</div><div className="text-xs">{bs(precioDe(cfg, accion === "renov" ? planRen : plan) * fx)}</div>{m > 1 && <div style={{ fontSize: 10 }}>{m - fx} {m - fx > 1 ? "meses" : "mes"} gratis</div>}
+          </button>))}</div>
+      </div>}
       <div className="rounded-xl p-3 text-sm" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.ink }}>
-        {accion === "renov" ? <>Tu renovación del mes completo ({planRen}): <b>{bs(monto)}</b>.{mi.planProx ? " Incluye el cambio de plan que programaste." : ""}</> : accion === "mejora" ? <>Mejora a <b>{plan}</b>: hoy pagas solo la diferencia por los {pr.resta} de {pr.ciclo} días que quedan: <b>{bs(monto)}</b>. Desde el próximo corte pagas {bs(precioDe(cfg, plan))}.</> : accion === "baja" ? <>Cambio a <b>{plan}</b>: sin pago ahora.</> : <>Primer pago prorrateado: <b>{bs(monto)}</b> ({pr.resta} de {pr.ciclo} días, hasta el {fechaL(pr.fin)}). Desde el {fechaL(pr.fin)} pagas <b>{bs(precioDe(cfg, plan))}</b> cada mes.</>}
+        {mesesPago > 1 ? <>{accion === "alta" ? <>Pagas los {pr.resta} días hasta el corte ({bs(pr.monto)}) + {mesesPago} meses de {plan} por el precio de {factorPeriodo(mesesPago)}: <b>{bs(monto)}</b>.</> : <>Renovación de {planRen} por {mesesPago} meses (pagas {factorPeriodo(mesesPago)}): <b>{bs(monto)}</b>.</>} Tu acceso quedará activo hasta el {fechaL(new Date((accion === "renov" && mi.venc ? isoD(mi.venc) : pr.fin).getFullYear(), (accion === "renov" && mi.venc ? isoD(mi.venc) : pr.fin).getMonth() + mesesPago, cfg.dia))}.</> : accion === "renov" ? <>Tu renovación del mes completo ({planRen}): <b>{bs(monto)}</b>.{mi.planProx ? " Incluye el cambio de plan que programaste." : ""}</> : accion === "mejora" ? <>Mejora a <b>{plan}</b>: hoy pagas solo la diferencia por los {pr.resta} de {pr.ciclo} días que quedan: <b>{bs(monto)}</b>. Desde el próximo corte pagas {bs(precioDe(cfg, plan))}.</> : accion === "baja" ? <>Cambio a <b>{plan}</b>: sin pago ahora.</> : <>Primer pago prorrateado: <b>{bs(monto)}</b> ({pr.resta} de {pr.ciclo} días, hasta el {fechaL(pr.fin)}). Desde el {fechaL(pr.fin)} pagas <b>{bs(precioDe(cfg, plan))}</b> cada mes.</>}
       </div>
       {accion === "baja" ? <div className="rounded-xl p-3 space-y-2" style={{ background: C.card, border: `1px solid ${C.line}` }}><div className="text-sm" style={{ color: C.ink }}>Bajar a <b>{plan}</b> no genera pago ahora. Mantienes {planAct} hasta el próximo corte y desde entonces pagas {bs(precioDe(cfg, plan))} al mes.</div>{mi.planProx === plan ? <div className="text-xs" style={{ color: C.ok }}>✓ Cambio programado para el próximo corte</div> : <button onClick={() => { setUsers(users.map((u) => (u.n === ME ? { ...u, planProx: plan } : u))); flash(`Cambio a ${plan} programado para el próximo corte.`); }} className="w-full py-2.5 rounded-xl font-semibold text-white" style={{ background: C.lila }}>Programar cambio a {plan}</button>}</div> : pend ? <div className="rounded-xl p-3 text-sm" style={{ background: C.amberSoft, color: C.amber }}>⏳ Tu pago de {bs(pend.monto)} está en verificación. Te habilitaremos en cuanto se confirme.</div> : <>
         {rech && <div className="rounded-xl p-3 text-sm" style={{ background: C.redSoft, color: C.red }}>Tu último pago fue rechazado: {rech.mot}. Puedes enviarlo de nuevo.</div>}
@@ -1474,7 +1502,7 @@ function Sus({ acceso, users, setUsers, pagos, setPagos, cfg, flash, nivel, tria
         <button onClick={enviar} disabled={!listo} className="w-full py-3 rounded-xl font-semibold text-white" style={{ background: listo ? C.grad : C.mute }}>Ya pagué: enviar comprobante</button>
       </>}
       {mios.length > 0 && <div className="text-sm font-semibold pt-1" style={{ color: C.ink }}>Mis pagos</div>}
-      {mios.slice(0, 6).map((p) => <div key={p.id} className="rounded-xl p-2.5 flex justify-between items-center text-sm" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.ink }}><span>{fechaL(isoD(p.iso))} · {p.plan}<div className="text-xs" style={{ color: C.mute }}>{p.tipo}</div></span><span className="text-right"><b>{bs(p.monto)}</b><div className="text-xs" style={{ color: p.est === "Aprobado" ? C.ok : p.est === "Rechazado" ? C.red : C.amber }}>{p.est}</div></span></div>)}
+      {mios.slice(0, 6).map((p) => <div key={p.id} className="rounded-xl p-2.5 flex justify-between items-center text-sm" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.ink }}><span>{fechaL(isoD(p.iso))} · {p.plan}<div className="text-xs" style={{ color: C.mute }}>{p.tipo}{p.meses > 1 ? ` · ${p.meses} meses` : ""}</div></span><span className="text-right"><b>{bs(p.monto)}</b><div className="text-xs" style={{ color: p.est === "Aprobado" ? C.ok : p.est === "Rechazado" ? C.red : C.amber }}>{p.est}</div></span></div>)}
     </div>
   );
 }
@@ -1616,15 +1644,19 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas, onIngresar, o
   const acceso = nivel === "gratuito" ? "vencido" : ["Inicial", "Profesional", "Premium"].includes(nivel) ? "suscrito" : nivel;
   useEffect(() => { setUsers((us) => (us.some((u) => u.est === "Prueba" && u.prueba && now > u.prueba.fin) ? us.map((u) => (u.est === "Prueba" && u.prueba && now > u.prueba.fin ? { ...u, est: "Vencido" } : u)) : us)); }, [now]);
   const onPublicada = (p) => { if (!perm.inversa) return; clientes.forEach((r) => { if (match(r, p)) notify("Nueva propiedad compatible", `${p.t} coincide con el requerimiento de ${r.n}`, { tab: "buscar", p: p.id }, "🔔"); }); };
-  // Al cerrar una captación propia se eliminan sus fotos (no ocupan espacio en la base de datos)
+  // Captaciones cerradas: se guardan según el plan (3 / 7 / 12 meses). Al vencer se borran fotos y datos;
+  // el registro del cierre se conserva en Cierres.
   useEffect(() => {
     if (visitante) return;
-    const cerradas = props.filter((p) => p.cap && p.cap.n === ME && p.est === "Cerrado" && p.fotos && p.fotos.length);
-    if (!cerradas.length) return;
-    const ids = new Set(cerradas.map((p) => p.id));
-    cerradas.forEach((p) => borrarFotos(p.fotos));
-    setProps((ps) => ps.map((p) => (ids.has(p.id) ? { ...p, fotos: [] } : p)));
-  }, [props]);
+    const meses = esAdmin ? 12 : retencion(nivel), ahora = Date.now();
+    const mias = props.filter((p) => p.cap && p.cap.n === ME && p.est === "Cerrado");
+    const sinFecha = mias.filter((p) => !p.cerradaF);
+    const vencidas = mias.filter((p) => p.cerradaF && ahora > sumarMeses(p.cerradaF, meses));
+    if (!sinFecha.length && !vencidas.length) return;
+    vencidas.forEach((p) => borrarFotos(p.fotos));
+    const idsV = new Set(vencidas.map((p) => p.id)), idsS = new Set(sinFecha.map((p) => p.id));
+    setProps((ps) => ps.filter((p) => !idsV.has(p.id)).map((p) => (idsS.has(p.id) ? { ...p, cerradaF: ahora } : p)));
+  }, [props, nivel]);
   useEffect(() => { setSel(null); if (sim === "prueba") setFin(Date.now() + 48 * 36e5); }, [sim]);
   useEffect(() => { if (finPrueba) setFin(Date.now() - 1000); }, [finPrueba]);
   const goSub = () => { if (visitante) { onRegistro && onRegistro(); return; } setSel(null); setTab("perfil"); setPerfilSub("sus"); };
