@@ -42,7 +42,9 @@ export async function desactivarPush() {
 export async function notificar(evento, datos = {}) {
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-    await fetch("/.netlify/functions/notificar", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ evento, datos }) });
-  } catch (e) { console.warn("notificar", e); }
+    if (!session) return { ok: false, error: "Sin sesión" };
+    const r = await fetch("/.netlify/functions/notificar", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ evento, datos }) });
+    const txt = await r.text();
+    try { return JSON.parse(txt); } catch { return { ok: false, error: `Respuesta ${r.status}: ${txt.slice(0, 120)}` }; }
+  } catch (e) { console.warn("notificar", e); return { ok: false, error: e.message || String(e) }; }
 }

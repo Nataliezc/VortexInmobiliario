@@ -3,8 +3,9 @@
 import webpush from "web-push";
 
 const MENSAJES = {
-  pago: (d) => ({ titulo: "💳 Nuevo pago por verificar", cuerpo: `${d.de || "Un agente"} envió un pago${d.monto ? ` de Bs ${d.monto}` : ""}${d.plan ? ` (plan ${d.plan})` : ""}.`, tag: "pago" }),
-  registro: (d) => ({ titulo: "🪪 Nuevo registro por verificar", cuerpo: `${d.nombre || "Un nuevo agente"} se registró y espera la verificación de su carnet.`, tag: "registro" }),
+  pago: (d) => ({ titulo: "💳 Nuevo pago por verificar", cuerpo: `${d.de || "Un agente"} envió un pago${d.monto ? ` de Bs ${d.monto}` : ""}${d.plan ? ` (plan ${d.plan})` : ""}. Toca para revisarlo.`, tag: "pago-" + Date.now(), importante: true }),
+  registro: (d) => ({ titulo: "🆕 Nuevo agente registrado", cuerpo: `${d.nombre || "Un nuevo agente"} se registró y empezó su prueba de 48 h.`, tag: "registro-" + Date.now() }),
+  prueba: () => ({ titulo: "🔔 Notificación de prueba", cuerpo: "¡Funciona! Así te llegarán los avisos de Vortex.", tag: "prueba", importante: true }),
   pago_revisado: (d) => ({ titulo: d.est === "Aprobado" ? "✅ Pago aprobado" : "⚠️ Pago rechazado", cuerpo: d.est === "Aprobado" ? `Tu plan ${d.plan || ""} ya está activo. ¡Gracias!` : `Revisa el motivo en Perfil → Suscripción${d.mot ? `: ${d.mot}` : ""}.` }),
   verificado: (d) => ({ titulo: d.ok ? "✅ Cuenta verificada" : "⚠️ No pudimos verificar tu cuenta", cuerpo: d.ok ? "Tu prueba de 48 horas con acceso completo ya está activa." : `Motivo: ${d.mot || "revisa tu carnet"}.` }),
   visita: (d) => ({ titulo: "📅 Nueva visita agendada", cuerpo: `${d.de || "Un agente"} agendó una visita a ${d.prop || "tu propiedad"} el ${d.fecha || ""} a las ${d.hora || ""}.` }),
@@ -31,10 +32,10 @@ export default async (req) => {
 
   webpush.setVapidDetails("mailto:soporte@vortex.app", PUB, PRIV);
   const msg = { ...armar(body.datos || {}), url: "/" };
-  let enviados = 0;
+  let enviados = 0; const errores = [];
   await Promise.all((destinos || []).map(async (fila) => {
     const sub = fila.datos || fila.push_destinos || fila;
-    try { await webpush.sendNotification(sub, JSON.stringify(msg), { TTL: 86400 }); enviados++; } catch (e) { console.warn("push", e.statusCode); }
+    try { await webpush.sendNotification(sub, JSON.stringify(msg), { TTL: 86400, urgency: "high" }); enviados++; } catch (e) { errores.push(e.statusCode || e.message); console.warn("push", e.statusCode, e.body); }
   }));
-  return new Response(JSON.stringify({ ok: true, enviados }), { headers: { "Content-Type": "application/json" } });
+  return new Response(JSON.stringify({ ok: true, enviados, destinos: (destinos || []).length, errores }), { headers: { "Content-Type": "application/json" } });
 };

@@ -20,7 +20,7 @@ export const TERMINOS_BASE = `TÉRMINOS DE USO Y POLÍTICA DE PRIVACIDAD — VOR
 Vortex es una plataforma para agentes inmobiliarios independientes que permite publicar captaciones, compartir información de propiedades entre agentes, coordinar visitas y registrar cierres.
 
 2. Registro y cuenta
-Para usar las funciones de agente debes registrarte con datos reales: nombre, correo, número de WhatsApp y foto de tu carnet de identidad. Eres responsable de mantener tu contraseña en reserva y de toda la actividad realizada con tu cuenta. Vortex puede verificar tu identidad antes de activar tu cuenta y puede rechazar o suspender cuentas con datos falsos.
+Para usar las funciones de agente debes registrarte con datos reales: nombre, correo y número de WhatsApp. Al contratar tu primer plan de pago se te pedirá la foto de tu carnet de identidad para verificar tu identidad. Eres responsable de mantener tu contraseña en reserva y de toda la actividad realizada con tu cuenta. Vortex puede verificar tu identidad antes de activar tu cuenta y puede rechazar o suspender cuentas con datos falsos.
 
 3. Uso correcto
 Te comprometes a publicar información veraz y actualizada, a respetar los acuerdos de comisión entre agentes, a tratar con respeto a otros agentes y clientes, y a no usar la plataforma para fines ilegales o engañosos. Los reportes de mala conducta son revisados por el administrador y pueden derivar en la suspensión de la cuenta.

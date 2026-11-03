@@ -6,7 +6,7 @@ import { supabase } from "./supabase";
 import { C, CUENTAS, RESUMEN } from "./Vortex";
 import { inp, Campo, Boton, MsgError, ClaveInput } from "./ui";
 import { useEffect } from "react";
-import { estadoPush, activarPush, desactivarPush, esIOS, instaladaComoApp } from "./push";
+import { estadoPush, activarPush, desactivarPush, esIOS, instaladaComoApp, notificar } from "./push";
 import { LOGO_ISO } from "./Vortex";
 
 // Activar las notificaciones en este celular
@@ -20,8 +20,11 @@ function PanelPush({ esAdmin }) {
   return (
     <div className="rounded-2xl p-3 space-y-2" style={{ background: C.brandSoft }}>
       <div className="text-sm font-semibold" style={{ color: C.brandDk }}>🔔 Notificaciones en este celular</div>
-      <div className="text-xs" style={{ color: C.ink }}>{esAdmin ? "Te avisaremos al instante cuando llegue un pago o un nuevo registro por verificar." : "Te avisaremos cuando aprueben tu pago o tu cuenta, y cuando agenden una visita a tu propiedad."}</div>
-      {est === "activo" ? <><div className="text-xs font-semibold" style={{ color: C.ok }}>✓ Activadas</div><button onClick={apagar} disabled={ocupado} className="text-xs underline" style={{ color: C.mute }}>Desactivar en este celular</button></>
+      <div className="text-xs" style={{ color: C.ink }}>{esAdmin ? "Te avisaremos al instante, con sonido y en la pantalla, cada vez que un agente envíe un pago." : "Te avisaremos cuando aprueben tu pago o tu cuenta, y cuando agenden una visita a tu propiedad."}</div>
+      {est === "activo" ? <><div className="text-xs font-semibold" style={{ color: C.ok }}>✓ Activadas en este celular</div>
+          <button onClick={async () => { setOcupado(true); setMsg(""); const r = await notificar("prueba"); setOcupado(false); setMsg(r.ok ? (r.enviados > 0 ? "✓ Enviada. Debe aparecer en unos segundos. Si no llega, revisa los permisos de notificación de tu navegador en los ajustes del celular." : r.destinos ? `No se pudo entregar (${(r.errores || []).join(", ")}). Toca «Desactivar» y vuelve a activarlas.` : "Este celular no quedó registrado. Toca «Desactivar» y vuelve a activarlas.") : `Error del servidor: ${r.error || "desconocido"}. Revisa las variables VAPID en Netlify.`); }} disabled={ocupado} className="w-full py-2 rounded-xl text-sm font-semibold" style={{ background: "#fff", color: C.brandDk }}>{ocupado ? "Enviando…" : "📳 Enviar notificación de prueba"}</button>
+          <button onClick={async () => { setOcupado(true); try { await desactivarPush(); await activarPush(); setMsg("✓ Reactivadas en este celular."); } catch (e) { setMsg(e.message || String(e)); } setOcupado(false); }} disabled={ocupado} className="text-xs underline" style={{ color: C.brandDk }}>Volver a activar</button>
+          <button onClick={apagar} disabled={ocupado} className="text-xs underline ml-3" style={{ color: C.mute }}>Desactivar en este celular</button></>
         : est === "bloqueado" ? <div className="text-xs" style={{ color: C.red }}>Las bloqueaste en este navegador. Actívalas en los ajustes del navegador (candado junto a la dirección → Notificaciones → Permitir).</div>
         : est === "no" && esIOS() && !instaladaComoApp() ? <div className="text-xs" style={{ color: C.amber }}>En iPhone: toca Compartir ⬆️ → «Agregar a inicio», abre Vortex desde ese ícono y vuelve aquí para activarlas.</div>
         : est === "no" ? <div className="text-xs" style={{ color: C.amber }}>Este navegador no permite notificaciones. Usa Chrome en Android o instala la app en tu iPhone.</div>
