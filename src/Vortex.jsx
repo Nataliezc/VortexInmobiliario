@@ -53,9 +53,22 @@ const usd = (p) => (p.mon === "USD" ? p.precio : p.precio / BOB);
 const reqUsd = (r) => (r.mon === "USD" ? r.max : r.max / BOB);
 // Precio tal como lo publicó el captador
 const moneyOrig = (p) => `${p.mon === "USD" ? "USD" : "Bs"} ${Number(p.precio || 0).toLocaleString("es-BO")}`;
-// Precio en la moneda elegida por el usuario (convertido si hace falta)
-const money = (p) => (p.mon === MONEDA || !p.mon ? moneyOrig(p) : `≈ ${MONEDA === "USD" ? "USD" : "Bs"} ${Math.round(p.mon === "USD" ? p.precio * BOB : p.precio / BOB).toLocaleString("es-BO")}`);
-const enMoneda = (p) => (p.mon === MONEDA ? p.precio : MONEDA === "USD" ? p.precio / BOB : p.precio * BOB);
+// Tipo de cambio fijo de una propiedad en dólares (si el captador lo indicó)
+const tcFijo = (p) => (p.mon === "USD" && p.tcModo === "fijo" && +p.tc > 0 ? +p.tc : null);
+const fmtTc = (n) => Number(n).toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Precio en la moneda elegida: solo se convierte a Bs si la propiedad tiene tipo de cambio fijo.
+// Si es "al tipo de cambio del día", se muestra en dólares con esa aclaración.
+const money = (p) => (MONEDA === "BOB" && tcFijo(p) ? `Bs ${Math.round(p.precio * tcFijo(p)).toLocaleString("es-BO")}` : moneyOrig(p));
+const notaPrecio = (p) => {
+  if (p.mon !== "USD") return MONEDA === "USD" ? "Precio en bolivianos" : "";
+  const tc = tcFijo(p);
+  if (!tc) return "Al tipo de cambio del día";
+  return MONEDA === "BOB" ? `USD ${Number(p.precio).toLocaleString("es-BO")} · TC ${fmtTc(tc)}` : `TC fijo ${fmtTc(tc)} (Bs ${Math.round(p.precio * tc).toLocaleString("es-BO")})`;
+};
+// Para copys y mensajes: precio original + aclaración del tipo de cambio
+const precioCopy = (p) => `${moneyOrig(p)}${p.mon === "USD" ? (tcFijo(p) ? ` (TC ${fmtTc(tcFijo(p))})` : " (al tipo de cambio del día)") : ""}`;
+// Para filtros de precio (aproximado si no hay tipo de cambio fijo)
+const enMoneda = (p) => (p.mon === MONEDA ? p.precio : MONEDA === "USD" ? p.precio / BOB : p.precio * (tcFijo(p) || BOB));
 
 function match(r, p) {
   const strict = [
@@ -101,7 +114,7 @@ function Card({ p, onOpen, locked, rate, perm }) {
         <div className="font-semibold leading-snug" style={{ color: C.ink, fontSize: 15 }}>{locked ? tBasico(p) : p.t}</div>
         <div className="text-xs mt-0.5" style={{ color: C.mute }}>{p.zona}, {p.ciudad}{p.dorm ? ` · ${p.dorm} dorm · ${p.ban} baños` : ""} · {p.m2} m²</div>
         <div className="flex items-center justify-between mt-1.5">
-          <span style={{ ...serif, color: C.ink, fontSize: 18, fontWeight: 700 }}>{money(p)}</span>
+          <span style={{ ...serif, color: C.ink, fontSize: 18, fontWeight: 700 }}>{money(p)}{notaPrecio(p) && <span className="block" style={{ fontFamily: "inherit", fontSize: 10, fontWeight: 500, color: C.mute }}>{notaPrecio(p)}</span>}</span>
           <span className="flex gap-1 items-center"><EstBadge est={est} /><Badge v={v} /></span>
         </div>
         {locked && <div className="text-xs mt-1" style={{ color: C.mute }}>🔒 Captador y contacto con suscripción activa</div>}
@@ -128,7 +141,7 @@ function DetalleInner({ p, acceso, onBack, onVisit, onReport, ant, rate, onProfi
       <div className="flex items-center justify-between"><span className="text-sm" style={{ color: C.mute }}>{p.op} · {p.tipo}</span><span className="flex gap-1 items-center"><EstBadge est={p.est || "Disponible"} /><Badge v={v} /></span></div>
       <h2 className="font-semibold text-xl leading-snug" style={{ color: C.ink }}>{locked ? tBasico(p) : p.t}</h2>
       <div style={{ ...serif, fontSize: 28, fontWeight: 700, color: C.ink }}>{money(p)}</div>
-      {p.mon && p.mon !== MONEDA && <div className="text-xs -mt-2" style={{ color: C.mute }}>Precio publicado: {moneyOrig(p)} · cambio {BOB}</div>}
+      {notaPrecio(p) && <div className="text-xs -mt-2" style={{ color: C.mute }}>{notaPrecio(p)}</div>}
       {perm.fav && <div className="flex gap-2 overflow-x-auto items-center">
         <Chip on={isFav(null)} onClick={() => toggleFav(p.id, null)}>{isFav(null) ? "♥ Guardada" : "♡ Guardar"}</Chip>
         {perm.cliente && clientes.map((c) => <Chip key={c.id} on={isFav(c.id)} onClick={() => toggleFav(p.id, c.id)}>Para {c.n.split(" ")[0]}</Chip>)}
@@ -724,7 +737,7 @@ const Seg = ({ o, v, set }) => <div className="flex flex-wrap gap-2">{o.map((x) 
 const Fld = ({ l, children, x }) => <div className="space-y-1.5" style={x ? { background: C.amberSoft, borderRadius: 12, padding: 8, outline: `1.5px solid ${C.amber}` } : undefined}><div className="text-xs font-medium" style={{ color: x ? C.amber : C.mute }}>{l}</div>{children}</div>;
 
 const TIPOS_INM = ["Casa", "Departamento", "Terreno", "Oficina", "Comercial"];
-const toF = (p) => ({ op: p.op, tipo: TIPOS_INM.includes(p.tipo) ? p.tipo : "Otro", tipoOtro: TIPOS_INM.includes(p.tipo) || p.tipo === "Otro" ? "" : p.tipo, ciudad: p.ciudad, zona: p.zona, t: p.t, precio: String(p.precio), mon: p.mon, dorm: String(p.dorm), ban: String(p.ban), m2: String(p.m2), garaje: p.garaje ? "Sí" : "No", gTipo: p.gTipo || "Independiente", gAparte: p.gAparte ? "Sí" : "No", gPrecio: p.gPrecio || "", mascotas: p.mascotas, mascCond: p.mascCond || "", amoblado: p.amoblado, com: p.com, condComp: p.condComp || "", desc: p.desc || "", fotos: p.fotos || [] });
+const toF = (p) => ({ tcModo: p.tcModo || "dia", tc: p.tc ? String(p.tc) : "", op: p.op, tipo: TIPOS_INM.includes(p.tipo) ? p.tipo : "Otro", tipoOtro: TIPOS_INM.includes(p.tipo) || p.tipo === "Otro" ? "" : p.tipo, ciudad: p.ciudad, zona: p.zona, t: p.t, precio: String(p.precio), mon: p.mon, dorm: String(p.dorm), ban: String(p.ban), m2: String(p.m2), garaje: p.garaje ? "Sí" : "No", gTipo: p.gTipo || "Independiente", gAparte: p.gAparte ? "Sí" : "No", gPrecio: p.gPrecio || "", mascotas: p.mascotas, mascCond: p.mascCond || "", amoblado: p.amoblado, com: p.com, condComp: p.condComp || "", desc: p.desc || "", fotos: p.fotos || [] });
 
 function Form({ onSave, init, maxFotos = 3, autoCopy = false }) {
   const [copyTxt, setCopyTxt] = useState("");
@@ -735,13 +748,13 @@ function Form({ onSave, init, maxFotos = 3, autoCopy = false }) {
   const leer = () => {
     if (copyTxt.trim().length < 20) { setInfo("Pega el copy completo del anuncio para poder leerlo."); return; }
     const d = leerCopy(copyTxt, ZONAS);
-    const vacio = { op: "", tipo: "", tipoOtro: "", ciudad: "", zona: "", t: "", precio: "", mon: "", dorm: "", ban: "", m2: "", garaje: "", gTipo: "", gAparte: "", gPrecio: "", mascotas: "", mascCond: "", amoblado: "", com: "", condComp: "" };
+    const vacio = { tcModo: "dia", tc: "", op: "", tipo: "", tipoOtro: "", ciudad: "", zona: "", t: "", precio: "", mon: "", dorm: "", ban: "", m2: "", garaje: "", gTipo: "", gAparte: "", gPrecio: "", mascotas: "", mascCond: "", amoblado: "", com: "", condComp: "" };
     const nuevo = { ...f, ...vacio, ...d, fotos: f.fotos };
     setF(nuevo); setMarcar(true); setErr("");
     const fal = camposFaltantes(nuevo);
     setInfo(fal.length ? `✨ Listo: llenamos los datos que encontramos en tu copy. Completa ${fal.length === 1 ? "el campo marcado" : `los ${fal.length} campos marcados`} en amarillo: ${fal.map((k) => NOMBRES_CAMPOS[k]).join(", ")}.` : "✨ ¡Encontramos todos los datos! Revísalos antes de publicar.");
   };
-  const [f, setF] = useState(init ? toF(init) : { op: "Alquiler", tipo: "Departamento", tipoOtro: "", ciudad: "La Paz", zona: "", t: "", precio: "", mon: MONEDA, dorm: "2", ban: "1", m2: "", garaje: "No", gTipo: "Independiente", gAparte: "No", gPrecio: "", mascotas: "No", mascCond: "", amoblado: "Vacío", com: "", condComp: "", desc: "", fotos: [] });
+  const [f, setF] = useState(init ? toF(init) : { op: "Alquiler", tipo: "Departamento", tipoOtro: "", tcModo: "dia", tc: "", ciudad: "La Paz", zona: "", t: "", precio: "", mon: MONEDA, dorm: "2", ban: "1", m2: "", garaje: "No", gTipo: "Independiente", gAparte: "No", gPrecio: "", mascotas: "No", mascCond: "", amoblado: "Vacío", com: "", condComp: "", desc: "", fotos: [] });
   const [err, setErr] = useState("");
   const s = (k) => (v) => setF({ ...f, [k]: v });
   const num = (k) => (e) => s(k)(e.target.value.replace(/\D/g, ""));
@@ -750,7 +763,7 @@ function Form({ onSave, init, maxFotos = 3, autoCopy = false }) {
     const fal = camposFaltantes(f);
     if (fal.length) { setMarcar(true); setErr(`Para publicar falta completar: ${fal.map((k) => NOMBRES_CAMPOS[k]).join(", ")}. Están marcados en amarillo.`); return; }
     const tipoFinal = f.tipo === "Otro" ? f.tipoOtro.trim().charAt(0).toUpperCase() + f.tipoOtro.trim().slice(1) : f.tipo;
-    const b = ({ id: Date.now(), op: f.op, tipo: tipoFinal, t: f.t, ciudad: f.ciudad, zona: f.zona, precio: +f.precio, mon: f.mon, dorm: vivienda ? +f.dorm : 0, ban: vivienda ? +f.ban : 0, m2: +f.m2, garaje: f.garaje === "Sí", gTipo: f.garaje === "Sí" ? f.gTipo : "", gAparte: f.gAparte === "Sí", gPrecio: f.gAparte === "Sí" ? f.gPrecio : "", mascotas: f.mascotas, mascCond: f.mascotas === "Condicionado" ? f.mascCond : "", condComp: f.condComp, desc: f.desc, amoblado: f.amoblado, dias: 0, est: "Disponible", cap: { n: ME, tel: miTel(), ciu: f.ciudad }, com: f.com || "A definir con el captador", hue: Math.floor(Math.random() * 360), fotos: f.fotos });
+    const b = ({ id: Date.now(), ...(f.mon === "USD" ? { tcModo: f.tcModo || "dia", tc: f.tcModo === "fijo" ? +f.tc : null } : { tcModo: null, tc: null }), op: f.op, tipo: tipoFinal, t: f.t, ciudad: f.ciudad, zona: f.zona, precio: +f.precio, mon: f.mon, dorm: vivienda ? +f.dorm : 0, ban: vivienda ? +f.ban : 0, m2: +f.m2, garaje: f.garaje === "Sí", gTipo: f.garaje === "Sí" ? f.gTipo : "", gAparte: f.gAparte === "Sí", gPrecio: f.gAparte === "Sí" ? f.gPrecio : "", mascotas: f.mascotas, mascCond: f.mascotas === "Condicionado" ? f.mascCond : "", condComp: f.condComp, desc: f.desc, amoblado: f.amoblado, dias: 0, est: "Disponible", cap: { n: ME, tel: miTel(), ciu: f.ciudad }, com: f.com || "A definir con el captador", hue: Math.floor(Math.random() * 360), fotos: f.fotos });
     onSave(init ? { ...init, ...b, id: init.id, dias: init.dias, est: init.est, hue: init.hue, cap: init.cap } : b);
   };
   return (
@@ -771,6 +784,11 @@ function Form({ onSave, init, maxFotos = 3, autoCopy = false }) {
       <div className="grid grid-cols-2 gap-3">
         <Fld l={lb("precio", "Precio")} x={falta("precio")}><input value={f.precio} onChange={num("precio")} inputMode="numeric" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
         <Fld l={lb("mon", "Moneda")} x={falta("mon")}><Seg o={["Bs", "USD"]} v={f.mon === "BOB" ? "Bs" : f.mon} set={(x) => s("mon")(x === "Bs" ? "BOB" : "USD")} /></Fld>
+      {f.mon === "USD" && <Fld l={lb("tc", "Tipo de cambio")} x={falta("tc")}>
+        <Seg o={["Tipo de cambio del día", "Tipo de cambio fijo"]} v={f.tcModo === "fijo" ? "Tipo de cambio fijo" : "Tipo de cambio del día"} set={(x) => setF({ ...f, tcModo: x === "Tipo de cambio fijo" ? "fijo" : "dia" })} />
+        {f.tcModo === "fijo" ? <div className="flex items-center gap-2 mt-2"><input value={f.tc} onChange={(e) => s("tc")(e.target.value.replace(",", ".").replace(/[^\d.]/g, ""))} inputMode="decimal" placeholder="Ej. 6.96" className="w-28 rounded-xl px-3 py-2 text-sm" style={inp} /><span className="text-xs" style={{ color: C.mute }}>Bs por 1 USD{+f.tc > 0 && +f.precio > 0 ? ` · equivale a Bs ${Math.round(+f.precio * +f.tc).toLocaleString("es-BO")}` : ""}</span></div>
+          : <div className="text-xs mt-1.5" style={{ color: C.mute }}>Se mostrará en dólares, aclarando que es al tipo de cambio del día.</div>}
+      </Fld>}
         {vivienda && <Fld l={lb("dorm", "Dormitorios")} x={falta("dorm")}><input value={f.dorm} onChange={num("dorm")} inputMode="numeric" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>}
         {vivienda && <Fld l={lb("ban", "Baños")} x={falta("ban")}><input value={f.ban} onChange={num("ban")} inputMode="numeric" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>}
         <Fld l={lb("m2", "Superficie (m²)")} x={falta("m2")}><input value={f.m2} onChange={num("m2")} inputMode="numeric" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
@@ -1003,9 +1021,9 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
         <div className="text-sm font-semibold" style={{ color: C.ink }}>💱 Moneda</div>
         <div className="grid grid-cols-2 gap-2">
           <Fld l="Moneda principal de la app"><Seg o={["Bs", "USD"]} v={(cfg.moneda || "BOB") === "BOB" ? "Bs" : "USD"} set={(x) => setCfg({ ...cfg, moneda: x === "Bs" ? "BOB" : "USD" })} /></Fld>
-          <Fld l="Tipo de cambio (Bs por 1 USD)"><input value={cfg.tc ?? 6.96} onChange={(e) => setCfg({ ...cfg, tc: e.target.value.replace(/[^\d.]/g, "") })} inputMode="decimal" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
+          <Fld l="Tipo de cambio de referencia (Bs por 1 USD)"><input value={cfg.tc ?? 6.96} onChange={(e) => setCfg({ ...cfg, tc: e.target.value.replace(/[^\d.]/g, "") })} inputMode="decimal" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
         </div>
-        <div className="text-xs" style={{ color: C.mute }}>Cada usuario puede cambiar en el buscador si ve los precios en Bs o en dólares. Las propiedades conservan la moneda en que se publicaron.</div>
+        <div className="text-xs" style={{ color: C.mute }}>Cada usuario elige en el buscador si ve los precios en Bs o en dólares. Una propiedad en dólares solo se convierte a Bs si su captador indicó un tipo de cambio fijo; si no, se muestra en dólares "al tipo de cambio del día". El tipo de cambio de referencia solo se usa para los filtros de precio.</div>
         <div style={{ height: 1, background: C.line }} />
         <div className="text-sm font-semibold" style={{ color: C.ink }}>💳 Cobros</div>
         <Fld l="Día de corte de todos los pagos"><select value={cfg.dia} onChange={(e) => { setCfg({ ...cfg, dia: +e.target.value }); log(`Día de corte cambiado a ${e.target.value}`); }} className="w-full rounded-xl px-3 py-2 text-sm" style={inp}>{Array.from({ length: 28 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>Día {d} de cada mes</option>)}</select></Fld>
@@ -1321,7 +1339,7 @@ const textoCopy = (p, tel) => {
     const d = leerCopy(desc, ZONAS); // lo que el copy ya dice
     const extra = [
       !d.op || !d.tipo ? `🏠 ${p.op} · ${p.tipo}` : "",
-      !d.precio ? `💰 ${moneyOrig(p)}` : "",
+      !d.precio ? `💰 ${precioCopy(p)}` : p.mon === "USD" && !/tipo de cambio|\btc\b/i.test(desc) ? `💱 ${tcFijo(p) ? `Tipo de cambio: ${fmtTc(tcFijo(p))}` : "Al tipo de cambio del día"}` : "",
       !d.zona ? `📍 ${p.zona}, ${p.ciudad}` : "",
       [!d.dorm ? dormTxt : "", !d.ban ? banTxt : "", !d.m2 ? m2Txt : ""].filter(Boolean).join(" · "),
       !d.garaje && p.garaje !== undefined ? gar : "",
@@ -1334,7 +1352,7 @@ const textoCopy = (p, tel) => {
   return [
     `🏠 *${p.t}*`,
     `${p.op} · ${p.tipo}`,
-    `💰 ${moneyOrig(p)}`,
+    `💰 ${precioCopy(p)}`,
     `📍 ${p.zona}, ${p.ciudad}`,
     [dormTxt, banTxt, m2Txt].filter(Boolean).join(" · "),
     gar, masc,

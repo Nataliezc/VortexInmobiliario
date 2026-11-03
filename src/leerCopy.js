@@ -77,6 +77,12 @@ export function leerCopy(copy, ZONAS) {
     d.precio = String(Math.round(n));
     d.mon = /bs|boliviano/.test(c0.mon) ? "BOB" : "USD";
   } else { d.precio = ""; d.mon = ""; }
+  // Tipo de cambio (solo para precios en dólares)
+  if (d.mon === "USD") {
+    const tcm = t.match(/(?:tipo de cambio|t\.?\s?c\.?|cambio)\s*(?:de|a|:|=)?\s*(?:bs\.?\s*)?(\d{1,2}[.,]\d{1,2})/);
+    if (tcm && aNumero(tcm[1]) > 5 && aNumero(tcm[1]) < 30) { d.tcModo = "fijo"; d.tc = String(aNumero(tcm[1])); }
+    else d.tcModo = "dia";
+  }
 
   // Dormitorios y baños
   const cuenta = (re) => { const m = t.match(re); if (!m) return ""; const v = NUM_PAL[m[1]] || parseInt(m[1], 10); return v ? String(v) : ""; };
@@ -132,7 +138,7 @@ export function leerCopy(copy, ZONAS) {
 }
 
 // Campos obligatorios para que la captación quede completa
-export const NOMBRES_CAMPOS = { t: "título", op: "operación", tipo: "tipo de inmueble", tipoOtro: "qué tipo de inmueble es", ciudad: "ciudad", zona: "zona", precio: "precio", mon: "moneda", dorm: "dormitorios", ban: "baños", m2: "superficie", garaje: "garaje", gTipo: "tipo de garaje", gAparte: "garaje aparte", mascotas: "mascotas", mascCond: "condición para mascotas", amoblado: "estado del inmueble" };
+export const NOMBRES_CAMPOS = { tc: "tipo de cambio", t: "título", op: "operación", tipo: "tipo de inmueble", tipoOtro: "qué tipo de inmueble es", ciudad: "ciudad", zona: "zona", precio: "precio", mon: "moneda", dorm: "dormitorios", ban: "baños", m2: "superficie", garaje: "garaje", gTipo: "tipo de garaje", gAparte: "garaje aparte", mascotas: "mascotas", mascCond: "condición para mascotas", amoblado: "estado del inmueble" };
 export function camposFaltantes(f) {
   const vivienda = ["Casa", "Departamento"].includes(f.tipo);
   const req = ["t", "op", "tipo", "ciudad", "zona", "precio", "mon", "m2", "garaje", "gAparte", "mascotas", "amoblado"];
@@ -140,5 +146,6 @@ export function camposFaltantes(f) {
   if (vivienda) req.push("dorm", "ban");
   if (f.garaje === "Sí") req.push("gTipo");
   if (f.mascotas === "Condicionado") req.push("mascCond");
+  if (f.mon === "USD" && f.tcModo === "fijo" && !(+f.tc > 0)) req.push("tc");
   return req.filter((k) => !String(f[k] ?? "").trim());
 }
