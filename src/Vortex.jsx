@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useSync, useSyncObj } from "./datos";
 import { subir, subirVarios, borrarFotos, subirPrivado } from "./archivos";
 import { ImgSegura, TerminosModal, AdminCiudades, AdminVerificar, AdminMetricas, AdminBorrarTodo, Plantillas, RespuestasRapidas, PLANTILLAS_BASE, TERMINOS_BASE } from "./Extras";
@@ -182,6 +182,7 @@ function DetalleInner({ p, acceso, onBack, onVisit, onReport, ant, rate, onProfi
             <button onClick={() => onProfile(p.cap.n)} className="text-xs px-2 py-1 rounded-md" style={{ background: C.lilaSoft, color: C.lilaDk }}>Ver perfil</button>
           </div>
           <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Colaboración 50/50: si cierras con tu cliente, la comisión se divide en partes iguales con el captador.</div>
+          {p.cap.n === ME && (p.est || "Disponible") === "Disponible" && <a href={`https://wa.me/?text=${encodeURIComponent(textoGrupo(p))}`} target="_blank" rel="noreferrer" className="block text-center w-full py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: "#25D366" }}>📢 Compartir en grupos de WhatsApp</a>}
           {perm.auto && onRespuestas && <button onClick={() => onRespuestas({ propiedad: p.t, agente: ME })} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.brandSoft, color: C.brandDk }}>💬 Respuestas rápidas</button>}
           <button onClick={async () => { const ok = await copiarTexto(textoCopy(p, miTel())); flash && flash(ok ? (waNum(miTel()).length < 8 ? "Copy copiado. Tip: agrega tu WhatsApp en Mis datos para incluir tu enlace." : "Copy copiado con tu WhatsApp. Pégalo en el chat de tu cliente.") : "No se pudo copiar automáticamente."); }} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.lilaSoft, color: C.lilaDk }}>📋 Copiar copy para enviar a un cliente</button>
           <div className={`grid ${perm.share ? "grid-cols-2" : "grid-cols-1"} gap-2`}>
@@ -884,6 +885,7 @@ function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, s
             <div className="flex gap-2">
               <select disabled={vencido} value={est} onChange={(e) => { const nv = e.target.value; if (nv === "Retirada") { setRetirando(p.id); setMotivo({ m: MOTIVOS_RETIRO[0], d: "" }); return; } if (nv === "Cerrado") { upd(p.id, { est: "Cerrado", opPend: true }); setPre(String(p.id)); setSub("ops"); flash("Ya no aparece en el buscador. Registra el cierre para completarlo oficialmente."); } else if (["Disponible", "Reservado"].includes(nv) && !["Disponible", "Reservado"].includes(est) && perm.maxCapt && activas >= perm.maxCapt) flash(`Tu plan ${nivel} permite ${perm.maxCapt} captaciones activas.`); else upd(p.id, { est: nv, opPend: false }); }} className="flex-1 rounded-lg px-2 py-1.5 text-sm" style={inp}>{ESTADOS.filter((e) => e !== "Cerrado" || est === "Cerrado").map((e) => <option key={e} value={e}>{EMO[e]} {e}</option>)}</select>
               <button onClick={async () => { const ok = await copiarTexto(textoCopy(p, miTel())); flash(ok ? (waNum(miTel()).length < 8 ? "Copy copiado. Tip: agrega tu WhatsApp en Mis datos para incluir tu enlace." : "Copy copiado con tu enlace de WhatsApp. Pégalo en el chat de tu cliente.") : "No se pudo copiar automáticamente."); }} className="px-3 py-1.5 rounded-lg text-sm font-semibold text-white" style={{ background: C.lila }}>📋 Copiar copy</button>
+              {(p.est || "Disponible") === "Disponible" && <a href={`https://wa.me/?text=${encodeURIComponent(textoGrupo(p))}`} target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-lg text-sm font-semibold text-white" style={{ background: "#25D366" }}>📢 Compartir en grupos</a>}
             </div>
             {retirando === p.id && <div className="rounded-xl p-3 space-y-2" style={{ background: C.redSoft }}>
               <div className="text-sm font-semibold" style={{ color: C.red }}>Retirar captación</div>
@@ -1387,6 +1389,18 @@ async function copiarTexto(t) {
     try { const a = document.createElement("textarea"); a.value = t; a.style.position = "fixed"; a.style.opacity = "0"; document.body.appendChild(a); a.select(); const ok = document.execCommand("copy"); a.remove(); return ok; } catch { return false; }
   }
 }
+// ── Mensaje corto para grupos de WhatsApp, con enlace a la ficha en Vortex ──
+const enlaceFicha = (p) => `${window.location.origin}/p/${p.id}`;
+const textoGrupo = (p) => [
+  `🏠 *${p.t}*`,
+  `📍 ${p.zona}, ${p.ciudad} · ${p.op}`,
+  `💰 ${precioCopy(p)}`,
+  [p.dorm ? `🛏 ${p.dorm} dorm.` : "", p.ban ? `🚿 ${p.ban} baño${p.ban > 1 ? "s" : ""}` : "", p.m2 ? `📐 ${p.m2} m²` : ""].filter(Boolean).join(" · "),
+  `🚗 Garaje: ${p.garaje ? "Sí" : "No"} · 🐾 Mascotas: ${p.mascotas === "Condicionado" ? "con condiciones" : p.mascotas || "consultar"}`,
+  ``,
+  `👉 Mira las fotos y más propiedades en Vortex:`,
+  enlaceFicha(p),
+].filter((x) => x !== undefined && x !== null && x !== false).join("\n").replace(/\n{3,}/g, "\n\n");
 // ── Fotos: descargar o enviar ──
 const nombreArchivo = (t) => (t || "foto").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 40).toLowerCase() || "foto";
 const bajarBlob = async (u) => { const r = await fetch(u, { mode: "cors" }); if (!r.ok) throw new Error("descarga"); return r.blob(); };
@@ -1664,6 +1678,13 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas, onIngresar, o
   const setPlantillas = (l) => setPlantObj((o) => ({ ...o, lista: l }));
   const [rr, setRr] = useState(null);
   useAtras(!!rr, () => setRr(null));
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("p");
+    if (!q) return;
+    const p = props.find((x) => String(x.id) === q);
+    if (p) { setTab("buscar"); setSel(p); } else flash("Esa propiedad ya no está disponible. Mira otras opciones en el buscador.");
+    window.history.replaceState(null, "", window.location.pathname);
+  }, []);
   const [autos, setAutos] = useSyncObj("ajustes_usuario", "autos", { recDef: 0, vig: { on: true, n: 5 }, vis: { on: false, n: 30 }, req: { on: true, n: 7 }, ...(inicial.autos || {}) }, sesion);
   const [sugs, setSugs] = useSync("sugerencias", inicial.sugerencias, sesion);
   const [visitas, setVisitas] = useSync("visitas", inicial.visitas, sesion);
@@ -1696,7 +1717,8 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas, onIngresar, o
     const idsV = new Set(vencidas.map((p) => p.id)), idsS = new Set(sinFecha.map((p) => p.id));
     setProps((ps) => ps.filter((p) => !idsV.has(p.id)).map((p) => (idsS.has(p.id) ? { ...p, cerradaF: ahora } : p)));
   }, [props, nivel]);
-  useEffect(() => { setSel(null); if (sim === "prueba") setFin(Date.now() + 48 * 36e5); }, [sim]);
+  const simInicial = useRef(true);
+  useEffect(() => { if (simInicial.current) { simInicial.current = false; return; } setSel(null); if (sim === "prueba") setFin(Date.now() + 48 * 36e5); }, [sim]);
   useEffect(() => { if (finPrueba) setFin(Date.now() - 1000); }, [finPrueba]);
   const goSub = () => { if (visitante) { onRegistro && onRegistro(); return; } setSel(null); setTab("perfil"); setPerfilSub("sus"); };
   // ── Vigilancia: avisa de propiedades nuevas compatibles con mis requerimientos
