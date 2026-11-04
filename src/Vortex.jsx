@@ -100,7 +100,14 @@ const RK = { Disponible: 0, Reservado: 1, "En pausa": 2, Retirada: 3 };
 const CERRADAS = ["Cerrado", "Retirada", "Caído"]; // ya no son captaciones activas
 const MOTIVOS_RETIRO = ["El propietario la retiró del mercado", "El propietario la vendió o alquiló por su cuenta", "La tomó otra inmobiliaria o agente", "El propietario ya no responde", "Otro motivo"];
 const Badge = ({ v }) => (<span className="text-xs px-2 py-0.5 rounded-md font-medium" style={{ background: v.bg, color: v.c }}>{v.l}</span>);
-const Photo = ({ hue, h = 120, label, src }) => (
+// Miniatura: las fotos nuevas se suben también en versión pequeña (…-t.jpg) para listas rápidas
+const miniatura = (u) => (typeof u === "string" && /-m\.jpg$/.test(u) ? u.replace(/-m\.jpg$/, "-t.jpg") : u);
+const Photo = ({ hue, h = 120, label, src }) => src ? (
+  <div className="w-full relative overflow-hidden flex items-end p-2" style={{ height: h, borderRadius: 12, background: `hsl(${hue || 260} 45% 85%)` }}>
+    <img src={miniatura(src)} alt="" loading="lazy" decoding="async" onError={(e) => { if (e.currentTarget.src !== src) e.currentTarget.src = src; }} className="absolute inset-0 w-full h-full object-cover" />
+    {label && <span className="relative text-xs px-2 py-0.5 rounded-md" style={{ background: "rgba(255,255,255,.85)", color: C.ink }}>{label}</span>}
+  </div>
+) : (
   <div className="w-full flex items-end p-2" style={{ height: h, background: src ? `url(${src}) center/cover` : `linear-gradient(135deg, hsl(${hue} 45% 78%), hsl(${hue + 30} 40% 55%))`, borderRadius: 12 }}>
     {label && <span className="text-xs px-2 py-0.5 rounded-md" style={{ background: "rgba(255,255,255,.85)", color: C.ink }}>{label}</span>}
   </div>
@@ -113,13 +120,13 @@ function Card({ p, onOpen, locked, rate, perm }) {
       <div style={{ width: 92, flexShrink: 0 }}><Photo hue={p.hue} h={92} src={p.fotos?.[0]} /></div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 text-xs" style={{ color: C.mute }}><span>{p.op}</span><span>{p.tipo}</span></div>
-        <div className="font-semibold leading-snug" style={{ color: C.ink, fontSize: 15 }}>{locked ? tBasico(p) : p.t}</div>
+        <div className="font-semibold leading-snug" style={{ color: C.ink, fontSize: 15 }}>{locked && ES_VISITANTE ? tBasico(p) : p.t}</div>
         <div className="text-xs mt-0.5" style={{ color: C.mute }}>{p.zona}, {p.ciudad}{p.dorm ? ` · ${p.dorm} dorm · ${p.ban} baños` : ""} · {p.m2} m²</div>
         <div className="flex items-center justify-between mt-1.5">
           <span style={{ ...serif, color: C.ink, fontSize: 18, fontWeight: 700 }}>{money(p)}{notaPrecio(p) && <span className="block" style={{ fontFamily: "inherit", fontSize: 10, fontWeight: 500, color: C.mute }}>{notaPrecio(p)}</span>}</span>
           <span className="flex gap-1 items-center"><EstBadge est={est} /><Badge v={v} /></span>
         </div>
-        {locked && <div className="text-xs mt-1" style={{ color: C.mute }}>🔒 Captador y contacto con suscripción activa</div>}
+        {locked && <div className="text-xs mt-1" style={{ color: C.mute }}>{ES_VISITANTE ? "🔒 Regístrate gratis para ver el detalle completo" : "🔒 Captador y contacto con un plan activo"}</div>}
         {!locked && rate(p.cap.n) && <div className="text-xs mt-1" style={{ color: C.mute }}>{p.cap.n} · ⭐ {rate(p.cap.n).avg.toFixed(1)}</div>}
       </div>
     </button>
@@ -127,19 +134,23 @@ function Card({ p, onOpen, locked, rate, perm }) {
 }
 
 function Detalle(a) {
-  const ant = (a.users.find((x) => x.n === a.p.cap.n) || { ant: 0 }).ant;
-  return DetalleInner({ ...a, ant });
+  const cap = a.users.find((x) => x.n === a.p.cap.n) || { ant: 0 };
+  const telCap = (cap.perfil && cap.perfil.tel) || a.p.cap.tel || "";
+  return DetalleInner({ ...a, ant: cap.ant, telCap });
 }
-function DetalleInner({ p, acceso, onBack, onVisit, onReport, ant, rate, onProfile, favs, toggleFav, clientes, onSub, perm, flash, onRespuestas }) {
+function DetalleInner({ p, acceso, onBack, onVisit, onReport, ant, rate, onProfile, favs, toggleFav, clientes, onSub, perm, flash, onRespuestas, telCap }) {
   const [share, setShare] = useState(false);
   const v = vigencia(p, perm.vigDet);
-  const locked = acceso === "vencido";
+  const gratis = acceso === "vencido" && !ES_VISITANTE; // plan Gratuito con cuenta: ve el inmueble completo, sin datos del captador
+  const locked = acceso === "vencido" && ES_VISITANTE; // visitante sin cuenta: solo datos básicos
+  const sinContacto = acceso === "vencido";
+  const propia = p.cap.n === ME;
   const isFav = (cid) => favs.some((f) => f.pid === p.id && f.cid === cid);
   const msg = `🏠 ${p.op} · ${p.tipo}\n${p.t}\n📍 ${p.zona}, ${p.ciudad}\n💰 ${money(p)}\n${p.dorm ? `🛏 ${p.dorm} dorm · 🚿 ${p.ban} baños · ` : ""}${p.m2} m²\nVer ficha: vortex.app/p/${p.id}`;
   return (
     <div className="p-4 pb-8 space-y-3">
       <button onClick={onBack} className="text-sm" style={{ color: C.brandDk }}>‹ Volver a resultados</button>
-      {p.fotos && p.fotos.length ? <Galeria fotos={p.fotos} titulo={locked ? tBasico(p) : p.t} texto={`${p.t} · ${moneyOrig(p)} · ${p.zona}, ${p.ciudad}`} soloVer={locked} /> : <Photo hue={p.hue} h={190} src={null} label="Sin fotos" />}
+      {p.fotos && p.fotos.length ? <Galeria fotos={p.fotos} titulo={locked ? tBasico(p) : p.t} texto={`${p.t} · ${moneyOrig(p)} · ${p.zona}, ${p.ciudad}`} soloVer={sinContacto} /> : <Photo hue={p.hue} h={190} src={null} label="Sin fotos" />}
       <div className="flex items-center justify-between"><span className="text-sm" style={{ color: C.mute }}>{p.op} · {p.tipo}</span><span className="flex gap-1 items-center"><EstBadge est={p.est || "Disponible"} /><Badge v={v} /></span></div>
       <h2 className="font-semibold text-xl leading-snug" style={{ color: C.ink }}>{locked ? tBasico(p) : p.t}</h2>
       <div style={{ ...serif, fontSize: 28, fontWeight: 700, color: C.ink }}>{money(p)}</div>
@@ -156,24 +167,37 @@ function DetalleInner({ p, acceso, onBack, onVisit, onReport, ant, rate, onProfi
       <div className="rounded-xl p-3 text-sm space-y-1" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.ink }}>
         <div>📍 {p.zona}, {p.ciudad}</div>
         {locked ? (
-          <div style={{ color: C.mute }}>Dirección exacta, garaje, mascotas y condiciones disponibles con suscripción activa.</div>
+          <div style={{ color: C.mute }}>Garaje, mascotas, condiciones y la descripción completa se ven al registrarte (es gratis).</div>
         ) : (
           <>
             <div>🚗 Garaje: {p.garaje ? `Sí${p.gTipo ? ` (${p.gTipo.toLowerCase()})` : ""}` : "No"}{p.gAparte ? ` · se alquila aparte en el edificio${p.gPrecio ? `: ${p.mon === "USD" ? "USD" : "Bs"} ${p.gPrecio}/mes` : ""}` : ""}</div>
             <div>🐾 Mascotas: {p.mascotas}{p.mascCond ? `: ${p.mascCond}` : ""}</div>
             <div>🛋 {p.amoblado}</div>
-            <div>💼 Comisión: {p.com}</div>
+            {!gratis && <div>💼 Comisión: {p.com}</div>}
             {p.condComp && <div>📄 Condiciones: {p.condComp}</div>}
             {p.desc && <div className="pt-1 whitespace-pre-line" style={{ color: C.mute }}>{p.desc}</div>}
           </>
         )}
       </div>
       {locked ? (
+        <div className="rounded-2xl p-4 text-center space-y-2" style={{ background: C.lilaSoft, border: `1px solid ${C.lila}` }}>
+          <div className="font-semibold" style={{ color: C.lilaDk }}>¿Te interesa esta propiedad?</div>
+          <div className="text-sm" style={{ color: C.ink }}>Regístrate gratis y prueba Vortex 48 horas con acceso completo: ficha completa, contacto directo con el captador y todas las herramientas.</div>
+          <button onClick={onSub} className="w-full py-3 rounded-xl font-semibold text-white" style={{ background: C.grad }}>Regístrate para la prueba gratuita</button>
+        </div>
+      ) : gratis ? (
         <div className="rounded-2xl p-4 text-center space-y-2" style={{ background: C.amberSoft, border: `1px solid #F1D79B` }}>
           <div className="font-semibold" style={{ color: C.amber }}>Estás en el plan Gratuito</div>
-          <div className="text-sm" style={{ color: C.ink }}>Puedes ver que la propiedad existe, pero necesitas una suscripción activa para ver el captador y contactarlo.</div>
-          <button onClick={onSub} className="w-full py-3 rounded-xl font-semibold text-white" style={{ background: C.lila }}>Activar suscripción</button>
+          <div className="text-sm" style={{ color: C.ink }}>Para ver quién es el captador, escribirle por WhatsApp y agendar visitas necesitas un plan.</div>
+          <button onClick={onSub} className="w-full py-3 rounded-xl font-semibold text-white" style={{ background: C.lila }}>Ver planes</button>
         </div>
+      ) : propia ? (
+        <>
+          <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Esta es tu captación.</div>
+          {(p.est || "Disponible") === "Disponible" && <a href={`https://wa.me/?text=${encodeURIComponent(textoGrupo(p))}`} target="_blank" rel="noreferrer" className="block text-center w-full py-3 rounded-xl text-sm font-semibold text-white" style={{ background: "#25D366" }}>📢 Compartir en grupos de WhatsApp</a>}
+          <button onClick={async () => { const ok = await copiarTexto(textoCopy(p, miTel())); flash && flash(ok ? "Copy copiado." : "No se pudo copiar automáticamente."); }} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.lilaSoft, color: C.lilaDk }}>📋 Copiar copy</button>
+          {perm.auto && onRespuestas && <button onClick={() => onRespuestas({ propiedad: p.t, agente: ME })} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.brandSoft, color: C.brandDk }}>💬 Respuestas rápidas</button>}
+        </>
       ) : (
         <>
           <div className="rounded-2xl p-3 flex items-center gap-3" style={{ background: C.card, border: `1px solid ${C.line}` }}>
@@ -182,11 +206,11 @@ function DetalleInner({ p, acceso, onBack, onVisit, onReport, ant, rate, onProfi
             <button onClick={() => onProfile(p.cap.n)} className="text-xs px-2 py-1 rounded-md" style={{ background: C.lilaSoft, color: C.lilaDk }}>Ver perfil</button>
           </div>
           <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Colaboración 50/50: si cierras con tu cliente, la comisión se divide en partes iguales con el captador.</div>
-          {p.cap.n === ME && (p.est || "Disponible") === "Disponible" && <a href={`https://wa.me/?text=${encodeURIComponent(textoGrupo(p))}`} target="_blank" rel="noreferrer" className="block text-center w-full py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: "#25D366" }}>📢 Compartir en grupos de WhatsApp</a>}
           {perm.auto && onRespuestas && <button onClick={() => onRespuestas({ propiedad: p.t, agente: ME })} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.brandSoft, color: C.brandDk }}>💬 Respuestas rápidas</button>}
           <button onClick={async () => { const ok = await copiarTexto(textoCopy(p, miTel())); flash && flash(ok ? (waNum(miTel()).length < 8 ? "Copy copiado. Tip: agrega tu WhatsApp en Mis datos para incluir tu enlace." : "Copy copiado con tu WhatsApp. Pégalo en el chat de tu cliente.") : "No se pudo copiar automáticamente."); }} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.lilaSoft, color: C.lilaDk }}>📋 Copiar copy para enviar a un cliente</button>
           <div className={`grid ${perm.share ? "grid-cols-2" : "grid-cols-1"} gap-2`}>
-            <button onClick={() => window.open(`https://wa.me/${p.cap.tel.replace(/\D/g, "")}?text=${encodeURIComponent("Hola " + p.cap.n + ", vi tu captación en Vortex: " + p.t)}`, "_blank")} className="py-3 rounded-xl font-semibold text-white" style={{ background: "#1FA855" }}>Escribir por WhatsApp</button>
+            {waNum(telCap).length >= 8 ? <a href={waLink(telCap, `Hola ${p.cap.n.split(" ")[0]}, vi tu captación en Vortex: *${p.t}* (${moneyOrig(p)}, ${p.zona}). ¿Sigue disponible?`)} target="_blank" rel="noreferrer" className="block text-center py-3 rounded-xl font-semibold text-white" style={{ background: "#1FA855" }}>💬 Escribir al captador por WhatsApp</a>
+              : <div className="py-3 rounded-xl text-xs text-center" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.mute }}>El captador aún no registró su WhatsApp</div>}
             {perm.share && <button onClick={() => setShare(!share)} className="py-3 rounded-xl font-semibold" style={{ background: C.card, border: `1px solid ${C.ink}`, color: C.ink }}>Compartir con cliente</button>}
           </div>
           {share && (() => { const txt = textoCopy(p, miTel()); return (
@@ -230,7 +254,7 @@ function Buscar({ acceso, open, props, rate, favs, perm, goSub, busq, setBusq, m
         <Chip on={gar} disabled={!perm.filtros} onClick={() => setGar(!gar)}>Garaje</Chip>
         <Chip on={fv} disabled={!perm.fav} onClick={() => setFv(!fv)}>♥</Chip>
       </div>
-      {!perm.ficha && <div className="rounded-xl p-2.5 text-xs flex items-center justify-between gap-2" style={{ background: C.lilaSoft, color: C.lilaDk }}><span>Modo limitado: fichas resumidas y filtros básicos. Suscríbete para ver la ficha completa y contactar al captador.</span><button onClick={goSub} className="underline font-semibold shrink-0">Ver planes</button></div>}
+      {!perm.ficha && <div className="rounded-xl p-2.5 text-xs flex items-center justify-between gap-2" style={{ background: C.lilaSoft, color: C.lilaDk }}><span>{ES_VISITANTE ? "Estás como visitante. Regístrate gratis y prueba 48 h con acceso completo: fichas, contacto con captadores y más." : "Plan Gratuito: ves las propiedades completas. Elige un plan para contactar a los captadores y usar todas las herramientas."}</span><button onClick={goSub} className="underline font-semibold shrink-0">Ver planes</button></div>}
       {perm.busq && <div className="flex gap-2 overflow-x-auto items-center"><button onClick={() => setBusq([...busq, { id: Date.now(), n: [op, ciu, dorm !== "Todos" ? dorm + " dorm" : "", max ? "≤" + max : "", gar ? "garaje" : "", masc ? "mascotas" : ""].filter((x) => x && x !== "Todas").join(" · ") || "Todas", op, ciu, max, gar, dorm, masc }])} className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px dashed ${C.lila}`, color: C.lilaDk }}>💾 Guardar búsqueda</button>{busq.map((b) => <span key={b.id} className="flex items-center rounded-full text-xs whitespace-nowrap" style={{ background: C.lilaSoft, color: C.lilaDk }}><button onClick={() => { setOp(b.op); setCiu(b.ciu); setMax(b.max); setGar(b.gar); setDorm(b.dorm); setMasc(b.masc); }} className="pl-3 pr-1 py-1.5">{b.n}</button><button onClick={() => setBusq(busq.filter((x) => x.id !== b.id))} className="pr-2">✕</button></span>)}</div>}
       <div className="flex gap-2 overflow-x-auto items-center" style={{ opacity: perm.filtros ? 1 : 0.4, pointerEvents: perm.filtros ? "auto" : "none" }}><span className="text-xs" style={{ color: C.mute }}>Dormitorios</span>{["Todos", "1", "2", "3", "4+"].map((x) => <Chip key={x} on={dorm === x} onClick={() => setDorm(x)}>{x}</Chip>)}<Chip on={masc} onClick={() => setMasc(!masc)}>🐾 Mascotas</Chip></div>
       <div className="text-xs" style={{ color: C.mute }}>{list.length} propiedades · primero las disponibles y confirmadas</div>
@@ -715,6 +739,7 @@ function Extra({ onRepublicar, nivelReal, sub, ops, setOps, props, setProps, rep
 }
 
 let ME = "";
+let ES_VISITANTE = false; // lo actualiza Vortex en cada render
 // Lo fija App.jsx con el nombre del usuario que inició sesión.
 export const fijarUsuario = (nombre) => { ME = nombre; };
 // Datos del perfil propio (teléfono, bio, ciudades). Vortex los actualiza en cada render.
@@ -752,6 +777,8 @@ function Form({ onSave, init, maxFotos = 3, autoCopy = false }) {
   const leer = () => {
     if (copyTxt.trim().length < 20) { setInfo("Pega el copy completo del anuncio para poder leerlo."); return; }
     const d = leerCopy(copyTxt, ZONAS);
+    d.desc = limpiarContacto(d.desc); // sin números de WhatsApp ni datos de contacto
+    if (d.condComp) d.condComp = limpiarContacto(d.condComp);
     const vacio = { tcModo: "dia", tc: "", op: "", tipo: "", tipoOtro: "", ciudad: "", zona: "", t: "", precio: "", mon: "", dorm: "", ban: "", m2: "", garaje: "", gTipo: "", gAparte: "", gPrecio: "", mascotas: "", mascCond: "", amoblado: "", com: "", condComp: "" };
     const nuevo = { ...f, ...vacio, ...d, fotos: f.fotos };
     setF(nuevo); setMarcar(true); setErr("");
@@ -767,6 +794,7 @@ function Form({ onSave, init, maxFotos = 3, autoCopy = false }) {
     const fal = camposFaltantes(f);
     if (fal.length) { setMarcar(true); setErr(`Para publicar falta completar: ${fal.map((k) => NOMBRES_CAMPOS[k]).join(", ")}. Están marcados en amarillo.`); return; }
     const tipoFinal = f.tipo === "Otro" ? f.tipoOtro.trim().charAt(0).toUpperCase() + f.tipoOtro.trim().slice(1) : f.tipo;
+    f.desc = limpiarContacto(f.desc || "");
     const b = ({ id: Date.now(), ...(f.mon === "USD" ? { tcModo: f.tcModo || "dia", tc: f.tcModo === "fijo" ? +f.tc : null } : { tcModo: null, tc: null }), op: f.op, tipo: tipoFinal, t: f.t, ciudad: f.ciudad, zona: f.zona, precio: +f.precio, mon: f.mon, dorm: vivienda ? +f.dorm : 0, ban: vivienda ? +f.ban : 0, m2: +f.m2, garaje: f.garaje === "Sí", gTipo: f.garaje === "Sí" ? f.gTipo : "", gAparte: f.gAparte === "Sí", gPrecio: f.gAparte === "Sí" ? f.gPrecio : "", mascotas: f.mascotas, mascCond: f.mascotas === "Condicionado" ? f.mascCond : "", condComp: f.condComp, desc: f.desc, amoblado: f.amoblado, dias: 0, est: "Disponible", cap: { n: ME, tel: miTel(), ciu: f.ciudad }, com: f.com || "A definir con el captador", hue: Math.floor(Math.random() * 360), fotos: f.fotos });
     onSave(init ? { ...init, ...b, id: init.id, dias: init.dias, est: init.est, hue: init.hue, cap: init.cap } : b);
   };
@@ -874,7 +902,7 @@ function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, s
         return (
           <div key={p.id} className="rounded-2xl p-3 space-y-2" style={{ background: C.card, border: `1px solid ${C.line}` }}>
             <div className="flex gap-3">
-              {p.fotos && p.fotos[0] ? <img src={p.fotos[0]} alt={p.t} className="rounded-xl object-cover shrink-0" style={{ width: 76, height: 76 }} /> : <div className="shrink-0 rounded-xl flex items-center justify-center text-xs text-center" style={{ width: 76, height: 76, background: `hsl(${p.hue || 260} 45% 90%)`, color: C.mute }}>Sin foto</div>}
+              {p.fotos && p.fotos[0] ? <img src={miniatura(p.fotos[0])} alt={p.t} loading="lazy" onError={(e) => { if (e.currentTarget.src !== p.fotos[0]) e.currentTarget.src = p.fotos[0]; }} className="rounded-xl object-cover shrink-0" style={{ width: 76, height: 76 }} /> : <div className="shrink-0 rounded-xl flex items-center justify-center text-xs text-center" style={{ width: 76, height: 76, background: `hsl(${p.hue || 260} 45% 90%)`, color: C.mute }}>Sin foto</div>}
               <div className="flex-1 min-w-0 space-y-1">
                 <div className="flex justify-between gap-2"><div className="font-semibold text-sm" style={{ color: C.ink }}>{p.t} <button disabled={vencido} onClick={() => setNueva(p)} className="text-xs underline" style={{ color: C.brandDk }}>Editar</button></div><span style={{ ...serif, color: C.ink, fontWeight: 700 }}>{money(p)}</span></div>
                 <div className="text-xs" style={{ color: C.mute }}>{p.op} · {p.tipo} · {p.zona}, {p.ciudad}{p.fotos && p.fotos.length > 1 ? ` · 📷 ${p.fotos.length}` : ""}</div>
@@ -1439,7 +1467,7 @@ function Galeria({ fotos, titulo, texto, soloVer = false }) {
         {!soloVer && <button onClick={() => descargarFotos([fotos[j]], base, j + 1)} title="Descargar esta foto" className="absolute top-2 right-2 px-2.5 py-1 rounded-lg text-xs" style={btn}>⬇ Esta foto</button>}
         <span className="absolute bottom-2 right-2 text-xs px-2 py-0.5 rounded-md" style={btn}>{j + 1} / {n}</span>
       </div>
-      {n > 1 && <div className="flex gap-1.5 overflow-x-auto">{fotos.map((u, k) => <button key={u} onClick={() => setI(k)} className="shrink-0 rounded-lg overflow-hidden" style={{ width: 52, height: 52, border: `2px solid ${k === j ? C.lila : "transparent"}` }}><img src={u} alt="" className="w-full h-full object-cover" /></button>)}</div>}
+      {n > 1 && <div className="flex gap-1.5 overflow-x-auto">{fotos.map((u, k) => <button key={u} onClick={() => setI(k)} className="shrink-0 rounded-lg overflow-hidden" style={{ width: 52, height: 52, border: `2px solid ${k === j ? C.lila : "transparent"}` }}><img src={miniatura(u)} alt="" loading="lazy" onError={(e) => { if (e.currentTarget.src !== u) e.currentTarget.src = u; }} className="w-full h-full object-cover" /></button>)}</div>}
       {!soloVer && <div className={`grid gap-2 ${compartible ? "grid-cols-2" : "grid-cols-1"}`}>
         <button disabled={!!ocup} onClick={async () => { setOcup("d"); await descargarFotos(fotos, base); setOcup(""); }} className="py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.brandSoft, color: C.brandDk }}>{ocup === "d" ? "Descargando…" : `⬇ Descargar ${n > 1 ? `las ${n} fotos` : "la foto"}`}</button>
         {compartible && <button disabled={!!ocup} onClick={async () => { setOcup("c"); const ok = await compartirFotos(fotos, base, texto); if (!ok) await descargarFotos(fotos, base); setOcup(""); }} className="py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.lilaSoft, color: C.lilaDk }}>{ocup === "c" ? "Preparando…" : "📤 Enviar fotos"}</button>}
@@ -1657,7 +1685,7 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas, onIngresar, o
   const [reviews, setReviews] = useSync("resenas", inicial.resenas, sesion);
   const [fin, setFin] = useState(() => { const yo = inicial.perfiles.find((u) => u.n === ME) || {}; return esAdmin ? Date.now() + 48 * 36e5 : yo.est === "Prueba" && yo.prueba ? yo.prueba.fin : 0; });
   const [now, setNow] = useState(Date.now());
-  useEffect(() => { const i = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(i); }, []);
+  useEffect(() => { const i = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(i); }, []);
   const [ops, setOps] = useSync("operaciones", inicial.operaciones, sesion);
   const [reports, setReports] = useSync("reportes", inicial.reportes, sesion);
   const [users, setUsers] = useSync("perfiles", inicial.perfiles, sesion);
@@ -1692,6 +1720,7 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas, onIngresar, o
   const flash = (m) => { setToast(m); setTimeout(() => setToast(""), 2200); };
   ZONAS = cfg.ciudades && Object.keys(cfg.ciudades).length ? cfg.ciudades : ZONAS_BASE;
   BOB = +cfg.tc > 0 ? +cfg.tc : 6.96;
+  ES_VISITANTE = visitante;
   MONEDA = moneda;
   const mi = users.find((u) => u.n === ME) || {};
   PERFIL.datos = mi.perfil || null;
@@ -1773,7 +1802,7 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas, onIngresar, o
   const toggleFav = (pid, cid) => setFavs(favs.some((f) => f.pid === pid && f.cid === cid) ? favs.filter((f) => !(f.pid === pid && f.cid === cid)) : [...favs, { pid, cid }]);
   const go = (to) => { setTab(to.tab); setSel(to.p ? props.find((x) => x.id === to.p) : null); };
   const agendar = (p) => { const m = new Date(HOY.getFullYear(), HOY.getMonth(), HOY.getDate() + 1); setVisitas([...visitas, { id: Date.now(), p: p.id, cl: clientes[0] ? clientes[0].n : "Cliente", f: isoOf(m), h: "09:00", ag: p.cap.n, est: "Pendiente" }]); notify("Visita agendada", `${p.t} · ${fechaL(m)}, 09:00`, { tab: "visitas" }); flash(`Visita agendada para mañana (${fechaL(m)}) a las 09:00. Puedes cambiarla en Visitas.`); };
-  const rem = Math.max(0, fin - now), cd = [Math.floor(rem / 3.6e6), Math.floor(rem / 6e4) % 60, Math.floor(rem / 1e3) % 60].map((x) => String(x).padStart(2, "0")).join(":");
+  const rem = Math.max(0, fin - now), cd = `${Math.floor(rem / 3.6e6)} h ${String(Math.floor(rem / 6e4) % 60).padStart(2, "0")} min`;
   const tabs = [["buscar", "🔍", "Buscar"], ["clientes", "👤", "Requerim."], ["visitas", "📅", "Visitas"], ["alertas", "🔔", "Alertas"], ["perfil", "🧑‍💼", "Perfil"]];
   const avisosPlan = [];
   if (!visitante && sim !== "admin") {

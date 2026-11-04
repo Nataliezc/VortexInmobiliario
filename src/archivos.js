@@ -21,6 +21,23 @@ export async function comprimir(file, max = 1600) {
   } catch { return file; }
 }
 
+async function miniaturaBlob(file, max = 420) {
+  try {
+    const img = await new Promise((ok, mal) => { const i = new Image(); i.onload = () => ok(i); i.onerror = mal; i.src = URL.createObjectURL(file); });
+    const k = Math.min(1, max / Math.max(img.width, img.height));
+    const cv = document.createElement("canvas"); cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
+    cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height); URL.revokeObjectURL(img.src);
+    return await new Promise((ok) => cv.toBlob(ok, "image/jpeg", 0.75));
+  } catch { return null; }
+}
+const textoError = (e) => {
+  const m = (e && (e.message || e.error)) || String(e);
+  if (/bucket not found/i.test(m)) return `No existe la carpeta de fotos "${BUCKET}" en Supabase (o no es pública). Ejecuta el archivo 14_reparar_carpeta_fotos.sql.`;
+  if (/row-level security|unauthorized|not allowed|403/i.test(m)) return "Supabase no dio permiso para subir la foto. Ejecuta el archivo 14_reparar_carpeta_fotos.sql.";
+  if (/payload too large|413|size/i.test(m)) return "La imagen es demasiado grande.";
+  return m;
+};
+
 export async function subir(file) {
   if (!file) return null;
   marcar(1);
@@ -28,13 +45,15 @@ export async function subir(file) {
     const { data: { session } } = await supabase.auth.getSession();
     const uid = session ? session.user.id : "anon";
     const blob = await comprimir(file);
-    const ext = blob.type === "image/jpeg" ? "jpg" : (file.name.split(".").pop() || "bin").toLowerCase();
-    const ruta = `${uid}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
+    const esImg = blob.type === "image/jpeg" || file.type.startsWith("image/");
+    const nombre = `${uid}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const ruta = esImg && blob.type === "image/jpeg" ? `${nombre}-m.jpg` : `${nombre}.${(file.name.split(".").pop() || "bin").toLowerCase()}`;
     const { error } = await supabase.storage.from(BUCKET).upload(ruta, blob, { contentType: blob.type || file.type, upsert: false });
     if (error) throw error;
+    if (ruta.endsWith("-m.jpg")) { const t = await miniaturaBlob(blob); if (t) await supabase.storage.from(BUCKET).upload(`${nombre}-t.jpg`, t, { contentType: "image/jpeg", upsert: false }); }
     return supabase.storage.from(BUCKET).getPublicUrl(ruta).data.publicUrl;
   } catch (e) {
-    aviso(`No se pudo subir la imagen: ${(e && e.message) || e}. Revisa que exista el bucket "${BUCKET}".`);
+    aviso(`No se pudo subir la imagen: ${textoError(e)}`);
     return null;
   } finally { marcar(-1); }
 }
@@ -48,7 +67,8 @@ export async function subirVarios(files) {
 // Elimina del almacenamiento las fotos indicadas (por ejemplo, al cerrar una captación)
 export async function borrarFotos(urls) {
   const marca = `/object/public/${BUCKET}/`;
-  const rutas = (urls || []).map((u) => { const i = String(u).indexOf(marca); return i >= 0 ? decodeURIComponent(String(u).slice(i + marca.length).split("?")[0]) : null; }).filter(Boolean);
+  const rutas = (urls || []).map((u) => { const i = String(u).indexOf(marca); return i >= 0 ? decodeURIComponent(String(u).slice(i + marca.length).split("?")[0]) : null; }).filter(Boolean)
+    .flatMap((r) => (/-m\.jpg$/.test(r) ? [r, r.replace(/-m\.jpg$/, "-t.jpg")] : [r]));
   if (!rutas.length) return true;
   try { const { error } = await supabase.storage.from(BUCKET).remove(rutas); if (error) throw error; return true; }
   catch (e) { console.warn("No se pudieron borrar fotos", e); return false; }
@@ -68,7 +88,7 @@ export async function subirPrivado(file, cliente = supabase) {
     if (error) throw error;
     return `priv:${ruta}`;
   } catch (e) {
-    aviso(`No se pudo subir el carnet: ${(e && e.message) || e}. Revisa que exista la carpeta privada "${BUCKET_PRIV}".`);
+    aviso(`No se pudo subir el carnet: ${/bucket not found/i.test((e && e.message) || "") ? `no existe la carpeta privada "${BUCKET_PRIV}". Ejecuta el archivo 14_reparar_carpeta_fotos.sql.` : textoError(e)}`);
     return null;
   } finally { marcar(-1); }
 }
