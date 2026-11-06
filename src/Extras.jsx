@@ -127,7 +127,8 @@ export function AdminMetricas({ users, pagos, props, ops, cfg, respaldo, flash }
   const hoyIso = isoOf(HOY);
   const agentes = users.filter((u) => u._rol !== "admin");
   const precio = (plan) => (cfg.planes.find((p) => p.nombre === plan) || {}).precio || 0;
-  const activos = agentes.filter((u) => u.est === "Activo" && u.venc && u.venc >= hoyIso && precio(u.plan));
+  const activos = agentes.filter((u) => !u.pref && u.est === "Activo" && u.venc && u.venc >= hoyIso && precio(u.plan));
+  const preferentes = agentes.filter((u) => u.pref);
   const aprobados = pagos.filter((p) => p.est === "Aprobado");
   const pagaron = new Set(aprobados.map((p) => p.de));
   const conv = agentes.length ? Math.round((100 * agentes.filter((u) => pagaron.has(u.n)).length) / agentes.length) : 0;
@@ -141,7 +142,7 @@ export function AdminMetricas({ users, pagos, props, ops, cfg, respaldo, flash }
   const meses = Array.from({ length: 6 }, (_, i) => { const d = new Date(HOY.getFullYear(), HOY.getMonth() - (5 - i), 1); const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; return { l: ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"][d.getMonth()], n: aprobados.filter((p) => (p.revF || p.iso || "").startsWith(k)).reduce((a, p) => a + (p.monto || 0), 0) }; });
   const maxM = Math.max(1, ...meses.map((m) => m.n));
   const porPlan = cfg.planes.map((p) => [p.nombre, activos.filter((u) => u.plan === p.nombre).length]);
-  const otros = [["En prueba", agentes.filter((u) => u.est === "Prueba").length], ["Por verificar", agentes.filter((u) => u.est === "Verificación").length], ["Gratuito / vencido", agentes.filter((u) => !activos.includes(u) && !["Prueba", "Verificación"].includes(u.est)).length]];
+  const otros = [["⭐ Preferentes", preferentes.length], ["En prueba", agentes.filter((u) => u.est === "Prueba").length], ["Por verificar", agentes.filter((u) => u.est === "Verificación").length], ["Gratuito / vencido", agentes.filter((u) => !activos.includes(u) && !u.pref && !["Prueba", "Verificación"].includes(u.est)).length]];
 
   const excel = async () => {
     setOcupado(true);
@@ -172,7 +173,7 @@ export function AdminMetricas({ users, pagos, props, ops, cfg, respaldo, flash }
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-2">
         <Tarjeta v={agentes.length} l="Agentes registrados" />
-        <Tarjeta v={activos.length} l="Con plan de pago activo" />
+        <Tarjeta v={activos.length} l="Con plan de pago activo" s={preferentes.length ? `+ ${preferentes.length} preferente${preferentes.length > 1 ? "s" : ""} (gratis)` : ""} />
         <Tarjeta v={`${conv}%`} l="Conversión a pago" s="agentes que pagaron alguna vez" />
         <Tarjeta v={bajas} l="Dejaron de pagar" s="pagaron antes y hoy no están activos" />
         <Tarjeta v={bs(mrr)} l="Ingreso mensual estimado" s="suma de planes activos" />

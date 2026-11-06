@@ -962,6 +962,10 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
   const nuevas = sugs.filter((x) => x.est === "Nueva").length;
   const pPend = pagos.filter((p) => p.est === "Pendiente");
   const porVerificar = users.filter((u) => u.est === "Verificación").length;
+  const [prefDe, setPrefDe] = useState(null);
+  const [prefF, setPrefF] = useState({ plan: "Premium", nota: "" });
+  const [filtroUsr, setFiltroUsr] = useState("Todos");
+  const nCapt = (n) => props.filter((p) => p.cap && p.cap.n === n && (p.est || "Disponible") === "Disponible").length;
   const aprobar = (p) => {
     const u = users.find((x) => x.n === p.de);
     const base = p.tipo === "Renovación" && u && u.venc ? isoD(u.venc) : null;
@@ -981,7 +985,7 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
     setRej(null); setMot(""); flash("Pago rechazado. Se notificó al agente.");
   };
   const renombrar = (i, nuevo) => { const viejo = cfg.planes[i].nombre; setCfg({ ...cfg, planes: cfg.planes.map((q, j) => (j === i ? { ...q, nombre: nuevo } : q)) }); setUsers(users.map((u) => (u.plan === viejo ? { ...u, plan: nuevo } : u))); setPagos(pagos.map((p) => (p.plan === viejo ? { ...p, plan: nuevo } : p))); };
-  const activos = users.filter((u) => u.est === "Activo");
+  const activos = users.filter((u) => u.est === "Activo" && !u.pref);
   const planes = cfg.planes.map((pl) => ({ p: pl.nombre, n: activos.filter((u) => u.plan === pl.nombre).length }));
   const mrr = planes.reduce((a, x) => a + x.n * precioDe(cfg, x.p), 0);
   const apr = pagos.filter((p) => p.est === "Aprobado");
@@ -992,7 +996,7 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
   const corte = proximoCorte(cfg.dia), corteI = isoOf(corte);
   const porRenovar = activos.filter((u) => u.venc && u.venc <= corteI);
   const esperado = porRenovar.reduce((a, u) => a + precioDe(cfg, u.plan), 0);
-  const ejecutarCorte = () => { setUsers(users.map((u) => (u.est === "Activo" && u.venc && u.venc <= corteI ? { ...u, est: "Vencido" } : u))); log(`Corte del ${fechaL(corte)} ejecutado: ${porRenovar.length} cuenta(s) pasaron a Vencido`); setCfm(false); flash(`Corte ejecutado: ${porRenovar.length} cuenta(s) vencidas.`); };
+  const ejecutarCorte = () => { setUsers(users.map((u) => (u.est === "Activo" && !u.pref && u.venc && u.venc <= corteI ? { ...u, est: "Vencido" } : u))); log(`Corte del ${fechaL(corte)} ejecutado: ${porRenovar.length} cuenta(s) pasaron a Vencido`); setCfm(false); flash(`Corte ejecutado: ${porRenovar.length} cuenta(s) vencidas.`); };
   const act = props.filter((p) => ["Disponible", "Reservado"].includes(p.est || "Disponible"));
   return (
     <div className="p-4 space-y-3">
@@ -1135,9 +1139,11 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
         {!sugs.some((x) => fc === "Todas" || x.cat === fc) && <div className="text-center py-8 text-sm" style={{ color: C.mute }}>No hay sugerencias en esta categoría.</div>}
       </>}
       {s === "usr" && cuentas && <cuentas.Crear planes={cfg.planes.map((q) => q.nombre)} corte={isoOf(proximoCorte(cfg.dia))} onCreado={(n, plan) => { log(`Cuenta de ${n} creada (${plan === "Prueba" ? "prueba de 48 h" : "plan " + plan})`); flash(`Usuario ${n} creado.`); }} />}
-      {s === "usr" && users.map((u) => (
+      {s === "usr" && <div className="flex gap-2 flex-wrap">{["Todos", "⭐ Preferentes"].map((x) => <Chip key={x} on={filtroUsr === x} onClick={() => setFiltroUsr(x)}>{x} ({x === "Todos" ? users.length : users.filter((u) => u.pref).length})</Chip>)}</div>}
+      {s === "usr" && filtroUsr !== "Todos" && <div className="text-xs rounded-xl p-2.5" style={{ background: C.amberSoft, color: C.amber }}>⭐ Usuarios preferentes: tienen su plan gratis y sin vencimiento a cambio del acuerdo que hiciste con ellos (por ejemplo, mantener captaciones activas). Solo tú ves esta marca; para los demás son agentes normales.</div>}
+      {s === "usr" && users.filter((u) => filtroUsr === "Todos" || u.pref).map((u) => (
         <div key={u.n} className="rounded-2xl p-3 space-y-2" style={{ background: C.card, border: `1px solid ${C.line}` }}>
-          <div className="flex justify-between"><span className="text-sm font-semibold" style={{ color: C.ink }}>{u.n}{u._rol === "admin" ? " · Admin" : ""}{u._email && <span className="block text-xs font-normal" style={{ color: C.mute }}>{u._email}</span>}</span><span className="text-xs" style={{ color: C.mute }}>{u.ant ? `⚠️ ${u.ant} antecedente(s)` : "Sin antecedentes"}</span></div>
+          <div className="flex justify-between"><span className="text-sm font-semibold" style={{ color: C.ink }}>{u.pref ? "⭐ " : ""}{u.n}{u._rol === "admin" ? " · Admin" : ""}{u._email && <span className="block text-xs font-normal" style={{ color: C.mute }}>{u._email}</span>}</span><span className="text-xs" style={{ color: C.mute }}>{u.ant ? `⚠️ ${u.ant} antecedente(s)` : "Sin antecedentes"}</span></div>
           <div className="text-xs" style={{ color: C.mute }}>{u.prueba && u.est === "Prueba" ? `Prueba: inicio ${new Date(u.prueba.inicio).toLocaleString("es-BO")} · vence ${new Date(u.prueba.fin).toLocaleString("es-BO")}` : u.venc ? `Acceso hasta ${fechaL(isoD(u.venc))}` : "Sin fecha de vencimiento"}</div>
           <div className="flex flex-wrap gap-2 items-center"><Ci ci={u.ci} />{u.insc && <span className="text-xs" style={{ color: C.lilaDk }}>Se inscribió en {u.insc.plan} · {fechaL(isoD(u.insc.f))}</span>}</div>
           <div className="grid grid-cols-2 gap-2">
@@ -1145,6 +1151,18 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
             <select value={u.plan} onChange={(e) => setU(u.n, { plan: e.target.value }, `plan cambiado a ${e.target.value}`)} className="rounded-lg px-2 py-1.5 text-sm" style={inp}>{["Prueba", "Gratuito", ...cfg.planes.map((q) => q.nombre)].map((x) => <option key={x}>{x}</option>)}</select>
           </div>
           {u.est === "Activo" && (!u.venc || u.venc < isoOf(HOY)) && <button onClick={() => setU(u.n, { venc: isoOf(proximoCorte(cfg.dia)) }, `acceso habilitado hasta ${fechaL(proximoCorte(cfg.dia))}`)} className="w-full py-2 rounded-lg text-xs font-semibold" style={{ background: C.okSoft, color: C.ok }}>Habilitar acceso hasta el próximo corte ({fechaL(proximoCorte(cfg.dia))})</button>}
+          {u._rol !== "admin" && (u.pref ? <div className="rounded-xl p-2.5 space-y-1.5 text-xs" style={{ background: C.amberSoft, color: C.ink }}>
+            <div className="font-semibold" style={{ color: C.amber }}>⭐ Usuario preferente · plan {u.pref.plan} gratis, sin vencimiento</div>
+            <div>Desde el {fechaL(isoD(u.pref.desde))} · {nCapt(u.n)} captación{nCapt(u.n) !== 1 ? "es" : ""} disponible{nCapt(u.n) !== 1 ? "s" : ""} ahora</div>
+            {u.pref.nota && <div style={{ color: C.mute }}>Acuerdo: {u.pref.nota}</div>}
+            <div className="flex gap-3"><button onClick={() => { setPrefDe(u.n); setPrefF({ plan: u.pref.plan, nota: u.pref.nota || "" }); }} className="underline" style={{ color: C.lilaDk }}>Editar</button><button onClick={() => setU(u.n, { pref: null, est: u.venc && u.venc >= isoOf(HOY) ? "Activo" : "Vencido" }, "dejó de ser usuario preferente")} className="underline" style={{ color: C.red }}>Quitar preferente</button></div>
+          </div> : prefDe !== u.n && <button onClick={() => { setPrefDe(u.n); setPrefF({ plan: "Premium", nota: "" }); }} className="w-full py-2 rounded-lg text-xs font-semibold" style={{ background: C.amberSoft, color: C.amber }}>⭐ Marcar como preferente (acceso gratis)</button>)}
+          {prefDe === u.n && <div className="rounded-xl p-3 space-y-2" style={{ background: "#fff", border: `1.5px solid ${C.amber}` }}>
+            <div className="text-xs font-semibold" style={{ color: C.amber }}>⭐ Acceso preferente para {u.n}</div>
+            <Fld l="Plan que tendrá gratis"><Seg o={cfg.planes.map((q) => q.nombre)} v={prefF.plan} set={(x) => setPrefF({ ...prefF, plan: x })} /></Fld>
+            <Fld l="Acuerdo (solo lo ves tú)"><textarea rows={2} value={prefF.nota} onChange={(e) => setPrefF({ ...prefF, nota: e.target.value })} placeholder="Ej. Mantener al menos 5 captaciones activas" className="w-full rounded-lg px-2 py-1.5 text-sm" style={inp} /></Fld>
+            <div className="grid grid-cols-2 gap-2"><button onClick={() => { setU(u.n, { pref: { plan: prefF.plan, nota: prefF.nota.trim(), desde: (u.pref && u.pref.desde) || isoOf(HOY) }, est: "Activo" }, `usuario preferente · plan ${prefF.plan} gratis`); setPrefDe(null); flash(`${u.n} ahora tiene el plan ${prefF.plan} gratis.`); }} className="py-2 rounded-lg text-xs font-semibold text-white" style={{ background: C.amber }}>Guardar</button><button onClick={() => setPrefDe(null)} className="py-2 rounded-lg text-xs" style={{ border: `1px solid ${C.line}`, color: C.mute }}>Cancelar</button></div>
+          </div>}
           {cuentas && u._uid && <cuentas.Acciones u={u} onHecho={(t) => { log(`${u.n}: ${t}`); flash(t); }} />}
         </div>
       ))}
@@ -1507,7 +1525,21 @@ const PAGOS0 = [
   { id: "p3", de: "Paola Egüez", plan: "Profesional", monto: 99, iso: "2026-10-08", tipo: "Renovación", metodo: "QR", ref: "0044870", est: "Pendiente", comp: null, nota: "Mes completo" },
 ];
 
-function Sus({ acceso, users, setUsers, pagos, setPagos, cfg, flash, nivel, trial }) {
+function Sus(props) {
+  const yo = props.users.find((u) => u.n === ME) || {};
+  if (yo.pref) return (
+    <div className="p-4 space-y-3">
+      <div className="rounded-2xl p-4 space-y-1.5" style={{ background: C.okSoft, border: `1px solid ${C.ok}` }}>
+        <div className="font-bold" style={{ color: C.ok }}>✅ Tu acceso está activo</div>
+        <div className="text-sm" style={{ color: C.ink }}>Tienes el plan <b>{yo.pref.plan}</b> sin fecha de vencimiento, por un acuerdo especial con Vortex. No necesitas realizar pagos.</div>
+      </div>
+      <div className="text-sm font-semibold" style={{ color: C.ink }}>Lo que incluye tu plan</div>
+      {(PLAN_BEN[yo.pref.plan] || []).map((b) => <div key={b} className="text-sm" style={{ color: C.ink }}>✓ {b}</div>)}
+    </div>
+  );
+  return <SusPago {...props} />;
+}
+function SusPago({ acceso, users, setUsers, pagos, setPagos, cfg, flash, nivel, trial }) {
   const [plan, setPlan] = useState(["Inicial", "Profesional", "Premium"].includes(nivel) ? nivel : "Profesional");
   const [metodo, setMetodo] = useState("QR");
   const [meses, setMeses] = useState(1);
@@ -1726,7 +1758,7 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas, onIngresar, o
   PERFIL.datos = mi.perfil || null;
   PERFIL.guardar = (d) => setUsers((us) => us.map((u) => (u.n === ME ? { ...u, perfil: d } : u)));
   const iniciales = ME.split(" ").filter(Boolean).slice(0, 2).map((x) => x[0].toUpperCase()).join("") || "?";
-  const planUser = mi.est === "Activo" && mi.venc && mi.venc >= isoOf(HOY) && (ORD[mi.plan] || 0) >= 1 ? mi.plan : null;
+  const planUser = mi.pref && (ORD[mi.pref.plan] || 0) >= 1 ? mi.pref.plan : mi.est === "Activo" && mi.venc && mi.venc >= isoOf(HOY) && (ORD[mi.plan] || 0) >= 1 ? mi.plan : null;
   const vivo = now < fin;
   const nivel = sim === "admin" ? "admin" : sim === "auto" ? (planUser || (vivo ? "prueba" : "gratuito")) : sim === "prueba" ? (vivo ? "prueba" : "gratuito") : sim;
   const perm = permisos(nivel);
@@ -1806,13 +1838,13 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas, onIngresar, o
   const tabs = [["buscar", "🔍", "Buscar"], ["clientes", "👤", "Requerim."], ["visitas", "📅", "Visitas"], ["alertas", "🔔", "Alertas"], ["perfil", "🧑‍💼", "Perfil"]];
   const avisosPlan = [];
   if (!visitante && sim !== "admin") {
-    if (planUser && mi.venc) {
+    if (planUser && mi.venc && !mi.pref) {
       const dv = Math.round((isoD(mi.venc) - HOY) / 864e5), precioPl = (cfg.planes.find((q) => q.nombre === mi.plan) || {}).precio;
       if (dv <= 5) avisosPlan.push({ id: "venc", sus: true, ic: "⏳", t: dv <= 0 ? `Tu plan ${mi.plan} vence hoy` : `Tu plan ${mi.plan} vence en ${dv} día${dv > 1 ? "s" : ""}`, s: `Fecha de corte: ${fechaL(isoD(mi.venc))}${precioPl ? ` · ${bs(precioPl)}` : ""}. Renueva a tiempo para no perder el acceso. Toca para pagar.`, h: "Aviso de vencimiento" });
     }
     if (acceso === "prueba" && fin - now < 12 * 36e5) avisosPlan.push({ id: "finprueba", sus: true, ic: "⏱", t: "Tu prueba gratuita está por terminar", s: `Te quedan ${cd}. Elige un plan para seguir con acceso completo.`, h: "Aviso de vencimiento" });
   }
-  const diasVenc = planUser && mi.venc ? Math.round((isoD(mi.venc) - HOY) / 864e5) : 99;
+  const diasVenc = planUser && mi.venc && !mi.pref ? Math.round((isoD(mi.venc) - HOY) / 864e5) : 99;
   const banner = visitante ? ["👋 Estás como visitante (plan Gratuito) · Regístrate gratis y prueba 48 h con acceso completo", C.lilaSoft, C.lilaDk] : sim === "auto" && mi.est === "Verificación" ? ["🪪 Tu cuenta está en verificación. Cuando revisemos tu carnet se activarán tus 48 h de prueba", C.lilaSoft, C.lilaDk] : sim === "auto" && mi.est === "Rechazado" ? [`⚠️ No pudimos verificar tu identidad${mi.motRech ? ` (${mi.motRech})` : ""}. Escríbenos o elige un plan`, C.redSoft, C.red] : diasVenc <= 3 ? [`⏳ Tu plan ${mi.plan} vence ${diasVenc <= 0 ? "hoy" : `en ${diasVenc} día${diasVenc > 1 ? "s" : ""}`} · Renueva a tiempo`, C.amberSoft, C.amber] : acceso === "prueba" ? [`⏱ Prueba gratuita · te quedan ${cd}`, C.brandSoft, C.brandDk] : acceso === "vencido" ? ["Plan Gratuito · acceso limitado", C.amberSoft, C.amber] : null;
 
   return (
