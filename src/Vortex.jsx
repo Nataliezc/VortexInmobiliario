@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useSync, useSyncObj } from "./datos";
 import { subir, subirVarios, borrarFotos, subirPrivado } from "./archivos";
-import { ImgSegura, TerminosModal, AdminCiudades, AdminVerificar, AdminMetricas, AdminBorrarTodo, Plantillas, RespuestasRapidas, PLANTILLAS_BASE, TERMINOS_BASE } from "./Extras";
+import { ImgSegura, TerminosModal, AdminCiudades, AdminVerificar, AdminMetricas, AdminBorrarTodo, AdminAgenda, Plantillas, RespuestasRapidas, PLANTILLAS_BASE, TERMINOS_BASE } from "./Extras";
 import { supabase } from "./supabase";
 import { useAtras } from "./atras";
 import { notificar } from "./push";
@@ -941,8 +941,11 @@ function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, s
   );
 }
 
-function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, ops, sugs, setSugs, pagos, setPagos, cfg, setCfg, flash, cuentas, visitas = [], reviews = [] }) {
+function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, ops, sugs, setSugs, pagos, setPagos, cfg, setCfg, flash, cuentas, visitas = [], reviews = [], agenda = [], setAgenda }) {
   const [s, setS] = useState("pag");
+  const [menuAb, setMenuAb] = useState(false);
+  useAtras(menuAb, () => setMenuAb(false));
+  useAtras(s !== "pag" && !menuAb, () => setS("pag"));
   const [rej, setRej] = useState(null);
   const [mot, setMot] = useState("");
   const [filtro, setFiltro] = useState("Todos");
@@ -1003,7 +1006,37 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
       <style>{`@keyframes vp{0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,.55)}50%{box-shadow:0 0 0 9px rgba(220,38,38,0)}}.vpulse{animation:vp 1.6s infinite}`}</style>
       {porVerificar > 0 && s !== "ver" && <button onClick={() => setS("ver")} className="w-full rounded-2xl p-3 text-left text-white" style={{ background: "linear-gradient(135deg,#7928CA,#4F46E5)" }}><div className="font-bold">🪪 {porVerificar} registro{porVerificar > 1 ? "s" : ""} por verificar</div><div className="text-xs opacity-90">Revisa el carnet para activar su prueba de 48 h ›</div></button>}
       {pPend.length > 0 ? <button onClick={() => setS("pag")} className="w-full rounded-2xl p-3 text-left text-white vpulse" style={{ background: "linear-gradient(135deg,#F59E0B,#DC2626)" }}><div className="flex justify-between items-center"><div><div className="font-bold">🔔 {pPend.length} pago{pPend.length > 1 ? "s" : ""} por aprobar</div><div className="text-xs opacity-90">{bs(pPend.reduce((a, p) => a + p.monto, 0))} esperando tu verificación</div></div><span className="text-sm font-semibold underline">Revisar ›</span></div></button> : <div className="rounded-xl p-2 text-xs text-center" style={{ background: C.okSoft, color: C.ok }}>✓ Sin pagos pendientes de aprobar</div>}
-      <div className="flex gap-2 overflow-x-auto">{[["pag", `💳 Pagos (${pPend.length})`], ...(porVerificar ? [["ver", `🪪 Verificar (${porVerificar})`]] : []), ["met", "📈 Métricas"], ["fin", "📊 Finanzas"], ["cfg", "⚙️ Configuración"], ["rep", `Reportes (${pend})`], ["sug", `Sugerencias (${nuevas})`], ["usr", "Usuarios"], ["res", "Resumen"], ["aud", "Auditoría"]].map(([k, l]) => <Chip key={k} on={s === k} onClick={() => setS(k)}>{l}</Chip>)}</div>
+      {(() => {
+        const hoyIso = isoOf(HOY), evHoy = agenda.filter((e) => e.f === hoyIso && !e.hecho).length;
+        const SECC = [
+          ["Operación", [["pag", "💳", "Pagos", pPend.length], ["age", "📅", "Agenda", evHoy], ...(porVerificar ? [["ver", "🪪", "Verificar", porVerificar]] : []), ["usr", "👥", "Usuarios", 0], ["rep", "🚩", "Reportes", pend], ["sug", "💡", "Sugerencias", nuevas]]],
+          ["Negocio", [["met", "📈", "Métricas", 0], ["fin", "📊", "Finanzas", 0], ["res", "📋", "Resumen", 0]]],
+          ["Sistema", [["cfg", "⚙️", "Configuración", 0], ["aud", "🧾", "Auditoría", 0]]],
+        ];
+        const actual = SECC.flatMap((g) => g[1]).find((x) => x[0] === s) || SECC[0][1][0];
+        return <>
+          <div className="flex items-center gap-3">
+            <button onClick={() => setMenuAb(true)} aria-label="Abrir menú" className="w-11 h-11 rounded-xl flex flex-col items-center justify-center gap-1 shrink-0" style={{ background: C.grad }}>{[0, 1, 2].map((i) => <i key={i} style={{ width: 18, height: 2, borderRadius: 2, background: "#fff" }} />)}</button>
+            <div className="flex-1 min-w-0"><div className="text-xs" style={{ color: C.mute }}>Panel SuperAdmin</div><div className="font-bold text-lg truncate" style={{ color: C.ink }}>{actual[1]} {actual[2]}</div></div>
+            {s === "pag" && evHoy > 0 && <button onClick={() => setS("age")} className="text-xs px-2.5 py-1.5 rounded-full font-semibold" style={{ background: C.lilaSoft, color: C.lilaDk }}>📅 {evHoy} hoy</button>}
+          </div>
+          {menuAb && <div className="absolute inset-0 z-40 flex" style={{ background: "rgba(30,27,58,.45)" }} onClick={() => setMenuAb(false)}>
+            <div className="h-full overflow-y-auto vx-menu-izq" style={{ width: "78%", maxWidth: 300, background: C.card, boxShadow: "6px 0 24px rgba(0,0,0,.15)" }} onClick={(e) => e.stopPropagation()}>
+              <div className="p-4 flex items-center justify-between" style={{ background: C.grad, color: "#fff" }}><div><div className="text-xs opacity-80">VORTEX</div><div className="font-bold">Panel SuperAdmin</div></div><button onClick={() => setMenuAb(false)} className="text-2xl leading-none" aria-label="Cerrar">×</button></div>
+              {SECC.map(([g, items]) => (
+                <div key={g} className="py-2">
+                  <div className="px-4 py-1 text-xs font-semibold uppercase" style={{ color: C.mute, letterSpacing: ".06em" }}>{g}</div>
+                  {items.map(([k, ic, l, n]) => (
+                    <button key={k} onClick={() => { setS(k); setMenuAb(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm" style={{ background: s === k ? C.lilaSoft : "transparent", color: s === k ? C.lilaDk : C.ink, fontWeight: s === k ? 700 : 500, borderLeft: `4px solid ${s === k ? C.lila : "transparent"}` }}>
+                      <span className="text-lg w-6 text-center">{ic}</span><span className="flex-1">{l}</span>{n > 0 && <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ background: k === "age" ? C.lila : C.red }}>{n}</span>}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>}
+        </>;
+      })()}
       {s === "pag" && <>
         {!pPend.length && <div className="text-center py-6 text-sm" style={{ color: C.mute }}>No hay pagos pendientes. Cuando un agente envíe su comprobante aparecerá aquí.</div>}
         {pPend.map((p) => (
@@ -1167,6 +1200,7 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
         </div>
       ))}
       {s === "ver" && <AdminVerificar users={users} setU={setU} />}
+      {s === "age" && <AdminAgenda users={users} cfg={cfg} pagos={pagos} agenda={agenda} setAgenda={setAgenda} flash={flash} />}
       {s === "met" && <AdminMetricas users={users} pagos={pagos} props={props} ops={ops} cfg={cfg} flash={flash} respaldo={{ perfiles: users, propiedades: props, pagos, operaciones: ops, visitas, reportes: reports, sugerencias: sugs, resenas: reviews, auditoria: audit, cfg }} />}
       {s === "res" && <div className="grid grid-cols-2 gap-2">
         {[["Agentes", users.length], ["Propiedades activas", act.length], ["Sin confirmar", act.filter((p) => vigencia(p).n === 2).length], ["Cierres", ops.length], ["Reportes abiertos", pend], ["Cuentas vencidas", users.filter((u) => u.est === "Vencido").length]].map(([a, b]) => (
@@ -1737,6 +1771,7 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas, onIngresar, o
   const plantillas = plantObj.lista || [];
   const setPlantillas = (l) => setPlantObj((o) => ({ ...o, lista: l }));
   const [rr, setRr] = useState(null);
+  const [agObj, setAgObj] = useSyncObj("ajustes_usuario", "agenda", { lista: [], ...(inicial.agenda || {}) }, sesion);
   useAtras(!!rr, () => setRr(null));
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get("p");
@@ -1858,7 +1893,7 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas, onIngresar, o
         <div style={{ height: 3, background: C.grad }} />
         {banner && <button onClick={goSub} className="w-full text-left text-xs px-4 py-2 font-medium" style={{ background: banner[1], color: banner[2] }}>{banner[0]}{visitante ? " ›" : " · Ver planes ›"}</button>}
         <div className="flex-1 overflow-y-auto">
-          {acceso === "admin" ? <Admin reports={reports} setReports={setReports} users={users} setUsers={setUsers} audit={audit} setAudit={setAudit} props={props} ops={ops} sugs={sugs} setSugs={setSugs} pagos={pagos} setPagos={setPagos} cfg={cfg} setCfg={setCfg} flash={flash} cuentas={cuentas} visitas={visitas} reviews={reviews} />
+          {acceso === "admin" ? <Admin reports={reports} setReports={setReports} users={users} setUsers={setUsers} audit={audit} setAudit={setAudit} props={props} ops={ops} sugs={sugs} setSugs={setSugs} pagos={pagos} setPagos={setPagos} cfg={cfg} setCfg={setCfg} flash={flash} cuentas={cuentas} visitas={visitas} reviews={reviews} agenda={agObj.lista || []} setAgenda={(l) => setAgObj((o) => ({ ...o, lista: l }))} />
             : sel ? <Detalle p={sel} acceso={acceso} onBack={() => setSel(null)} onVisit={agendar} onReport={setReportando} users={users} onSub={goSub} perm={perm} rate={rate} onProfile={setPerfilDe} favs={favs} toggleFav={toggleFav} clientes={clientes} flash={flash} onRespuestas={setRr} />
             : visitante && tab !== "buscar" ? <Invitacion tab={tab} onRegistro={onRegistro} onIngresar={onIngresar} />
             : tab === "buscar" ? <Buscar acceso={acceso} open={open} props={props} rate={rate} favs={favs} perm={perm} goSub={goSub} busq={busq} setBusq={setBusq} moneda={moneda} setMoneda={setMoneda} />

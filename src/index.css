@@ -12,3 +12,7 @@ body { background: #E3DEF3; -webkit-tap-highlight-color: transparent; }
   .vx-frame { max-width: none; border: 0; border-radius: 0; box-shadow: none; }
   .vx-simbar { padding-top: 8px; margin-bottom: 6px !important; }
 }
+
+/* Menú lateral deslizable del panel de administración */
+@keyframes vxEntraIzq { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+.vx-menu-izq { animation: vxEntraIzq .22s ease-out; }

@@ -291,3 +291,98 @@ export function AdminBorrarTodo() {
     </div>
   );
 }
+
+// ───────── Agenda del administrador con calendario ─────────
+const MESES_L = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+const TIPOS_EV = { Reunión: "🤝", Llamada: "📞", Cobro: "💰", Recordatorio: "🔔", Otro: "📌" };
+const pad2 = (n) => String(n).padStart(2, "0");
+const isoDia = (y, m, d) => `${y}-${pad2(m + 1)}-${pad2(d)}`;
+
+export function AdminAgenda({ users, cfg, pagos, agenda, setAgenda, flash }) {
+  const hoy = isoOf(HOY);
+  const [vm, setVm] = useState({ y: HOY.getFullYear(), m: HOY.getMonth() });
+  const [sel, setSel] = useState(hoy);
+  const [form, setForm] = useState(null);
+
+  // Eventos automáticos del negocio
+  const autos = (iso) => {
+    const out = [];
+    const d = +iso.slice(8, 10);
+    if (d === (+cfg.dia || 5)) out.push({ ic: "💳", t: "Día de corte de pagos", c: C.red });
+    users.filter((u) => u._rol !== "admin" && !u.pref && u.est === "Activo" && u.venc === iso).forEach((u) => out.push({ ic: "⏳", t: `Vence el plan ${u.plan} de ${u.n}`, c: C.amber }));
+    users.filter((u) => u.est === "Prueba" && u.prueba && isoOf(new Date(u.prueba.fin)) === iso).forEach((u) => out.push({ ic: "⏱", t: `Termina la prueba de ${u.n}`, c: C.amber }));
+    pagos.filter((p) => p.est === "Pendiente" && p.iso === iso).forEach((p) => out.push({ ic: "💳", t: `Pago pendiente de ${p.de} (${bs(p.monto)})`, c: C.red }));
+    return out;
+  };
+  const propios = (iso) => agenda.filter((e) => e.f === iso).sort((a, b) => (a.h || "").localeCompare(b.h || ""));
+
+  const primero = new Date(vm.y, vm.m, 1);
+  const off = (primero.getDay() + 6) % 7;
+  const dias = new Date(vm.y, vm.m + 1, 0).getDate();
+  const celdas = [...Array(off).fill(null), ...Array.from({ length: dias }, (_, i) => i + 1)];
+  const ir = (n) => { const d = new Date(vm.y, vm.m + n, 1); setVm({ y: d.getFullYear(), m: d.getMonth() }); };
+  const guardar = () => {
+    if (!form.t.trim()) { flash("Escribe un título para el evento."); return; }
+    const ev = { ...form, t: form.t.trim(), nota: (form.nota || "").trim() };
+    setAgenda(agenda.some((e) => e.id === ev.id) ? agenda.map((e) => (e.id === ev.id ? ev : e)) : [...agenda, ev]);
+    setSel(ev.f); setForm(null); flash("Evento guardado en tu agenda.");
+  };
+  const delDia = propios(sel), autoDia = autos(sel);
+  const pendientesHoy = propios(hoy).filter((e) => !e.hecho).length;
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-2xl p-3" style={{ background: C.card, border: `1px solid ${C.line}` }}>
+        <div className="flex items-center justify-between mb-2">
+          <button onClick={() => ir(-1)} className="w-9 h-9 rounded-full text-lg" style={{ background: C.lilaSoft, color: C.lilaDk }}>‹</button>
+          <div className="text-center"><div className="font-bold" style={{ color: C.ink }}>{MESES_L[vm.m]} {vm.y}</div>{(vm.y !== HOY.getFullYear() || vm.m !== HOY.getMonth()) && <button onClick={() => { setVm({ y: HOY.getFullYear(), m: HOY.getMonth() }); setSel(hoy); }} className="text-xs underline" style={{ color: C.lilaDk }}>Ir a hoy</button>}</div>
+          <button onClick={() => ir(1)} className="w-9 h-9 rounded-full text-lg" style={{ background: C.lilaSoft, color: C.lilaDk }}>›</button>
+        </div>
+        <div className="grid grid-cols-7 gap-1 text-center" style={{ fontSize: 11, color: C.mute }}>{["L", "M", "M", "J", "V", "S", "D"].map((d, i) => <div key={i} className="py-1 font-semibold">{d}</div>)}</div>
+        <div className="grid grid-cols-7 gap-1">
+          {celdas.map((d, i) => {
+            if (!d) return <div key={i} />;
+            const iso = isoDia(vm.y, vm.m, d), ev = propios(iso), au = autos(iso), esSel = iso === sel, esHoy = iso === hoy;
+            return (
+              <button key={i} onClick={() => setSel(iso)} className="rounded-lg flex flex-col items-center justify-center" style={{ height: 44, background: esSel ? C.lila : esHoy ? C.lilaSoft : "transparent", color: esSel ? "#fff" : C.ink, border: esHoy && !esSel ? `1px solid ${C.lila}` : "1px solid transparent" }}>
+                <span className="text-sm font-semibold">{d}</span>
+                <span className="flex gap-0.5" style={{ height: 6 }}>{ev.length > 0 && <i style={{ width: 5, height: 5, borderRadius: 9, background: esSel ? "#fff" : C.lila }} />}{au.length > 0 && <i style={{ width: 5, height: 5, borderRadius: 9, background: esSel ? "#fff" : au.some((a) => a.c === C.red) ? C.red : C.amber }} />}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex gap-3 justify-center mt-2" style={{ fontSize: 10, color: C.mute }}><span>● <span style={{ color: C.lila }}>Tus eventos</span></span><span>● <span style={{ color: C.amber }}>Vencimientos</span></span><span>● <span style={{ color: C.red }}>Cortes y pagos</span></span></div>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div className="font-semibold" style={{ color: C.ink }}>{sel === hoy ? "Hoy" : fechaL(isoD(sel))}{sel === hoy && pendientesHoy ? ` · ${pendientesHoy} pendiente${pendientesHoy > 1 ? "s" : ""}` : ""}</div>
+        {!form && <button onClick={() => setForm({ id: "e" + Date.now(), f: sel, h: "09:00", t: "", nota: "", tipo: "Reunión", hecho: false })} className="text-sm px-3 py-1.5 rounded-full text-white" style={{ background: C.grad }}>+ Nuevo evento</button>}
+      </div>
+
+      {form && <div className="rounded-2xl p-3 space-y-2" style={{ background: C.card, border: `2px solid ${C.lila}` }}>
+        <Fld l="Título"><input value={form.t} onChange={(e) => setForm({ ...form, t: e.target.value })} placeholder="Ej. Reunión con agentes de Santa Cruz" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} autoFocus /></Fld>
+        <div className="flex flex-wrap gap-1.5">{Object.entries(TIPOS_EV).map(([k, ic]) => <Chip key={k} on={form.tipo === k} onClick={() => setForm({ ...form, tipo: k })}>{ic} {k}</Chip>)}</div>
+        <div className="grid grid-cols-2 gap-2">
+          <Fld l="Fecha"><input type="date" value={form.f} onChange={(e) => setForm({ ...form, f: e.target.value })} className="w-full rounded-xl px-2 py-2 text-sm" style={inp} /></Fld>
+          <Fld l="Hora"><input type="time" value={form.h} onChange={(e) => setForm({ ...form, h: e.target.value })} className="w-full rounded-xl px-2 py-2 text-sm" style={inp} /></Fld>
+        </div>
+        <Fld l="Nota (opcional)"><textarea rows={2} value={form.nota} onChange={(e) => setForm({ ...form, nota: e.target.value })} className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
+        <div className="grid grid-cols-2 gap-2"><button onClick={guardar} className="py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: C.lila }}>Guardar</button><button onClick={() => setForm(null)} className="py-2.5 rounded-xl text-sm" style={{ border: `1px solid ${C.line}`, color: C.mute }}>Cancelar</button></div>
+      </div>}
+
+      {!delDia.length && !autoDia.length && !form && <div className="text-center py-5 text-sm rounded-2xl" style={{ color: C.mute, background: C.card, border: `1px dashed ${C.line}` }}>No hay nada agendado para este día.</div>}
+      {delDia.map((e) => (
+        <div key={e.id} className="rounded-2xl p-3 flex gap-3" style={{ background: C.card, border: `1px solid ${C.line}`, opacity: e.hecho ? 0.6 : 1 }}>
+          <button onClick={() => setAgenda(agenda.map((x) => (x.id === e.id ? { ...x, hecho: !x.hecho } : x)))} title="Marcar como hecho" className="w-6 h-6 rounded-md shrink-0 mt-0.5 flex items-center justify-center text-xs" style={{ border: `2px solid ${C.lila}`, background: e.hecho ? C.lila : "transparent", color: "#fff" }}>{e.hecho ? "✓" : ""}</button>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-semibold" style={{ color: C.ink, textDecoration: e.hecho ? "line-through" : "none" }}>{TIPOS_EV[e.tipo] || "📌"} {e.t}</div>
+            <div className="text-xs" style={{ color: C.mute }}>{e.h || "Todo el día"} · {e.tipo}</div>
+            {e.nota && <div className="text-xs mt-1 whitespace-pre-line" style={{ color: C.ink }}>{e.nota}</div>}
+            <div className="flex gap-3 mt-1 text-xs"><button onClick={() => setForm(e)} className="underline" style={{ color: C.lilaDk }}>Editar</button><button onClick={() => setAgenda(agenda.filter((x) => x.id !== e.id))} className="underline" style={{ color: C.red }}>Borrar</button></div>
+          </div>
+        </div>
+      ))}
+      {autoDia.map((a, i) => <div key={i} className="rounded-xl px-3 py-2 text-sm flex gap-2" style={{ background: C.bg, border: `1px solid ${C.line}`, color: C.ink }}><span>{a.ic}</span><span className="flex-1">{a.t}</span><span className="text-xs" style={{ color: a.c }}>automático</span></div>)}
+    </div>
+  );
+}
