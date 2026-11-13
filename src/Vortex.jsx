@@ -953,7 +953,7 @@ function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, s
   const [retirando, setRetirando] = useState(null);
   const [motivo, setMotivo] = useState({ m: MOTIVOS_CAIDA[0], d: "" });
   const [reservando, setReservando] = useState(null);
-  const [resF, setResF] = useState({ monto: "", fechaSaldo: "", fechaFirma: "" });
+  const [resF, setResF] = useState({ monto: "", fecha: "" });
   const [pausando, setPausando] = useState(null);
   const [pausaF, setPausaF] = useState("");
   const [eliminando, setEliminando] = useState(null);
@@ -1041,13 +1041,17 @@ function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, s
             <div className="flex gap-2">
               <select disabled={vencido} value={est} onChange={(e) => {
                 const nv = e.target.value;
-                if (nv === "Caído") { setRetirando(p.id); setMotivo({ m: MOTIVOS_CAIDA[0], d: "" }); return; }
-                if (nv === "Cerrado") { upd(p.id, { est: "Cerrado", opPend: true }); setPre(String(p.id)); setSub("ops"); flash("Ya no aparece en el buscador. Registra el cierre para completarlo oficialmente."); return; }
+                // Al cambiar de estado se cierra cualquier otro panel que hubiera quedado abierto
+                setRetirando(null); setReservando(null); setPausando(null);
+                if (nv === "Caído") { setMotivo({ m: MOTIVOS_CAIDA[0], d: "" }); setRetirando(p.id); return; }
+                if (nv === "Cerrado") { upd(p.id, { est: "Cerrado", opPend: true, reservaMonto: null, reservaFecha: null, pausaMotivo: null }); setPre(String(p.id)); setSub("ops"); flash("Ya no aparece en el buscador. Registra el cierre para completarlo oficialmente."); return; }
                 if (["Disponible", "Reservado"].includes(nv) && !["Disponible", "Reservado"].includes(est) && perm.maxCapt && activas >= perm.maxCapt) { flash(`Tu plan ${nivel} permite ${perm.maxCapt} captaciones activas.`); return; }
-                upd(p.id, { est: nv, opPend: false });
+                // Se limpian los datos propios de los estados anteriores: ya no aplican al nuevo estado
+                const limpiar = { reservaMonto: null, reservaFecha: null, pausaMotivo: null, motivoRet: null, fechaCaidaProp: null };
+                upd(p.id, { ...limpiar, est: nv, opPend: false });
                 setFiltroCapt(nv);
-                if (nv === "Reservado") { setReservando(p.id); setResF({ monto: p.reservaMonto ? String(p.reservaMonto) : "", fechaSaldo: p.reservaFechaSaldo || "", fechaFirma: p.reservaFechaFirma || "" }); }
-                else if (nv === "En pausa") { setPausando(p.id); setPausaF(p.pausaMotivo || ""); }
+                if (nv === "Reservado") { setResF({ monto: "", fecha: "" }); setReservando(p.id); }
+                else if (nv === "En pausa") { setPausaF(""); setPausando(p.id); }
               }} className="flex-1 rounded-lg px-2 py-1.5 text-sm" style={inp}>{ESTADOS.filter((e) => e !== "Cerrado" || est === "Cerrado").map((e) => <option key={e} value={e}>{EMO[e]} {e}</option>)}</select>
               <button onClick={async () => { const ok = await copiarTexto(textoCopy(p, miTel())); flash(ok ? (waNum(miTel()).length < 8 ? "Copy copiado. Tip: agrega tu WhatsApp en Mis datos para incluir tu enlace." : "Copy copiado con tu enlace de WhatsApp. Pégalo en el chat de tu cliente.") : "No se pudo copiar automáticamente."); }} className="px-3 py-1.5 rounded-lg text-sm font-semibold text-white" style={{ background: C.lila }}>📋 Copiar copy</button>
               {(p.est || "Disponible") === "Disponible" && <a href={`https://wa.me/?text=${encodeURIComponent(textoGrupo(p))}`} target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-lg text-sm font-semibold text-white" style={{ background: "#25D366" }}>📢 Compartir en grupos</a>}
@@ -1066,10 +1070,9 @@ function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, s
               <div className="text-sm font-semibold" style={{ color: C.amber }}>Detalles de la reserva (opcional)</div>
               <Fld l={`¿Con cuánto dinero se hizo la reserva? (${p.mon})`}><input value={resF.monto} onChange={(e) => setResF({ ...resF, monto: e.target.value.replace(/\D/g, "") })} inputMode="numeric" placeholder="Ej. 500" className="w-full rounded-lg px-2 py-1.5 text-sm" style={inp} /></Fld>
               {+resF.monto > 0 && <div className="text-xs" style={{ color: C.ink }}>Saldo pendiente: {fm(Math.max(0, p.precio - (+resF.monto || 0)), p.mon)}</div>}
-              <Fld l="¿Cuándo vence el plazo para pagar el saldo?"><input type="date" value={resF.fechaSaldo} onChange={(e) => setResF({ ...resF, fechaSaldo: e.target.value })} className="w-full rounded-lg px-2 py-1.5 text-sm" style={inp} /></Fld>
-              <Fld l="¿Cuándo es la firma y el pago del restante?"><input type="date" value={resF.fechaFirma} onChange={(e) => setResF({ ...resF, fechaFirma: e.target.value })} className="w-full rounded-lg px-2 py-1.5 text-sm" style={inp} /></Fld>
+              <Fld l="¿Cuándo se paga el saldo y se firma el contrato?"><input type="date" value={resF.fecha} onChange={(e) => setResF({ ...resF, fecha: e.target.value })} className="w-full rounded-lg px-2 py-1.5 text-sm" style={inp} /></Fld>
               <div className="grid grid-cols-2 gap-2">
-                <button onClick={() => { upd(p.id, { reservaMonto: +resF.monto || null, reservaFechaSaldo: resF.fechaSaldo || null, reservaFechaFirma: resF.fechaFirma || null }); setReservando(null); flash("Detalles de la reserva guardados."); }} className="py-2 rounded-lg text-sm font-semibold text-white" style={{ background: C.amber }}>Guardar</button>
+                <button onClick={() => { upd(p.id, { reservaMonto: +resF.monto || null, reservaFecha: resF.fecha || null }); setReservando(null); flash("Detalles de la reserva guardados."); }} className="py-2 rounded-lg text-sm font-semibold text-white" style={{ background: C.amber }}>Guardar</button>
                 <button onClick={() => setReservando(null)} className="py-2 rounded-lg text-sm" style={{ background: "#fff", color: C.mute }}>Omitir por ahora</button>
               </div>
             </div>}
@@ -1081,8 +1084,8 @@ function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, s
                 <button onClick={() => setPausando(null)} className="py-2 rounded-lg text-sm" style={{ background: "#fff", color: C.mute }}>Omitir por ahora</button>
               </div>
             </div>}
-            {est === "Reservado" && reservando !== p.id && p.reservaMonto > 0 && <div className="text-xs rounded-lg px-2.5 py-1.5" style={{ background: C.amberSoft, color: C.amber }}>Reserva: {fm(p.reservaMonto, p.mon)} · Saldo {fm(Math.max(0, p.precio - p.reservaMonto), p.mon)}{p.reservaFechaSaldo ? ` · vence el ${fechaL(isoD(p.reservaFechaSaldo))}` : ""}{p.reservaFechaFirma ? ` · firma el ${fechaL(isoD(p.reservaFechaFirma))}` : ""} <button onClick={() => { setReservando(p.id); setResF({ monto: String(p.reservaMonto || ""), fechaSaldo: p.reservaFechaSaldo || "", fechaFirma: p.reservaFechaFirma || "" }); }} className="underline font-semibold">Editar</button></div>}
-            {est === "En pausa" && pausando !== p.id && p.pausaMotivo && <div className="text-xs rounded-lg px-2.5 py-1.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Motivo: {p.pausaMotivo} <button onClick={() => { setPausando(p.id); setPausaF(p.pausaMotivo || ""); }} className="underline font-semibold">Editar</button></div>}
+            {est === "Reservado" && reservando !== p.id && p.reservaMonto > 0 && <div className="text-xs rounded-lg px-2.5 py-1.5" style={{ background: C.amberSoft, color: C.amber }}>Reserva: {fm(p.reservaMonto, p.mon)} · Saldo {fm(Math.max(0, p.precio - p.reservaMonto), p.mon)}{p.reservaFecha ? ` · firma y pago el ${fechaL(isoD(p.reservaFecha))}` : ""} <button onClick={() => { setResF({ monto: String(p.reservaMonto || ""), fecha: p.reservaFecha || "" }); setReservando(p.id); }} className="underline font-semibold">Editar</button></div>}
+            {est === "En pausa" && pausando !== p.id && p.pausaMotivo && <div className="text-xs rounded-lg px-2.5 py-1.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Motivo: {p.pausaMotivo} <button onClick={() => { setPausaF(p.pausaMotivo || ""); setPausando(p.id); }} className="underline font-semibold">Editar</button></div>}
             {est === "Caído" && p.motivoRet && <div className="text-xs rounded-lg px-2.5 py-1.5" style={{ background: C.redSoft, color: C.red }}>Motivo: {p.motivoRet}{p.fechaCaidaProp ? ` · ${fechaL(isoD(p.fechaCaidaProp))}` : ""}</div>}
             {eliminando === p.id ? <div className="rounded-xl p-3 space-y-2" style={{ background: C.redSoft }}>
               <div className="text-xs" style={{ color: C.ink }}>¿Eliminar <b>{p.t}</b> para siempre? Se borran sus fotos y datos. No se puede deshacer.</div>
