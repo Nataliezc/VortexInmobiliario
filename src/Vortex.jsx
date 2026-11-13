@@ -71,11 +71,13 @@ const precioCopy = (p) => `${moneyOrig(p)}${p.mon === "USD" ? (tcFijo(p) ? ` (TC
 const enMoneda = (p) => (p.mon === MONEDA ? p.precio : MONEDA === "USD" ? p.precio / BOB : p.precio * (tcFijo(p) || BOB));
 
 function match(r, p) {
+  const sinDorm = r.tipo && ["Terreno", "Oficina", "Comercial"].includes(r.tipo);
   const strict = [
     ["Operación", p.op === r.op, p.op],
+    ["Tipo", !r.tipo || r.tipo === "Indiferente" || p.tipo === r.tipo, p.tipo],
     ["Ciudad", p.ciudad === r.ciudad, p.ciudad],
     ["Presupuesto", usd(p) <= reqUsd(r) * 1.0, money(p)],
-    ["Dormitorios", p.dorm >= r.dorm, `${p.dorm} dormitorios`],
+    ["Dormitorios", sinDorm || p.dorm >= r.dorm, `${p.dorm} dormitorios`],
   ];
   const weighted = [
     ["Zona", p.zona === r.zona, p.zona === r.zona ? p.zona : `Zona diferente (${p.zona})`, 3],
@@ -267,87 +269,131 @@ function Buscar({ acceso, open, props, rate, favs, perm, goSub, busq, setBusq, m
 
 function Clientes({ acceso, open, props, clientes, setClientes, favs, toggleFav, delCliente, perm, visitas, goSub, flash }) {
   const [vistaReq, setVistaReq] = useState("mios");
+  const [subReq, setSubReq] = useState("detalle");
+  const [menuAb, setMenuAb] = useState(false);
   const [conf, setConf] = useState(false);
   const [nota, setNota] = useState("");
   const [sel, setSel] = useState(clientes[0] ? clientes[0].id : null);
-  const [nuevo, setNuevo] = useState(false);
-  useAtras(nuevo, () => setNuevo(false));
+  const [nuevo, setNuevo] = useState(false); // false | true (nuevo) | objeto del cliente (editando)
+  useAtras(!!nuevo, () => setNuevo(false));
+  useAtras(menuAb, () => setMenuAb(false));
   useAtras(vistaReq === "red", () => setVistaReq("mios"));
   const [err, setErr] = useState("");
-  const [f, setF] = useState({ n: "", op: "Alquiler", ciudad: Object.keys(ZONAS)[0] || "La Paz", zona: "", max: "", mon: MONEDA, dorm: "2", garaje: "Indiferente", mascotas: "Indiferente", amoblado: "Indiferente", compartir: true });
+  const vacioF = { n: "", op: "Alquiler", tipo: "Indiferente", ciudad: Object.keys(ZONAS)[0] || "La Paz", zona: "", max: "", mon: MONEDA, dorm: "2", garaje: "Indiferente", mascotas: "Indiferente", amoblado: "Indiferente", obs: "", compartir: true };
+  const [f, setF] = useState(vacioF);
   const s = (k) => (v) => setF({ ...f, [k]: v });
   const num = (k) => (e) => s(k)(e.target.value.replace(/\D/g, ""));
   const tri = ["Obligatorio", "Preferido", "Indiferente"];
+  const editando = typeof nuevo === "object" ? nuevo : null;
+  const sinDorm = ["Terreno", "Oficina", "Comercial"].includes(f.tipo);
+  const abrirNuevo = () => { setF(vacioF); setNuevo(true); setMenuAb(false); };
+  const abrirEditar = (c) => { setF({ n: c.n, op: c.op, tipo: c.tipo || "Indiferente", ciudad: c.ciudad, zona: c.zona || "", max: String(c.max), mon: c.mon, dorm: String(c.dorm || 0), garaje: c.garaje, mascotas: c.mascotas, amoblado: c.amoblado, obs: c.obs || "", compartir: !c.priv }); setNuevo(c); };
   const save = () => {
     if (!f.n || !f.max) { setErr("Indica el nombre del cliente y su presupuesto máximo."); return; }
-    const c = { id: Date.now(), n: f.n, op: f.op, ciudad: f.ciudad, zona: f.zona, max: +f.max, mon: f.mon, dorm: +f.dorm || 0, garaje: f.garaje, mascotas: f.mascotas, amoblado: f.amoblado, etapa: "Nuevo", mov: isoOf(HOY), notas: [], prox: null, priv: !f.compartir };
-    setClientes([...clientes, c]); setSel(c.id); setNuevo(false); setErr("");
+    const datos = { n: f.n, op: f.op, tipo: f.tipo, ciudad: f.ciudad, zona: f.zona, max: +f.max, mon: f.mon, dorm: sinDorm ? 0 : +f.dorm || 0, garaje: f.garaje, mascotas: f.mascotas, amoblado: f.amoblado, obs: f.obs.trim(), priv: !f.compartir };
+    if (editando) { setClientes(clientes.map((c) => (c.id === editando.id ? { ...c, ...datos } : c))); setSel(editando.id); flash("Requerimiento actualizado."); }
+    else { const c = { id: Date.now(), ...datos, etapa: "Nuevo", mov: isoOf(HOY), notas: [], prox: null }; setClientes([...clientes, c]); setSel(c.id); setSubReq("detalle"); }
+    setNuevo(false); setErr("");
   };
   if (nuevo) return (
     <div className="p-4 space-y-4">
       <button onClick={() => setNuevo(false)} className="text-sm" style={{ color: C.brandDk }}>‹ Volver</button>
-      <h2 className="font-semibold text-lg" style={{ color: C.ink }}>Nuevo requerimiento</h2>
+      <h2 className="font-semibold text-lg" style={{ color: C.ink }}>{editando ? "Editar requerimiento" : "Nuevo requerimiento"}</h2>
       <Fld l="Nombre del cliente"><input value={f.n} onChange={(e) => s("n")(e.target.value)} className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
       <Fld l="Operación"><Seg o={["Venta", "Alquiler", "Anticrético", "Preventa"]} v={f.op} set={s("op")} /></Fld>
+      <Fld l="Tipo de inmueble"><Seg o={[...TIPOS_INM, "Otro", "Indiferente"]} v={f.tipo} set={s("tipo")} /></Fld>
       <Fld l="Ciudad"><Seg o={Object.keys(ZONAS)} v={f.ciudad} set={s("ciudad")} /></Fld>
-      <Fld l="Zona preferida"><input value={f.zona} onChange={(e) => s("zona")(e.target.value)} placeholder="Ej. Norte" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
+      <Fld l="Zona preferida"><input list="zonas" value={f.zona} onChange={(e) => s("zona")(e.target.value)} placeholder="Ej. Norte" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /><datalist id="zonas">{(ZONAS[f.ciudad] || []).map((z) => <option key={z} value={z} />)}</datalist></Fld>
       <div className="grid grid-cols-2 gap-3">
         <Fld l="Presupuesto máximo"><input value={f.max} onChange={num("max")} inputMode="numeric" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
         <Fld l="Moneda"><Seg o={["Bs", "USD"]} v={f.mon === "BOB" ? "Bs" : f.mon} set={(x) => s("mon")(x === "Bs" ? "BOB" : "USD")} /></Fld>
-        <Fld l="Dormitorios (mín.)"><input value={f.dorm} onChange={num("dorm")} inputMode="numeric" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
+        {!sinDorm && <Fld l="Dormitorios (mín.)"><input value={f.dorm} onChange={num("dorm")} inputMode="numeric" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>}
       </div>
       <Fld l="Garaje"><Seg o={tri} v={f.garaje} set={s("garaje")} /></Fld>
       <Fld l="Mascotas"><Seg o={["Sí", "No", "Indiferente"]} v={f.mascotas} set={s("mascotas")} /></Fld>
       <Fld l="Amoblado"><Seg o={tri} v={f.amoblado} set={s("amoblado")} /></Fld>
+      <Fld l="Observaciones"><textarea rows={3} value={f.obs} onChange={(e) => s("obs")(e.target.value)} placeholder="Ej. Solo puede visitar los fines de semana, prefiere edificios con ascensor…" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
       <label className="flex gap-2 items-start text-sm rounded-xl p-3 cursor-pointer" style={{ background: C.lilaSoft, color: C.lilaDk }}><input type="checkbox" checked={f.compartir} onChange={(e) => s("compartir")(e.target.checked)} className="mt-1" /><span>🌐 Compartir con otros agentes<span className="block text-xs" style={{ color: C.mute }}>Verán lo que busca tu cliente (sin su nombre) y podrán ofrecerte propiedades.</span></span></label>
       {err && <div className="text-sm" style={{ color: C.red }}>{err}</div>}
-      <button onClick={save} className="w-full py-3 rounded-xl font-semibold text-white" style={{ background: C.grad }}>Guardar requerimiento</button>
+      <button onClick={save} className="w-full py-3 rounded-xl font-semibold text-white" style={{ background: C.grad }}>{editando ? "Guardar cambios" : "Guardar requerimiento"}</button>
     </div>
   );
   const r = clientes.find((c) => c.id === sel) || clientes[0];
   const upd = (id, patch) => setClientes(clientes.map((c) => (c.id === id ? { ...c, ...patch } : c)));
   const res = r && perm.match ? props.filter((p) => ["Disponible", "Reservado"].includes(p.est || "Disponible")).map((p) => ({ p, m: match(r, p) })).filter((x) => x.m).sort((a, b) => b.m.pct - a.m.pct) : [];
   const guardadas = r ? favs.filter((x) => x.cid === r.id).map((x) => props.find((p) => p.id === x.pid)).filter(Boolean) : [];
+  const SECC_R = [
+    ["General", [["red", "🌐", "De la red"]]],
+    ...(clientes.length ? [["Mis requerimientos", clientes.map((c) => [`c-${c.id}`, "👤", c.n])]] : []),
+    ...(r ? [["Este requerimiento", [["detalle", "📋", "Detalle"], ["guardados", "♥", `Guardados (${guardadas.length})`], ["coincidencias", "🎯", `Coincidencias (${res.length})`]]]] : []),
+  ];
+  const tituloActual = vistaReq === "red" ? "🌐 De la red" : !r ? "Mis requerimientos" : { detalle: `👤 ${r.n}`, guardados: `♥ Guardados de ${r.n.split(" ")[0]}`, coincidencias: `🎯 Coincidencias de ${r.n.split(" ")[0]}` }[subReq];
   return (
     <div className="p-4 space-y-3">
-      <div className="flex gap-2"><Chip on={vistaReq === "mios"} onClick={() => setVistaReq("mios")}>Mis requerimientos ({clientes.length})</Chip><Chip on={vistaReq === "red"} onClick={() => setVistaReq("red")}>🌐 De la red</Chip></div>
-      {vistaReq === "red" ? <ReqRed props={props} perm={perm} flash={flash} /> : <>
-      <div className="flex items-center justify-between"><h2 className="font-semibold text-lg" style={{ color: C.ink }}>Mis requerimientos</h2><button onClick={() => setNuevo(true)} className="text-sm px-3 py-1.5 rounded-full text-white" style={{ background: C.grad }}>+ Nuevo requerimiento</button></div>
-      {!r && <div className="text-center py-10 text-sm" style={{ color: C.mute }}>Aún no tienes requerimientos. Registra lo que busca tu primer cliente.</div>}
-      {r && <>
-        <Fld l={`Requerimiento (${clientes.length})`}><select value={r.id} onChange={(e) => { setSel(+e.target.value); setConf(false); }} className="w-full rounded-xl px-3 py-2 text-sm" style={inp}>{clientes.map((c) => <option key={c.id} value={c.id}>{c.n} · {c.op} en {c.ciudad}{c.zona ? `, ${c.zona}` : ""}</option>)}</select></Fld>
-        <div className="rounded-xl p-3 text-sm" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.ink }}>
-          <b>{r.op}</b> en {r.ciudad}{r.zona ? `, zona ${r.zona}` : ""} · hasta {r.mon} {r.max.toLocaleString("es-BO")} · {r.dorm}+ dorm<br />
-          <span style={{ color: C.mute }}>Garaje: {r.garaje} · Mascotas: {r.mascotas} · Amoblado: {r.amoblado}</span>
-          <button onClick={() => upd(r.id, { priv: !r.priv })} className="block mt-1.5 text-xs underline" style={{ color: C.lilaDk }}>{r.priv ? "🔒 Solo tú lo ves · Compartir con la red" : "🌐 Visible para otros agentes (sin el nombre del cliente) · Hacer privado"}</button>
-        </div>
-        {perm.seg && <div className="rounded-2xl p-3 space-y-2" style={{ background: C.card, border: `1px solid ${C.line}` }}>
-          <div className="text-sm font-semibold" style={{ color: C.ink }}>Seguimiento de la oportunidad</div>
-          <div className="flex gap-2 overflow-x-auto text-xs" style={{ color: C.mute }}>{ETAPAS.map((e) => <span key={e} className="whitespace-nowrap">{e}: <b style={{ color: C.ink }}>{clientes.filter((c) => (c.etapa || "Nuevo") === e).length}</b></span>)}</div>
-          <div className="flex gap-2 overflow-x-auto">{ETAPAS.map((e) => <Chip key={e} on={(r.etapa || "Nuevo") === e} onClick={() => upd(r.id, { etapa: e, mov: isoOf(HOY) })}>{e}</Chip>)}</div>
-          <div className="grid grid-cols-5 gap-2"><input value={(r.prox && r.prox.t) || ""} onChange={(e) => upd(r.id, { prox: { t: e.target.value, f: (r.prox && r.prox.f) || "" } })} placeholder="Próxima acción (ej. llamar el lunes)" className="col-span-3 rounded-xl px-3 py-2 text-sm" style={inp} /><input type="date" value={(r.prox && r.prox.f) || ""} onChange={(e) => upd(r.id, { prox: { t: (r.prox && r.prox.t) || "", f: e.target.value } })} className="col-span-2 rounded-xl px-2 py-2 text-sm" style={inp} /></div>
-          <div className="flex gap-2"><input value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Agregar nota de seguimiento" className="flex-1 rounded-xl px-3 py-2 text-sm" style={inp} /><button onClick={() => { if (!nota.trim()) return; upd(r.id, { notas: [{ f: new Date().toLocaleString("es-BO"), t: nota.trim() }, ...(r.notas || [])], mov: isoOf(HOY) }); setNota(""); }} className="px-3 rounded-xl text-sm font-semibold text-white" style={{ background: C.grad }}>Agregar</button></div>
-          {(r.notas || []).map((n, i) => <div key={i} className="text-xs" style={{ color: C.ink }}><span style={{ color: C.mute }}>{n.f} · </span>{n.t}</div>)}
-          {visitas.filter((v) => v.cl === r.n).length > 0 && <div className="text-xs pt-1" style={{ color: C.mute }}>Visitas: {visitas.filter((v) => v.cl === r.n).map((v) => `${v.f} ${v.h} (${v.est})`).join(" · ")}</div>}
-        </div>}
-        <div className="flex justify-end">{conf ? <div className="flex items-center gap-2 text-sm"><span style={{ color: C.ink }}>¿Eliminar el requerimiento de {r.n}?</span><button onClick={() => { delCliente(r.id); setConf(false); setSel(null); }} className="px-3 py-1 rounded-lg text-white" style={{ background: C.red }}>Sí, eliminar</button><button onClick={() => setConf(false)} style={{ color: C.mute }}>No</button></div> : <button onClick={() => setConf(true)} className="text-xs underline" style={{ color: C.red }}>Eliminar este requerimiento</button>}</div>
-        {guardadas.length > 0 && <div className="rounded-xl p-3 space-y-1.5" style={{ background: C.lilaSoft }}>
-          <div className="text-sm font-semibold" style={{ color: C.lilaDk }}>Guardadas para {r.n.split(" ")[0]} ({guardadas.length})</div>
-          {guardadas.map((p) => <div key={p.id} className="flex justify-between items-center text-sm" style={{ color: C.ink }}><button onClick={() => open(p)} className="text-left underline">{p.t}</button><button onClick={() => toggleFav(p.id, r.id)} style={{ color: C.mute }}>Quitar</button></div>)}
-        </div>}
-        {perm.match ? <div className="text-sm font-semibold" style={{ color: C.ink }}>{res.length} propiedades compatibles</div> : <Lock t="Coincidencias con propiedades" plan="Profesional" go={goSub} />}
-        {res.map(({ p, m }) => !perm.matchAv ? (
-          <button key={p.id} onClick={() => open(p)} className="w-full text-left rounded-2xl p-3" style={{ background: C.card, border: `1px solid ${C.line}` }}><div className="font-semibold text-sm" style={{ color: C.ink }}>{p.t}</div><div className="text-xs" style={{ color: C.mute }}>{money(p)} · {p.zona}, {p.ciudad} · compatible con este requerimiento</div></button>
-        ) : (
-          <button key={p.id} onClick={() => open(p)} className="w-full text-left rounded-2xl p-3 space-y-2" style={{ background: C.card, border: `1px solid ${C.line}` }}>
-            <div className="flex items-center justify-between"><span className="font-semibold text-sm" style={{ color: C.ink }}>{p.t}</span><span className="font-bold" style={{ ...serif, color: m.pct >= 95 ? C.ok : C.amber, fontSize: 20 }}>{m.pct}%</span></div>
-            <div className="text-xs" style={{ color: C.mute }}>{m.tag} · {money(p)} {acceso === "vencido" ? "· 🔒 contacto bloqueado" : ""}</div>
-            <div className="flex flex-wrap gap-1.5">
-              {[...m.strict, ...m.weighted].map((x) => <span key={x[0]} className="text-xs px-2 py-0.5 rounded-md" style={{ background: x[1] ? C.okSoft : C.amberSoft, color: x[1] ? C.ok : C.amber }}>{x[1] ? "✅" : "⚠️"} {x[2]}</span>)}
+      <div className="flex items-center gap-3">
+        <button onClick={() => setMenuAb(true)} aria-label="Abrir menú" className="w-11 h-11 rounded-xl flex flex-col items-center justify-center gap-1 shrink-0" style={{ background: C.grad }}>{[0, 1, 2].map((i) => <i key={i} style={{ width: 18, height: 2, borderRadius: 2, background: "#fff" }} />)}</button>
+        <div className="flex-1 min-w-0"><div className="text-xs" style={{ color: C.mute }}>Requerimientos</div><div className="font-bold text-lg truncate" style={{ color: C.ink }}>{tituloActual}</div></div>
+        <button onClick={abrirNuevo} className="text-sm px-3 py-1.5 rounded-full text-white shrink-0" style={{ background: C.grad }}>+ Nuevo</button>
+      </div>
+      {menuAb && <div className="absolute inset-0 z-40 flex" style={{ background: "rgba(30,27,58,.45)" }} onClick={() => setMenuAb(false)}>
+        <div className="h-full overflow-y-auto vx-menu-izq" style={{ width: "80%", maxWidth: 300, background: C.card, boxShadow: "6px 0 24px rgba(0,0,0,.15)" }} onClick={(e) => e.stopPropagation()}>
+          <div className="p-4 flex items-center justify-between" style={{ background: C.grad, color: "#fff" }}><div className="font-bold">Requerimientos</div><button onClick={() => setMenuAb(false)} className="text-2xl leading-none" aria-label="Cerrar">×</button></div>
+          {SECC_R.map(([g, items]) => (
+            <div key={g} className="py-2">
+              <div className="px-4 py-1 text-xs font-semibold uppercase" style={{ color: C.mute, letterSpacing: ".06em" }}>{g}</div>
+              {items.map(([k, ic, l]) => {
+                const activo = k === "red" ? vistaReq === "red" : k.startsWith("c-") ? vistaReq === "mios" && r && `c-${r.id}` === k : vistaReq === "mios" && subReq === k;
+                return (
+                  <button key={k} onClick={() => { if (k === "red") setVistaReq("red"); else if (k.startsWith("c-")) { setSel(+k.slice(2)); setVistaReq("mios"); setSubReq("detalle"); setConf(false); } else { setVistaReq("mios"); setSubReq(k); } setMenuAb(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm" style={{ background: activo ? C.lilaSoft : "transparent", color: activo ? C.lilaDk : C.ink, fontWeight: activo ? 700 : 500, borderLeft: `4px solid ${activo ? C.lila : "transparent"}` }}>
+                    <span className="text-lg w-6 text-center">{ic}</span><span className="flex-1 truncate">{l}</span>
+                  </button>
+                );
+              })}
             </div>
-          </button>
-        ))}
-      </>}
+          ))}
+        </div>
+      </div>}
+      {vistaReq === "red" ? <ReqRed props={props} perm={perm} flash={flash} /> : !r ? (
+        <div className="text-center py-10 text-sm" style={{ color: C.mute }}>Aún no tienes requerimientos. Toca «+ Nuevo» para registrar lo que busca tu primer cliente.</div>
+      ) : <>
+        <div className="rounded-xl p-3 text-sm" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.ink }}>
+          <b>{r.op}</b>{r.tipo && r.tipo !== "Indiferente" ? ` · ${r.tipo}` : ""} en {r.ciudad}{r.zona ? `, zona ${r.zona}` : ""} · hasta {r.mon} {r.max.toLocaleString("es-BO")}{r.dorm ? ` · ${r.dorm}+ dorm` : ""}<br />
+          <span style={{ color: C.mute }}>Garaje: {r.garaje} · Mascotas: {r.mascotas} · Amoblado: {r.amoblado}</span>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5">
+            <button onClick={() => abrirEditar(r)} className="text-xs underline font-semibold" style={{ color: C.lilaDk }}>✏️ Editar requerimiento</button>
+            <button onClick={() => upd(r.id, { priv: !r.priv })} className="text-xs underline" style={{ color: C.lilaDk }}>{r.priv ? "🔒 Solo tú lo ves · Compartir con la red" : "🌐 Visible para la red · Hacer privado"}</button>
+          </div>
+        </div>
+        {r.obs && <div className="rounded-xl p-3 text-sm" style={{ background: C.amberSoft, color: C.ink }}><b>📝 Observaciones:</b> {r.obs}</div>}
+        {subReq === "detalle" && <>
+          {perm.seg && <div className="rounded-2xl p-3 space-y-2" style={{ background: C.card, border: `1px solid ${C.line}` }}>
+            <div className="text-sm font-semibold" style={{ color: C.ink }}>Seguimiento de la oportunidad</div>
+            <div className="flex gap-2 overflow-x-auto text-xs" style={{ color: C.mute }}>{ETAPAS.map((e) => <span key={e} className="whitespace-nowrap">{e}: <b style={{ color: C.ink }}>{clientes.filter((c) => (c.etapa || "Nuevo") === e).length}</b></span>)}</div>
+            <div className="flex gap-2 overflow-x-auto">{ETAPAS.map((e) => <Chip key={e} on={(r.etapa || "Nuevo") === e} onClick={() => upd(r.id, { etapa: e, mov: isoOf(HOY) })}>{e}</Chip>)}</div>
+            <div className="grid grid-cols-5 gap-2"><input value={(r.prox && r.prox.t) || ""} onChange={(e) => upd(r.id, { prox: { t: e.target.value, f: (r.prox && r.prox.f) || "" } })} placeholder="Próxima acción (ej. llamar el lunes)" className="col-span-3 rounded-xl px-3 py-2 text-sm" style={inp} /><input type="date" value={(r.prox && r.prox.f) || ""} onChange={(e) => upd(r.id, { prox: { t: (r.prox && r.prox.t) || "", f: e.target.value } })} className="col-span-2 rounded-xl px-2 py-2 text-sm" style={inp} /></div>
+            <div className="flex gap-2"><input value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Agregar nota de seguimiento" className="flex-1 rounded-xl px-3 py-2 text-sm" style={inp} /><button onClick={() => { if (!nota.trim()) return; upd(r.id, { notas: [{ f: new Date().toLocaleString("es-BO"), t: nota.trim() }, ...(r.notas || [])], mov: isoOf(HOY) }); setNota(""); }} className="px-3 rounded-xl text-sm font-semibold text-white" style={{ background: C.grad }}>Agregar</button></div>
+            {(r.notas || []).map((n, i) => <div key={i} className="text-xs" style={{ color: C.ink }}><span style={{ color: C.mute }}>{n.f} · </span>{n.t}</div>)}
+            {visitas.filter((v) => v.cl === r.n).length > 0 && <div className="text-xs pt-1" style={{ color: C.mute }}>Visitas: {visitas.filter((v) => v.cl === r.n).map((v) => `${v.f} ${v.h} (${v.est})`).join(" · ")}</div>}
+          </div>}
+          <div className="flex justify-end">{conf ? <div className="flex items-center gap-2 text-sm"><span style={{ color: C.ink }}>¿Eliminar el requerimiento de {r.n}?</span><button onClick={() => { delCliente(r.id); setConf(false); setSel(null); }} className="px-3 py-1 rounded-lg text-white" style={{ background: C.red }}>Sí, eliminar</button><button onClick={() => setConf(false)} style={{ color: C.mute }}>No</button></div> : <button onClick={() => setConf(true)} className="text-xs underline" style={{ color: C.red }}>Eliminar este requerimiento</button>}</div>
+        </>}
+        {subReq === "guardados" && (
+          guardadas.length ? guardadas.map((p) => <div key={p.id} className="flex justify-between items-center text-sm rounded-xl p-3" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.ink }}><button onClick={() => open(p)} className="text-left underline flex-1">{p.t}</button><button onClick={() => toggleFav(p.id, r.id)} style={{ color: C.mute }}>Quitar</button></div>)
+            : <div className="text-center py-8 text-sm" style={{ color: C.mute }}>Aún no guardaste propiedades para {r.n.split(" ")[0]}.</div>
+        )}
+        {subReq === "coincidencias" && (
+          !perm.match ? <Lock t="Coincidencias con propiedades" plan="Profesional" go={goSub} /> : !res.length ? <div className="text-center py-8 text-sm" style={{ color: C.mute }}>Todavía no hay propiedades compatibles con este requerimiento.</div> : res.map(({ p, m }) => !perm.matchAv ? (
+            <button key={p.id} onClick={() => open(p)} className="w-full text-left rounded-2xl p-3" style={{ background: C.card, border: `1px solid ${C.line}` }}><div className="font-semibold text-sm" style={{ color: C.ink }}>{p.t}</div><div className="text-xs" style={{ color: C.mute }}>{money(p)} · {p.zona}, {p.ciudad} · compatible con este requerimiento</div></button>
+          ) : (
+            <button key={p.id} onClick={() => open(p)} className="w-full text-left rounded-2xl p-3 space-y-2" style={{ background: C.card, border: `1px solid ${C.line}` }}>
+              <div className="flex items-center justify-between"><span className="font-semibold text-sm" style={{ color: C.ink }}>{p.t}</span><span className="font-bold" style={{ ...serif, color: m.pct >= 95 ? C.ok : C.amber, fontSize: 20 }}>{m.pct}%</span></div>
+              <div className="text-xs" style={{ color: C.mute }}>{m.tag} · {money(p)} {acceso === "vencido" ? "· 🔒 contacto bloqueado" : ""}</div>
+              <div className="flex flex-wrap gap-1.5">
+                {[...m.strict, ...m.weighted].map((x) => <span key={x[0]} className="text-xs px-2 py-0.5 rounded-md" style={{ background: x[1] ? C.okSoft : C.amberSoft, color: x[1] ? C.ok : C.amber }}>{x[1] ? "✅" : "⚠️"} {x[2]}</span>)}
+              </div>
+            </button>
+          ))
+        )}
       </>}
     </div>
   );
