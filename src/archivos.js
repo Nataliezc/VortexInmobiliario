@@ -7,18 +7,40 @@ import { aviso } from "./datos";
 let subiendo = 0;
 const marcar = (d) => { subiendo += d; window.dispatchEvent(new CustomEvent("vortex-subiendo", { detail: subiendo })); };
 
-export async function comprimir(file, max = 1600) {
-  if (!file.type.startsWith("image/") || file.type === "image/gif" || file.type === "image/svg+xml") return file;
+// Fotos de iPhone en formato HEIC/HEIF: la mayoría de navegadores (Android, Windows)
+// no pueden mostrarlas. Las convertimos a JPEG antes de comprimir y subir.
+const esHeic = (file) => /heic|heif/i.test(file.type || "") || /\.(heic|heif)$/i.test(file.name || "");
+async function esperarHeic2any(ms = 4000) {
+  const fin = Date.now() + ms;
+  while (!window.heic2any && Date.now() < fin) await new Promise((r) => setTimeout(r, 100));
+  return window.heic2any || null;
+}
+async function aJpegSiHaceFalta(file) {
+  if (!esHeic(file)) return file;
+  const conv = await esperarHeic2any();
+  if (!conv) throw new Error("No se pudo preparar el conversor de fotos HEIC. Revisa tu conexión a internet e inténtalo de nuevo.");
   try {
-    const img = await new Promise((ok, mal) => { const i = new Image(); i.onload = () => ok(i); i.onerror = mal; i.src = URL.createObjectURL(file); });
+    const r = await conv({ blob: file, toType: "image/jpeg", quality: 0.85 });
+    const out = Array.isArray(r) ? r[0] : r;
+    return new File([out], (file.name || "foto").replace(/\.(heic|heif)$/i, "") + ".jpg", { type: "image/jpeg" });
+  } catch {
+    throw new Error('Esta foto está en formato HEIC (típico de iPhone) y no se pudo convertir. En tu iPhone, ve a Ajustes → Cámara → Formatos y elige "Más compatible", o toma la foto de nuevo e inténtalo otra vez.');
+  }
+}
+
+export async function comprimir(file, max = 1600) {
+  const original = await aJpegSiHaceFalta(file);
+  if (!original.type.startsWith("image/") || original.type === "image/gif" || original.type === "image/svg+xml") return original;
+  try {
+    const img = await new Promise((ok, mal) => { const i = new Image(); i.onload = () => ok(i); i.onerror = mal; i.src = URL.createObjectURL(original); });
     const k = Math.min(1, max / Math.max(img.width, img.height));
     const cv = document.createElement("canvas");
     cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
     cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
     URL.revokeObjectURL(img.src);
     const blob = await new Promise((ok) => cv.toBlob(ok, "image/jpeg", 0.82));
-    return blob && blob.size < file.size ? blob : file;
-  } catch { return file; }
+    return blob && blob.size < original.size ? blob : original;
+  } catch { return original; }
 }
 
 async function miniaturaBlob(file, max = 420) {
@@ -38,8 +60,9 @@ const textoError = (e) => {
   return m;
 };
 
-export async function subir(file) {
-  if (!file) return null;
+// Igual que subir(), pero además devuelve el motivo exacto si falla (para mostrarlo junto al botón).
+export async function subirConError(file) {
+  if (!file) return { url: null, error: null };
   marcar(1);
   try {
     const { data: { session } } = await supabase.auth.getSession();
@@ -51,11 +74,17 @@ export async function subir(file) {
     const { error } = await supabase.storage.from(BUCKET).upload(ruta, blob, { contentType: blob.type || file.type, upsert: false });
     if (error) throw error;
     if (ruta.endsWith("-m.jpg")) { const t = await miniaturaBlob(blob); if (t) await supabase.storage.from(BUCKET).upload(`${nombre}-t.jpg`, t, { contentType: "image/jpeg", upsert: false }); }
-    return supabase.storage.from(BUCKET).getPublicUrl(ruta).data.publicUrl;
+    return { url: supabase.storage.from(BUCKET).getPublicUrl(ruta).data.publicUrl, error: null };
   } catch (e) {
-    aviso(`No se pudo subir la imagen: ${textoError(e)}`);
-    return null;
+    const msg = textoError(e);
+    aviso(`No se pudo subir la imagen: ${msg}`);
+    return { url: null, error: msg };
   } finally { marcar(-1); }
+}
+
+export async function subir(file) {
+  const { url } = await subirConError(file);
+  return url;
 }
 
 export async function subirVarios(files) {

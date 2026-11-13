@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useSync, useSyncObj } from "./datos";
-import { subir, subirVarios, borrarFotos, subirPrivado } from "./archivos";
+import { subir, subirVarios, borrarFotos, subirPrivado, subirConError } from "./archivos";
 import { ImgSegura, TerminosModal, AdminCiudades, AdminVerificar, AdminMetricas, AdminBorrarTodo, AdminAgenda, Plantillas, RespuestasRapidas, PLANTILLAS_BASE, TERMINOS_BASE } from "./Extras";
 import { supabase } from "./supabase";
 import { useAtras } from "./atras";
@@ -628,6 +628,8 @@ function Extra({ onRepublicar, nivelReal, sub, ops, setOps, props, setProps, rep
   const [nuevo, setNuevo] = useState(false);
   const [o, setO] = useState({ pid: "", monto: "", com: "", colab: "" });
   const [d, setD] = useState(() => ({ tel: "", bio: "", ciu: [], foto: null, ...(PERFIL.datos || {}) }));
+  const [fotoSt, setFotoSt] = useState(""); // mensaje debajo del botón de foto de perfil
+  const [subiendoFoto, setSubiendoFoto] = useState(false);
   const [sg, setSg] = useState({ cat: "", txt: "" });
   const [rfOpen, setRfOpen] = useState(false);
   useEffect(() => { if (pre) { setNuevo(true); setO((x) => ({ ...x, pid: pre })); clearPre(); } }, [pre]);
@@ -661,7 +663,20 @@ function Extra({ onRepublicar, nivelReal, sub, ops, setOps, props, setProps, rep
       <Fld l="Presentación profesional"><textarea rows={3} value={d.bio} onChange={(e) => setD({ ...d, bio: e.target.value })} className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
       <div className="flex items-center gap-3">
         {d.foto ? <img src={d.foto} alt="Tu foto" className="rounded-full object-cover shrink-0" style={{ width: 56, height: 56 }} /> : <div className="rounded-full flex items-center justify-center shrink-0 text-white font-semibold" style={{ width: 56, height: 56, background: C.lila }}>{ME.split(" ").filter(Boolean).slice(0, 2).map((x) => x[0].toUpperCase()).join("") || "?"}</div>}
-        <label className="flex-1 py-3 rounded-xl text-sm text-center cursor-pointer" style={{ border: `1px dashed ${C.mute}`, color: C.mute }}>📷 {d.foto ? "Cambiar" : "Subir"} foto de perfil<input type="file" accept="image/*" className="hidden" onChange={async (e) => { const file = e.target.files && e.target.files[0]; e.target.value = ""; if (!file) return; const u = await subir(file); if (u) setD((x) => ({ ...x, foto: u })); }} /></label>
+        <div className="flex-1 space-y-1">
+          <label className="block py-3 rounded-xl text-sm text-center cursor-pointer" style={{ border: `1px dashed ${subiendoFoto ? C.lila : C.mute}`, color: subiendoFoto ? C.lilaDk : C.mute, opacity: subiendoFoto ? 0.7 : 1 }}>
+            {subiendoFoto ? "Subiendo foto…" : `📷 ${d.foto ? "Cambiar" : "Subir"} foto de perfil`}
+            <input type="file" accept="image/*" className="hidden" disabled={subiendoFoto} onChange={async (e) => {
+              const file = e.target.files && e.target.files[0]; e.target.value = ""; if (!file) return;
+              setSubiendoFoto(true); setFotoSt("");
+              const { url, error } = await subirConError(file);
+              setSubiendoFoto(false);
+              if (url) { const nuevo = { ...d, foto: url }; setD(nuevo); PERFIL.guardar(nuevo); setFotoSt("✓ Foto guardada."); }
+              else setFotoSt(error || "No se pudo subir la foto. Inténtalo de nuevo.");
+            }} />
+          </label>
+          {fotoSt && <div className="text-xs" style={{ color: fotoSt.startsWith("✓") ? C.ok : C.red }}>{fotoSt}</div>}
+        </div>
       </div>
       <button onClick={() => { PERFIL.guardar(d); flash("Datos guardados."); }} className="w-full py-3 rounded-xl font-semibold text-white" style={{ background: C.grad }}>Guardar cambios</button>
     </div>
