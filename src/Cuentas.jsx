@@ -7,6 +7,7 @@ import { C, CUENTAS, RESUMEN } from "./Vortex";
 import { inp, Campo, Boton, MsgError, ClaveInput } from "./ui";
 import { useEffect } from "react";
 import { estadoPush, activarPush, desactivarPush, esIOS, instaladaComoApp, notificar } from "./push";
+import { puedeInstalar, onCambioInstalar, instalarApp, esIOSInstalar, instaladaYa } from "./instalar";
 import { LOGO_ISO } from "./Vortex";
 
 // Activar las notificaciones en este celular
@@ -139,6 +140,15 @@ export function AccionesUsuario({ u, onHecho, recargar, sesion }) {
   );
 }
 
+function BotonInstalar() {
+  const [visible, setVisible] = useState(puedeInstalar());
+  useEffect(() => { if (!instaladaYa()) return onCambioInstalar(setVisible); }, []);
+  const ios = esIOSInstalar() && !instaladaYa();
+  if (instaladaYa()) return <div className="text-xs rounded-xl p-2.5" style={{ background: C.okSoft, color: C.ok }}>✓ Ya tienes Vortex instalada como app.</div>;
+  if (ios) return <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>📲 En iPhone: toca Compartir ⬆️ y luego «Agregar a inicio».</div>;
+  if (!visible) return null;
+  return <button onClick={() => instalarApp()} className="w-full py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: C.grad }}>📲 Instalar Vortex en este celular</button>;
+}
 export function MenuCuenta({ sesion, onClose, vista, onTerminos }) {
   const [pass, setPass] = useState("");
   const [ok, setOk] = useState("");
@@ -166,6 +176,7 @@ export function MenuCuenta({ sesion, onClose, vista, onTerminos }) {
           {vista.sim !== "admin" && <div className="text-xs" style={{ color: C.amber }}>Vista previa: lo que publiques o registres se guarda con tu usuario de administrador. Para volver al panel elige SuperAdmin.</div>}
           <button onClick={onClose} className="w-full py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: C.grad }}>Ver la app</button>
         </div>}
+        <BotonInstalar />
         <PanelPush esAdmin={sesion.rol === "admin"} />
         <Campo l="Cambiar mi contraseña"><div className="flex gap-2"><div className="flex-1"><ClaveInput value={pass} onChange={(e) => setPass(e.target.value)} placeholder="Nueva contraseña" autoComplete="new-password" className="w-full rounded-xl px-3 py-2 text-sm" /></div><button onClick={cambiar} className="px-4 rounded-xl text-sm font-semibold text-white" style={{ background: C.lila }}>Guardar</button></div></Campo>
         {ok && <div className="text-xs" style={{ color: C.ok }}>✓ {ok}</div>}

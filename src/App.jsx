@@ -9,6 +9,7 @@ import Registro from "./Registro";
 import { CrearUsuario, AccionesUsuario, MenuCuenta, NuevaClave } from "./Cuentas";
 import { TerminosModal } from "./Extras";
 import { useAtras, useTrampaAtras } from "./atras";
+import InstalarBanner from "./InstalarBanner";
 
 const Centro = ({ children }) => (
   <div className="vx-shell"><div className="vx-frame flex flex-col items-center justify-center text-center p-6 space-y-4" style={{ background: C.bg }}>
@@ -131,7 +132,7 @@ export default function App() {
     Acciones: (p) => <AccionesUsuario {...p} recargar={recargar} sesion={perfilRef.current || {}} />,
   }), [recargar]);
 
-  if (!configurado) return <SinConfigurar />;
+  if (!configurado) return <><SinConfigurar /><InstalarBanner /></>;
   const textoTerminos = (datos && datos.cfg && datos.cfg.terminos) || (publico && publico.cfg && publico.cfg.terminos) || null;
   const modalTerminos = verTerminos && <TerminosModal texto={textoTerminos} onClose={() => setVerTerminos(false)} />;
   if (recuperar && sesion) return <NuevaClave onListo={() => { setRecuperar(false); window.history.replaceState(null, "", window.location.pathname); }} />;
@@ -147,7 +148,7 @@ export default function App() {
       </Centro>
     );
     if (!publico) return <Centro><div className="text-sm" style={{ color: C.mute }}>Cargando propiedades…</div></Centro>;
-    return <Vortex key="visitante" inicial={publico} sesion={{ uid: null, nombre: "", email: "", rol: "visitante" }} onIngresar={() => setModo("login")} onRegistro={() => setModo("registro")} />;
+    return <><Vortex key="visitante" inicial={publico} sesion={{ uid: null, nombre: "", email: "", rol: "visitante" }} onIngresar={() => setModo("login")} onRegistro={() => setModo("registro")} /><InstalarBanner /></>;
   }
   if (error) return (
     <Centro>
@@ -160,6 +161,7 @@ export default function App() {
 
   return (
     <>
+      <InstalarBanner />
       <Vortex key={perfil.uid} inicial={datos} sesion={perfil} onMenu={() => setMenu(true)} cuentas={perfil.rol === "admin" ? cuentas : null} sim={sim} setSim={setSim} finPrueba={finPrueba} />
       {modalTerminos}
       {menu && <MenuCuenta onTerminos={() => { setMenu(false); setVerTerminos(true); }} sesion={perfil} onClose={() => setMenu(false)} vista={perfil.rol === "admin" ? { sim, setSim, terminarPrueba: () => { setFinPrueba(Date.now()); setMenu(false); } } : null} />}
