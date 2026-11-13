@@ -915,9 +915,11 @@ function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, s
   const [sub, setSub] = useState("capt");
   const [pre, setPre] = useState(null);
   const [cerrando, setCerrando] = useState(null);
+  const [menuAb, setMenuAb] = useState(false);
   useAtras(!!nueva, () => setNueva(false));
   useAtras(!!cerrando, () => setCerrando(null));
-  useAtras(sub !== "capt", () => setSub("capt"));
+  useAtras(menuAb, () => setMenuAb(false));
+  useAtras(sub !== "capt" && !menuAb, () => setSub("capt"));
   useEffect(() => { if (subInit) { setSub(subInit); clearSub(); } }, [subInit]);
   const mine = props.filter((p) => p.cap.n === ME);
   const enLista = mine.filter((p) => !CERRADAS.includes(p.est));
@@ -939,22 +941,48 @@ function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, s
   );
   if (cerrando) return <Cierre p={cerrando} props={props} setProps={setProps} ops={ops} setOps={setOps} reviews={reviews} setReviews={setReviews} flash={flash} onDone={(hecho) => { setCerrando(null); if (hecho === true) setSub("ops"); }} />;
   const estado = { prueba: ["En prueba", C.brandSoft, C.brandDk], suscrito: ["Suscripción activa", C.okSoft, C.ok], vencido: ["Suscripción vencida", C.amberSoft, C.amber] }[acceso];
+  const SECC_P = [
+    ["Mi actividad", [["capt", "🏠", "Captaciones"], ["ops", "🔴", "Cierres"], ["sus", "💳", "Suscripción"]]],
+    ["Herramientas", [["dash", "📊", "Dashboard"], ["inf", "📋", "Informes"], ["auto", "⚡", "Automatiz."], ["plant", "💬", "Plantillas"]]],
+    ["Cuenta", [["rep", "🚩", "Reportes"], ["sug", "💡", "Sugerencias"], ["datos", "🧑‍💼", "Mis datos"]]],
+  ];
+  const actualP = SECC_P.flatMap((g) => g[1]).find((x) => x[0] === sub) || SECC_P[0][1][0];
   return (
     <div className="p-4 space-y-3">
-      <div className="rounded-2xl p-4 flex gap-3 items-center" style={{ background: C.card, border: `1px solid ${C.line}` }}>
-        <div className="w-14 h-14 rounded-full flex items-center justify-center text-xl font-semibold text-white" style={{ background: C.lila }}>{ME.split(" ").filter(Boolean).slice(0, 2).map((x) => x[0].toUpperCase()).join("") || "?"}</div>
-        <div className="flex-1">
-          <div className="font-semibold text-lg leading-tight" style={{ color: C.ink }}>{ME}</div>
-          <div className="text-xs" style={{ color: C.mute }}>Agente inmobiliario independiente{PERFIL.datos && PERFIL.datos.ciu && PERFIL.datos.ciu.length ? " · " + PERFIL.datos.ciu.join(", ") : ""}</div>
-          <span className="inline-block mt-1 text-xs px-2 py-0.5 rounded-md font-medium" style={{ background: estado[1], color: estado[2] }}>{estado[0]}</span>
+      <div className="flex items-center gap-3">
+        <button onClick={() => setMenuAb(true)} aria-label="Abrir menú" className="w-11 h-11 rounded-xl flex flex-col items-center justify-center gap-1 shrink-0" style={{ background: C.grad }}>{[0, 1, 2].map((i) => <i key={i} style={{ width: 18, height: 2, borderRadius: 2, background: "#fff" }} />)}</button>
+        <div className="flex-1 min-w-0"><div className="text-xs" style={{ color: C.mute }}>Mi perfil</div><div className="font-bold text-lg truncate" style={{ color: C.ink }}>{actualP[1]} {actualP[2]}</div></div>
+      </div>
+      {menuAb && <div className="absolute inset-0 z-40 flex" style={{ background: "rgba(30,27,58,.45)" }} onClick={() => setMenuAb(false)}>
+        <div className="h-full overflow-y-auto vx-menu-izq" style={{ width: "80%", maxWidth: 300, background: C.card, boxShadow: "6px 0 24px rgba(0,0,0,.15)" }} onClick={(e) => e.stopPropagation()}>
+          <div className="p-4 flex items-start justify-between" style={{ background: C.grad, color: "#fff" }}>
+            <div className="flex gap-3 items-center">
+              <div className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-semibold shrink-0" style={{ background: "rgba(255,255,255,.25)" }}>{PERFIL.datos && PERFIL.datos.foto ? <img src={PERFIL.datos.foto} alt="" className="w-12 h-12 rounded-full object-cover" /> : (ME.split(" ").filter(Boolean).slice(0, 2).map((x) => x[0].toUpperCase()).join("") || "?")}</div>
+              <div className="min-w-0">
+                <div className="font-bold leading-tight truncate">{ME}</div>
+                <div className="text-xs opacity-80 truncate">Agente independiente{PERFIL.datos && PERFIL.datos.ciu && PERFIL.datos.ciu.length ? " · " + PERFIL.datos.ciu.join(", ") : ""}</div>
+                <span className="inline-block mt-1 text-xs px-2 py-0.5 rounded-md font-medium" style={{ background: "rgba(255,255,255,.9)", color: estado[2] }}>{estado[0]}</span>
+              </div>
+            </div>
+            <button onClick={() => setMenuAb(false)} className="text-2xl leading-none shrink-0" aria-label="Cerrar">×</button>
+          </div>
+          <div className="grid grid-cols-3 gap-1.5 px-3 py-3" style={{ borderBottom: `1px solid ${C.line}` }}>
+            {[["Captaciones", enLista.length], ["Cierres", ops.filter((o) => !o.de || o.de === ME).length], ["Vigencia", enLista.length ? Math.round((100 * enLista.filter((p) => vigencia(p).n === 0).length) / enLista.length) + "%" : "—"]].map(([a, b]) => (
+              <div key={a} className="rounded-xl py-2 text-center" style={{ background: C.lilaSoft }}><div className="font-semibold" style={{ ...serif, color: C.lilaDk, fontSize: 18 }}>{b}</div><div style={{ fontSize: 10, color: C.mute }}>{a}</div></div>
+            ))}
+          </div>
+          {SECC_P.map(([g, items]) => (
+            <div key={g} className="py-2">
+              <div className="px-4 py-1 text-xs font-semibold uppercase" style={{ color: C.mute, letterSpacing: ".06em" }}>{g}</div>
+              {items.map(([k, ic, l]) => (
+                <button key={k} onClick={() => { setSub(k); setMenuAb(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm" style={{ background: sub === k ? C.lilaSoft : "transparent", color: sub === k ? C.lilaDk : C.ink, fontWeight: sub === k ? 700 : 500, borderLeft: `4px solid ${sub === k ? C.lila : "transparent"}` }}>
+                  <span className="text-lg w-6 text-center">{ic}</span><span className="flex-1">{l}</span>
+                </button>
+              ))}
+            </div>
+          ))}
         </div>
-      </div>
-      <div className="grid grid-cols-3 gap-2 text-center">
-        {[["Captaciones", enLista.length], ["Cierres", ops.filter((o) => !o.de || o.de === ME).length], ["Vigencia", enLista.length ? Math.round((100 * enLista.filter((p) => vigencia(p).n === 0).length) / enLista.length) + "%" : "—"]].map(([a, b]) => (
-          <div key={a} className="rounded-xl py-2" style={{ background: C.lilaSoft }}><div className="font-semibold" style={{ ...serif, color: C.lilaDk, fontSize: 20 }}>{b}</div><div className="text-xs" style={{ color: C.mute }}>{a}</div></div>
-        ))}
-      </div>
-      <div className="flex gap-2 overflow-x-auto">{[["capt", "Captaciones"], ["sus", "Suscripción"], ["dash", "Dashboard"], ["inf", "Informes"], ["auto", "Automatiz."], ["plant", "Plantillas"], ["ops", "Cierres"], ["rep", "Reportes"], ["sug", "Sugerencias"], ["datos", "Mis datos"]].map(([k, l]) => <Chip key={k} on={sub === k} onClick={() => setSub(k)}>{l}</Chip>)}</div>
+      </div>}
       {sub === "sus" && <Sus acceso={acceso} users={users} setUsers={setUsers} pagos={pagos} setPagos={setPagos} cfg={cfg} flash={flash} nivel={nivel} trial={trial} />}
       {sub === "plant" && (perm.auto ? <Plantillas plantillas={plantillas} setPlantillas={setPlantillas} agente={ME} flash={flash} /> : <Lock t="Plantillas de respuestas rápidas" plan="Premium" go={goSub} />)}
       {sub !== "capt" && sub !== "sus" && sub !== "plant" && <Extra onRepublicar={(p) => setNueva({ ...p, _repub: true })} sub={sub} ops={ops} setOps={setOps} props={props} setProps={setProps} reports={reports} flash={flash} reviews={reviews} setReviews={setReviews} onReport={onReport} pre={pre} clearPre={() => setPre(null)} sugs={sugs} setSugs={setSugs} perm={perm} goSub={goSub} nivel={nivel} setReports={setReports} cfg={cfg} clientes={clientes} visitas={visitas} favs={favs} autos={autos} setAutos={setAutos} pagos={pagos} />}
