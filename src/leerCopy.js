@@ -139,14 +139,17 @@ export function leerCopy(copy, ZONAS) {
 }
 
 // Campos obligatorios para que la captación quede completa
-export const NOMBRES_CAMPOS = { tc: "tipo de cambio", t: "título", op: "operación", tipo: "tipo de inmueble", tipoOtro: "qué tipo de inmueble es", ciudad: "ciudad", zona: "zona", precio: "precio", mon: "moneda", dorm: "dormitorios", ban: "baños", m2: "superficie", garaje: "garaje", gTipo: "tipo de garaje", gAparte: "garaje aparte", mascotas: "mascotas", mascCond: "condición para mascotas", amoblado: "estado del inmueble" };
+export const NOMBRES_CAMPOS = { tc: "tipo de cambio", t: "título", op: "operación", tipo: "tipo de inmueble", tipoOtro: "qué tipo de inmueble es", ciudad: "ciudad", zona: "zona", precio: "precio", mon: "moneda", dorm: "dormitorios", ban: "baños", m2: "superficie", garaje: "garaje", gTipo: "tipo de garaje", gAparte: "garaje aparte", mascotas: "mascotas", mascCond: "condición para mascotas", amoblado: "estado del inmueble", fotos: "al menos 1 foto" };
 export function camposFaltantes(f) {
   const vivienda = ["Casa", "Departamento"].includes(f.tipo);
-  const req = ["t", "op", "tipo", "ciudad", "zona", "precio", "mon", "m2", "garaje", "gAparte", "mascotas", "amoblado"];
+  const req = ["t", "op", "tipo", "ciudad", "zona", "precio", "mon", "m2", "garaje", "mascotas", "amoblado"];
   if (f.tipo === "Otro") req.push("tipoOtro");
   if (vivienda) req.push("dorm", "ban");
   if (f.garaje === "Sí") req.push("gTipo");
+  if (f.garaje !== "No aplica") req.push("gAparte");
   if (f.mascotas === "Condicionado") req.push("mascCond");
   if (f.mon === "USD" && f.tcModo === "fijo" && !(+f.tc > 0)) req.push("tc");
-  return req.filter((k) => !String(f[k] ?? "").trim());
+  const faltan = req.filter((k) => !String(f[k] ?? "").trim());
+  if (!f.fotos || !f.fotos.length) faltan.push("fotos");
+  return faltan;
 }
