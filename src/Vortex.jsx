@@ -627,6 +627,8 @@ function Extra({ onRepublicar, nivelReal, sub, ops, setOps, props, setProps, rep
   const [borrarId, setBorrarId] = useState(null);
   const [nuevo, setNuevo] = useState(false);
   const [o, setO] = useState({ pid: "", monto: "", com: "", colab: "" });
+  const [caidoDe, setCaidoDe] = useState(null); // id del cierre que se está editando como caído
+  const [caidoF, setCaidoF] = useState({ comDevuelta: true, motivo: "" });
   const [d, setD] = useState(() => ({ tel: "", bio: "", ciu: [], foto: null, ...(PERFIL.datos || {}) }));
   const [fotoSt, setFotoSt] = useState(""); // mensaje debajo del botón de foto de perfil
   const [subiendoFoto, setSubiendoFoto] = useState(false);
@@ -697,7 +699,13 @@ function Extra({ onRepublicar, nivelReal, sub, ops, setOps, props, setProps, rep
   const mia = sel && sel.cap.n === ME;
   const colab = mia ? o.colab : sel ? sel.cap.n : "";
   const com = +o.com || 0;
-  const tot = ops.reduce((a, x) => ({ ...a, [x.mon]: (a[x.mon] || 0) + x.com / 2 }), {});
+  const tot = ops.filter((x) => !x.caido).reduce((a, x) => ({ ...a, [x.mon]: (a[x.mon] || 0) + x.com / 2 }), {});
+  const marcarCaido = (x) => {
+    setOps(ops.map((o2) => (o2.id === x.id ? { ...o2, caido: true, comDevuelta: caidoF.comDevuelta, motivoCaida: caidoF.motivo.trim(), fechaCaida: isoOf(HOY) } : o2)));
+    setCaidoDe(null); setCaidoF({ comDevuelta: true, motivo: "" });
+    flash("Cierre marcado como caído. Ya no cuenta como cierre en tus estadísticas.");
+  };
+  const deshacerCaido = (x) => { setOps(ops.map((o2) => (o2.id === x.id ? { ...o2, caido: false, comDevuelta: null, motivoCaida: null, fechaCaida: null } : o2))); flash("El cierre vuelve a contar como vigente."); };
   const save = () => {
     if (!sel || !o.monto || !o.com || !colab) { flash("Completa propiedad, monto, comisión y agente."); return; }
     setOps([{ id: Date.now(), de: ME, pid: sel.id, t: sel.t, op: sel.op, monto: +o.monto, com, mon: sel.mon, colab, rol: mia ? "Captador" : "Con cliente", fecha: fechaL(HOY), iso: isoOf(HOY) }, ...ops]);
@@ -747,14 +755,31 @@ function Extra({ onRepublicar, nivelReal, sub, ops, setOps, props, setProps, rep
       </>; })()}
       {pend.map((p) => <div key={p.id} className="rounded-xl p-3 text-sm flex items-center justify-between gap-2" style={{ background: C.amberSoft, color: C.amber }}><span>Cerrada sin registrar: {p.t}</span><button onClick={() => { setO({ pid: String(p.id), monto: "", com: "", colab: "" }); setNuevo(true); }} className="px-3 py-1 rounded-lg text-white shrink-0" style={{ background: C.amber }}>Registrar</button></div>)}
       {(perm.hist ? ops : []).map((x) => (
-        <div key={x.id} className="rounded-2xl p-3 space-y-1" style={{ background: C.card, border: `1px solid ${C.line}` }}>
+        <div key={x.id} className="rounded-2xl p-3 space-y-1" style={{ background: x.caido ? C.redSoft : C.card, border: `1px solid ${x.caido ? C.red : C.line}` }}>
           <div className="flex justify-between gap-2"><span className="text-sm font-semibold" style={{ color: C.ink }}>{x.t}</span><span className="text-xs" style={{ color: C.mute }}>{x.fecha}</span></div>
           <div className="text-xs" style={{ color: C.mute }}>{x.op} · {fm(x.monto, x.mon)} · Comisión {fm(x.com, x.mon)}</div>
           <div className="text-xs" style={{ color: C.ink }}>Tú ({x.rol}) {fm(x.com / 2, x.mon)} · {x.colab}{x.reg === false ? " (fuera de la app)" : ""} {fm(x.com / 2, x.mon)}</div>
-          <div className="flex items-center justify-between pt-1">
-            {x.pt ? <span className="text-xs" style={{ color: C.ok }}>Puntuaste a {x.colab}: {"★".repeat(x.pt)}</span> : <div className="flex items-center gap-1"><span className="text-xs" style={{ color: C.mute }}>Puntuar a {x.colab.split(" ")[0]}:</span>{[1, 2, 3, 4, 5].map((n) => <button key={n} onClick={() => { setReviews([{ id: Date.now(), ag: x.colab, s: n, de: ME }, ...reviews]); setOps(ops.map((o2) => (o2.id === x.id ? { ...o2, pt: n } : o2))); flash("Puntuación enviada."); }} className="text-lg leading-none" style={{ color: C.lila }}>☆</button>)}</div>}
-            <button onClick={() => onReport({ cap: { n: x.colab } })} className="text-xs underline" style={{ color: C.mute }}>Reportar trabajo</button>
-          </div>
+          {x.caido ? (
+            <div className="rounded-xl p-2 space-y-1" style={{ background: "#fff" }}>
+              <div className="text-xs font-semibold" style={{ color: C.red }}>⚠️ Cayó el {fechaL(isoD(x.fechaCaida))} · ya no cuenta como cierre</div>
+              <div className="text-xs" style={{ color: C.ink }}>{x.comDevuelta ? "💰 La comisión se devolvió." : "💰 La comisión NO se devolvió."}</div>
+              {x.motivoCaida && <div className="text-xs" style={{ color: C.mute }}>Motivo: {x.motivoCaida}</div>}
+              <button onClick={() => deshacerCaido(x)} className="text-xs underline" style={{ color: C.lilaDk }}>Deshacer: marcar como vigente de nuevo</button>
+            </div>
+          ) : caidoDe === x.id ? (
+            <div className="rounded-xl p-2.5 space-y-2" style={{ background: C.redSoft }}>
+              <div className="text-xs font-semibold" style={{ color: C.red }}>¿Este cierre cayó después de registrarlo?</div>
+              <Fld l="¿Se devolvió la comisión?"><Seg o={["Sí, se devolvió", "No se devolvió"]} v={caidoF.comDevuelta ? "Sí, se devolvió" : "No se devolvió"} set={(v) => setCaidoF({ ...caidoF, comDevuelta: v === "Sí, se devolvió" })} /></Fld>
+              <Fld l="Motivo (opcional)"><input value={caidoF.motivo} onChange={(e) => setCaidoF({ ...caidoF, motivo: e.target.value })} placeholder="Ej. El banco no aprobó el crédito" className="w-full rounded-lg px-2 py-1.5 text-sm" style={inp} /></Fld>
+              <div className="grid grid-cols-2 gap-2"><button onClick={() => marcarCaido(x)} className="py-2 rounded-lg text-xs font-semibold text-white" style={{ background: C.red }}>Confirmar que cayó</button><button onClick={() => setCaidoDe(null)} className="py-2 rounded-lg text-xs" style={{ border: `1px solid ${C.line}`, color: C.mute }}>Cancelar</button></div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between pt-1">
+              {x.pt ? <span className="text-xs" style={{ color: C.ok }}>Puntuaste a {x.colab}: {"★".repeat(x.pt)}</span> : <div className="flex items-center gap-1"><span className="text-xs" style={{ color: C.mute }}>Puntuar a {x.colab.split(" ")[0]}:</span>{[1, 2, 3, 4, 5].map((n) => <button key={n} onClick={() => { setReviews([{ id: Date.now(), ag: x.colab, s: n, de: ME }, ...reviews]); setOps(ops.map((o2) => (o2.id === x.id ? { ...o2, pt: n } : o2))); flash("Puntuación enviada."); }} className="text-lg leading-none" style={{ color: C.lila }}>☆</button>)}</div>}
+              <button onClick={() => onReport({ cap: { n: x.colab } })} className="text-xs underline" style={{ color: C.mute }}>Reportar trabajo</button>
+            </div>
+          )}
+          {!x.caido && caidoDe !== x.id && <button onClick={() => { setCaidoDe(x.id); setCaidoF({ comDevuelta: true, motivo: "" }); }} className="text-xs underline" style={{ color: C.red }}>⚠️ Este cierre cayó</button>}
         </div>
       ))}
     </div>
@@ -967,7 +992,7 @@ function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, s
             <button onClick={() => setMenuAb(false)} className="text-2xl leading-none shrink-0" aria-label="Cerrar">×</button>
           </div>
           <div className="grid grid-cols-3 gap-1.5 px-3 py-3" style={{ borderBottom: `1px solid ${C.line}` }}>
-            {[["Captaciones", enLista.length], ["Cierres", ops.filter((o) => !o.de || o.de === ME).length], ["Vigencia", enLista.length ? Math.round((100 * enLista.filter((p) => vigencia(p).n === 0).length) / enLista.length) + "%" : "—"]].map(([a, b]) => (
+            {[["Captaciones", enLista.length], ["Cierres", ops.filter((o) => (!o.de || o.de === ME) && !o.caido).length], ["Vigencia", enLista.length ? Math.round((100 * enLista.filter((p) => vigencia(p).n === 0).length) / enLista.length) + "%" : "—"]].map(([a, b]) => (
               <div key={a} className="rounded-xl py-2 text-center" style={{ background: C.lilaSoft }}><div className="font-semibold" style={{ ...serif, color: C.lilaDk, fontSize: 18 }}>{b}</div><div style={{ fontSize: 10, color: C.mute }}>{a}</div></div>
             ))}
           </div>
@@ -1300,7 +1325,7 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
       {s === "age" && <AdminAgenda users={users} cfg={cfg} pagos={pagos} agenda={agenda} setAgenda={setAgenda} flash={flash} />}
       {s === "met" && <AdminMetricas users={users} pagos={pagos} props={props} ops={ops} cfg={cfg} flash={flash} respaldo={{ perfiles: users, propiedades: props, pagos, operaciones: ops, visitas, reportes: reports, sugerencias: sugs, resenas: reviews, auditoria: audit, cfg }} />}
       {s === "res" && <div className="grid grid-cols-2 gap-2">
-        {[["Agentes", users.length], ["Propiedades activas", act.length], ["Sin confirmar", act.filter((p) => vigencia(p).n === 2).length], ["Cierres", ops.length], ["Reportes abiertos", pend], ["Cuentas vencidas", users.filter((u) => u.est === "Vencido").length]].map(([a, b]) => (
+        {[["Agentes", users.length], ["Propiedades activas", act.length], ["Sin confirmar", act.filter((p) => vigencia(p).n === 2).length], ["Cierres", ops.filter((o) => !o.caido).length], ["Reportes abiertos", pend], ["Cuentas vencidas", users.filter((u) => u.est === "Vencido").length]].map(([a, b]) => (
           <div key={a} className="rounded-xl p-3" style={{ background: C.lilaSoft }}><div style={{ ...serif, color: C.lilaDk, fontSize: 26, fontWeight: 700 }}>{b}</div><div className="text-xs" style={{ color: C.mute }}>{a}</div></div>
         ))}
       </div>}
@@ -1352,7 +1377,9 @@ function Dash({ ops }) {
   const pb = (o) => (o.mon === "USD" ? o.com * BOB : o.com) / 2;
   const short = (n) => (n >= 1000 ? (n / 1000).toFixed(1).replace(".0", "") + "k" : String(Math.round(n)));
   const d0 = (iso) => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d); };
-  const list = ops.filter((o) => tipo === "Todas" || o.op === tipo);
+  const vigentes = ops.filter((o) => !o.caido); // los cierres que luego cayeron no cuentan en las estadísticas
+  const caidosN = ops.length - vigentes.length;
+  const list = vigentes.filter((o) => tipo === "Todas" || o.op === tipo);
   const bk = [];
   if (per === "Semanas") { const l = new Date(HOY); l.setDate(l.getDate() - ((l.getDay() + 6) % 7)); for (let i = 7; i >= 0; i--) { const s = new Date(l); s.setDate(s.getDate() - 7 * i); const e = new Date(s); e.setDate(e.getDate() + 7); bk.push({ l: `${s.getDate()}/${s.getMonth() + 1}`, s, e }); } }
   else if (per === "Meses") { for (let i = 11; i >= 0; i--) { const s = new Date(HOY.getFullYear(), HOY.getMonth() - i, 1); bk.push({ l: MES[s.getMonth()], s, e: new Date(HOY.getFullYear(), HOY.getMonth() - i + 1, 1) }); } }
@@ -1362,14 +1389,15 @@ function Dash({ ops }) {
   const max = Math.max(1, ...data.map(val));
   const enP = data.reduce((a, x) => a + x.n, 0);
   const parte = list.reduce((a, o) => a + pb(o), 0);
-  const tipos = [["Venta", C.lila], ["Alquiler", C.brand], ["Anticrético", "#D9961B"], ["Preventa", C.ink]].map(([t, c]) => ({ t, c, n: ops.filter((o) => o.op === t).length, b: ops.filter((o) => o.op === t).reduce((a, o) => a + pb(o), 0) }));
-  const tot = Math.max(1, ops.length);
+  const tipos = [["Venta", C.lila], ["Alquiler", C.brand], ["Anticrético", "#D9961B"], ["Preventa", C.ink]].map(([t, c]) => ({ t, c, n: vigentes.filter((o) => o.op === t).length, b: vigentes.filter((o) => o.op === t).reduce((a, o) => a + pb(o), 0) }));
+  const tot = Math.max(1, vigentes.length);
   const unidad = per === "Semanas" ? "semana" : per === "Meses" ? "mes" : "año";
-  const exportar = () => { const filas = [["Fecha", "Propiedad", "Tipo", "Monto", "Moneda", "Comisión", "Agente", "Rol"], ...ops.map((o) => [o.iso, o.t, o.op, o.monto, o.mon, o.com, o.colab, o.rol])]; const csv = filas.map((r) => r.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(",")).join("\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "mis-cierres.csv"; a.click(); };
+  const exportar = () => { const filas = [["Fecha", "Propiedad", "Tipo", "Monto", "Moneda", "Comisión", "Agente", "Rol", "Estado"], ...ops.map((o) => [o.iso, o.t, o.op, o.monto, o.mon, o.com, o.colab, o.rol, o.caido ? `Caído${o.comDevuelta ? " (comisión devuelta)" : " (comisión no devuelta)"}` : "Vigente"])]; const csv = filas.map((r) => r.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(",")).join("\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "mis-cierres.csv"; a.click(); };
   return (
     <div className="space-y-3">
       <div className="text-xs" style={{ color: C.mute }}>Calculado con los cierres registrados. En esta vista previa son datos de ejemplo.</div>
       <button onClick={exportar} className="text-xs underline" style={{ color: C.brandDk }}>⬇ Exportar mis cierres (CSV)</button>
+      {caidosN > 0 && <div className="text-xs rounded-xl p-2" style={{ background: C.redSoft, color: C.red }}>⚠️ {caidosN} cierre{caidosN > 1 ? "s" : ""} que cayó después no se cuenta en estas estadísticas. Puedes verlo marcado en Perfil → Cierres.</div>}
       <div className="flex gap-2">{["Semanas", "Meses", "Años"].map((p) => <Chip key={p} on={per === p} onClick={() => setPer(p)}>{p}</Chip>)}</div>
       <div className="flex gap-2 overflow-x-auto">{["Todas", "Venta", "Alquiler", "Anticrético", "Preventa"].map((x) => <Chip key={x} on={tipo === x} onClick={() => setTipo(x)}>{x}</Chip>)}</div>
       <div className="grid grid-cols-3 gap-2 text-center">
@@ -1855,7 +1883,7 @@ function Informes({ props, clientes, ops, visitas, favs }) {
       <Card tt="Clientes y oportunidades" arch="informe-oportunidades.csv" filas={filasEmb} nota={`Cerrados ganados: ${ganados} de ${clientes.length} (${clientes.length ? Math.round((ganados / clientes.length) * 100) : 0}%). Sin movimiento hace 7 días o más: ${inactivos.length}.`}>
         {ETAPAS.map((e) => <div key={e} className="flex items-center gap-2 text-xs" style={{ color: C.ink }}><span style={{ width: 92 }}>{e}</span><div className="flex-1 rounded-full" style={{ background: C.line, height: 8 }}><div className="rounded-full" style={{ width: `${(clientes.filter((c) => (c.etapa || "Nuevo") === e).length / Math.max(1, clientes.length)) * 100}%`, height: 8, background: C.grad }} /></div><span>{clientes.filter((c) => (c.etapa || "Nuevo") === e).length}</span></div>)}
       </Card>
-      <Card tt="Mis cierres" arch="informe-cierres.csv" filas={[["Fecha", "Propiedad", "Tipo", "Monto", "Moneda", "Comisión", "Agente", "Rol"], ...ops.map((o) => [o.iso, o.t, o.op, o.monto, o.mon, o.com, o.colab, o.rol])]} nota="Exportación de todos tus cierres registrados." />
+      <Card tt="Mis cierres" arch="informe-cierres.csv" filas={[["Fecha", "Propiedad", "Tipo", "Monto", "Moneda", "Comisión", "Agente", "Rol", "Estado"], ...ops.map((o) => [o.iso, o.t, o.op, o.monto, o.mon, o.com, o.colab, o.rol, o.caido ? "Caído" : "Vigente"])]} nota={`Exportación de todos tus cierres registrados. ${ops.filter((o) => o.caido).length ? `${ops.filter((o) => o.caido).length} marcado(s) como caído(s).` : ""}`} />
     </div>
   );
 }
@@ -1982,7 +2010,7 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas, onIngresar, o
         const lunAnt = new Date(lun); lunAnt.setDate(lunAnt.getDate() - 7);
         const vSem = visitas.filter((x) => (x.de === ME || x.ag === ME) && x.est !== "Cancelada" && isoD(x.f) >= lun && isoD(x.f) <= dom).length;
         const porConf = props.filter((p) => p.cap.n === ME && p.est !== "Cerrado" && vigencia(p).n > 0).length;
-        const cierres = ops.filter((o) => (!o.de || o.de === ME) && o.iso && isoD(o.iso) >= lunAnt && isoD(o.iso) < lun).length;
+        const cierres = ops.filter((o) => (!o.de || o.de === ME) && !o.caido && o.iso && isoD(o.iso) >= lunAnt && isoD(o.iso) < lun).length;
         nuevos.push({ ic: "📊", t: "Tu resumen de la semana", s: `${vSem} visita${vSem !== 1 ? "s" : ""} agendada${vSem !== 1 ? "s" : ""} esta semana · ${porConf} captación${porConf !== 1 ? "es" : ""} por confirmar · ${clientes.length} requerimiento${clientes.length !== 1 ? "s" : ""} activo${clientes.length !== 1 ? "s" : ""} · ${cierres} cierre${cierres !== 1 ? "s" : ""} la semana pasada`, to: { tab: "visitas" } });
       }
     }
