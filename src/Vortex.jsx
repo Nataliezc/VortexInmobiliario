@@ -363,7 +363,7 @@ function Visitas({ visitas, setVisitas, props, clientes, flash, notify, users, p
   const [sel, setSel] = useState(isoOf(HOY));
   const [nuevo, setNuevo] = useState(false);
   useAtras(nuevo, () => setNuevo(false));
-  const [v, setV] = useState({ pid: "", cid: "", h: "10:00", modo: "Captador de la propiedad", otro: "", cotro: "", ptxt: "", tel: "", agTel: "", waCli: true, waAg: true, waCuando: 1440, txtCli: null, txtAg: null });
+  const [v, setV] = useState({ pid: "", cid: "", h: "10:00", modo: "Captador de la propiedad", clientePropio: true, otro: "", cotro: "", ptxt: "", tel: "", agTel: "", waCli: true, waAg: true, waCuando: 1440, txtCli: null, txtAg: null });
   const next = { Pendiente: "Confirmada", Confirmada: "Realizada", Realizada: "Pendiente", Cancelada: "Pendiente", Reprogramada: "Confirmada" };
   const col = { Pendiente: [C.amber, C.amberSoft], Confirmada: [C.brandDk, C.brandSoft], Realizada: [C.ok, C.okSoft], Cancelada: [C.red, C.redSoft], Reprogramada: [C.amber, C.amberSoft] };
   const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
@@ -380,13 +380,16 @@ function Visitas({ visitas, setVisitas, props, clientes, flash, notify, users, p
   const manual = v.pid === "__otra";
   const cli = clientes.find((c) => String(c.id) === v.cid);
   const cOtro = v.cid === "__otro";
-  const cNombre = cOtro ? v.cotro.trim() : cli ? cli.n : "";
   const otro = v.modo === "Otro agente";
+  const esClienteDeOtro = otro && !v.clientePropio;
+  const cNombreDirecto = cOtro ? v.cotro.trim() : cli ? cli.n : "";
   const agNombre = otro ? v.otro.trim() : manual ? ME : prop ? prop.cap.n : "";
+  const cNombre = esClienteDeOtro ? `Cliente de ${agNombre || "otro agente"}` : cNombreDirecto;
+  const waCliActivo = v.waCli && !esClienteDeOtro;
   const agUser = users.find((u) => u.n === agNombre);
   const agTelAuto = !otro && prop ? prop.cap.tel || "" : (agUser && agUser.perfil && agUser.perfil.tel) || "";
   const telAg = v.agTel.trim() || agTelAuto;
-  const telCli = v.tel.trim() || (cli && cli.tel) || "";
+  const telCli = esClienteDeOtro ? "" : v.tel.trim() || (cli && cli.tel) || "";
   const esPremium = !!perm.auto;
   const datosMsg = { cl: cNombre || "cliente", pt: prop ? prop.t : manual && v.ptxt.trim() ? v.ptxt.trim() : "la propiedad", zona: prop ? `${prop.zona}, ${prop.ciudad}` : "", fecha: `${sd} de ${MESES[sm - 1].toLowerCase()}`, h: v.h || "10:00", ag: agNombre || "el agente", yo: ME };
   const txtCli = v.txtCli ?? plantillaWa("cli", datosMsg);
@@ -397,16 +400,16 @@ function Visitas({ visitas, setVisitas, props, clientes, flash, notify, users, p
   const save = () => {
     if ((!prop && !(manual && v.ptxt.trim())) || !cNombre) { flash(manual ? "Escribe la descripción o dirección de la propiedad y el nombre del cliente." : "Elige la propiedad y el cliente, o escribe su nombre."); return; }
     if (otro && !v.otro.trim()) { flash("Escribe el nombre del agente."); return; }
-    if (esPremium && v.waCli && waNum(telCli).length < 8) { flash("Escribe el WhatsApp del cliente o desactiva el mensaje al cliente."); return; }
+    if (esPremium && waCliActivo && waNum(telCli).length < 8) { flash("Escribe el WhatsApp del cliente o desactiva el mensaje al cliente."); return; }
     if (esPremium && v.waAg && conAg && waNum(telAg).length < 8) { flash("Escribe el WhatsApp del agente o desactiva el mensaje al agente."); return; }
     const ag = agNombre;
-    const wa = esPremium && (v.waCli || (v.waAg && conAg)) ? { cuando: v.waCuando, cli: v.waCli ? { tel: telCli, txt: txtCli, env: false } : null, ag: v.waAg && conAg ? { tel: telAg, txt: txtAg, env: false } : null } : null;
+    const wa = esPremium && (waCliActivo || (v.waAg && conAg)) ? { cuando: v.waCuando, cli: waCliActivo ? { tel: telCli, txt: txtCli, env: false } : null, ag: v.waAg && conAg ? { tel: telAg, txt: txtAg, env: false } : null } : null;
     setVisitas([...visitas, { id: Date.now(), p: prop ? prop.id : null, ...(manual ? { pTxt: v.ptxt.trim() } : {}), cl: cNombre, clTel: telCli, f: sel, h: v.h || "10:00", ag, agTel: telAg, de: ME, rec: perm.recordatorios ? autos.recDef || 0 : 0, est: "Pendiente", ...(wa ? { wa } : {}) }]);
     notify("Visita agendada", `${cNombre} · ${prop ? prop.t : v.ptxt.trim()} · ${sd} ${MESES[sm - 1].toLowerCase()}, ${v.h}`, { tab: "visitas" });
     flash(ag === ME ? "Visita agendada." : reg(ag) ? `Visita agendada y también en el calendario de ${ag}. Le llegó una notificación.` : `Visita agendada. ${ag} no está en la app: avísale por WhatsApp.`);
     if (prop && prop.cap.n !== ME && reg(prop.cap.n)) notificar("visita", { para: prop.cap.n, de: ME, prop: prop.t, fecha: fechaL(isoD(sel)), hora: v.h || "10:00" });
     if (wa) flash(v.waCuando === 0 ? "Visita agendada. Los mensajes de WhatsApp están listos arriba para enviar." : `Visita agendada. Los mensajes de WhatsApp quedan programados (${MOMENTOS_WA.find((m) => m[0] === v.waCuando)[1].toLowerCase()}).`);
-    setNuevo(false); setV({ ...v, pid: "", ptxt: "", modo: "Captador de la propiedad", cid: "", otro: "", cotro: "", tel: "", agTel: "", txtCli: null, txtAg: null });
+    setNuevo(false); setV({ ...v, pid: "", ptxt: "", modo: "Captador de la propiedad", clientePropio: true, cid: "", otro: "", cotro: "", tel: "", agTel: "", txtCli: null, txtAg: null });
   };
   return (
     <div className="p-4 space-y-3">
@@ -443,27 +446,29 @@ function Visitas({ visitas, setVisitas, props, clientes, flash, notify, users, p
       <div className="flex items-center justify-between"><div className="font-semibold" style={{ color: C.ink }}>{sd} de {MESES[sm - 1].toLowerCase()} de {sy}</div><button onClick={() => setNuevo(!nuevo)} className="text-sm px-3 py-1.5 rounded-full text-white" style={{ background: C.grad }}>{nuevo ? "Cerrar" : "+ Registrar visita"}</button></div>
       {nuevo && (
         <div className="rounded-2xl p-3 space-y-3" style={{ background: C.lilaSoft }}>
-          <Fld l="Propiedad"><select value={v.pid} onChange={(e) => { const pid = e.target.value; setV({ ...v, pid, modo: pid === "__otra" ? (v.modo === "Otro agente" ? "Otro agente" : "La atiendo yo") : v.modo === "La atiendo yo" ? "Captador de la propiedad" : v.modo }); }} className="w-full rounded-xl px-3 py-2 text-sm" style={inp}><option value="">Elige una propiedad</option>{abiertas.map((p) => <option key={p.id} value={p.id}>{p.t}</option>)}<option value="__otra">✏️ Otra propiedad (no está en Vortex)</option></select></Fld>
+          <Fld l="Propiedad"><BuscarPropiedad abiertas={abiertas} pid={v.pid} onSel={(pid) => setV({ ...v, pid, modo: pid === "__otra" ? (v.modo === "Otro agente" ? "Otro agente" : "La atiendo yo") : v.modo === "La atiendo yo" ? "Captador de la propiedad" : v.modo })} /></Fld>
           {manual && <Fld l="Descripción o dirección de la propiedad"><textarea rows={2} value={v.ptxt} onChange={(e) => setV({ ...v, ptxt: e.target.value })} placeholder="Ej. Casa 3 dorm. en Av. América #123, zona Queru Queru" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>}
-          <Fld l="Cliente"><select value={v.cid} onChange={(e) => setV({ ...v, cid: e.target.value })} className="w-full rounded-xl px-3 py-2 text-sm" style={inp}><option value="">Elige un cliente</option>{clientes.map((c) => <option key={c.id} value={c.id}>{c.n}</option>)}<option value="__otro">➕ Otro cliente (no registrado)</option></select></Fld>
+          {!esClienteDeOtro && <><Fld l="Cliente"><select value={v.cid} onChange={(e) => setV({ ...v, cid: e.target.value })} className="w-full rounded-xl px-3 py-2 text-sm" style={inp}><option value="">Elige un cliente</option>{clientes.map((c) => <option key={c.id} value={c.id}>{c.n}</option>)}<option value="__otro">➕ Otro cliente (no registrado)</option></select></Fld>
           {cOtro && <Fld l="Nombre del cliente"><input value={v.cotro} onChange={(e) => setV({ ...v, cotro: e.target.value })} placeholder="Escribe el nombre del cliente" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>}
-          {(cOtro || (esPremium && cli)) && <Fld l={`WhatsApp del cliente${esPremium ? "" : " (opcional)"}`}><input value={v.tel || (cli && cli.tel) || ""} onChange={(e) => setV({ ...v, tel: e.target.value })} inputMode="tel" placeholder="Ej. 70012345" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>}
+          {(cOtro || (esPremium && cli)) && <Fld l={`WhatsApp del cliente${esPremium ? "" : " (opcional)"}`}><input value={v.tel || (cli && cli.tel) || ""} onChange={(e) => setV({ ...v, tel: e.target.value })} inputMode="tel" placeholder="Ej. 70012345" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>}</>}
           <Fld l="Hora"><input type="time" value={v.h} onChange={(e) => setV({ ...v, h: e.target.value })} className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
           <Fld l="Agente que atiende la visita"><Seg o={[manual ? "La atiendo yo" : "Captador de la propiedad", "Otro agente"]} v={v.modo} set={(m) => setV({ ...v, modo: m })} /></Fld>
-          {otro ? <Fld l="Nombre del agente"><input value={v.otro} onChange={(e) => setV({ ...v, otro: e.target.value })} placeholder="Escribe su nombre (puede no estar en la app)" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
+          {otro ? <><Fld l="Nombre del agente"><input value={v.otro} onChange={(e) => setV({ ...v, otro: e.target.value })} placeholder="Escribe su nombre (puede no estar en la app)" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
+            <Fld l="¿De quién es este cliente?"><Seg o={["Es mi cliente", `Lo trae ${v.otro.trim() || "ese agente"}`]} v={v.clientePropio ? "Es mi cliente" : `Lo trae ${v.otro.trim() || "ese agente"}`} set={(x) => setV({ ...v, clientePropio: x === "Es mi cliente", cid: "", cotro: "", tel: "" })} /></Fld>
+            {esClienteDeOtro && <div className="text-xs rounded-lg px-2.5 py-1.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>No necesitas los datos de este cliente: lo gestiona {v.otro.trim() || "ese agente"}.</div>}</>
             : prop ? <div className="text-xs" style={{ color: C.lilaDk }}>Agente: {prop.cap.n === ME ? "tú (captador)" : prop.cap.n + ", recibirá una notificación"}</div> : manual ? <div className="text-xs" style={{ color: C.lilaDk }}>Agente: tú</div> : null}
           {conAg && (!agTelAuto || otro) && <Fld l={`WhatsApp de ${agNombre || "el agente"}${esPremium ? "" : " (opcional)"}`}><input value={v.agTel || agTelAuto} onChange={(e) => setV({ ...v, agTel: e.target.value })} inputMode="tel" placeholder="Ej. 70012345" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>}
           {esPremium ? <div className="rounded-xl p-3 space-y-2.5" style={{ background: "#fff", border: "1.5px solid #25D366" }}>
             <div className="text-sm font-semibold" style={{ color: "#0F7A3D" }}>📲 Confirmación por WhatsApp</div>
-            <div className="flex flex-wrap gap-2"><Chip on={v.waCli} onClick={() => setV({ ...v, waCli: !v.waCli })}>{v.waCli ? "✓ " : ""}Al cliente</Chip>{conAg && <Chip on={v.waAg} onClick={() => setV({ ...v, waAg: !v.waAg })}>{v.waAg ? "✓ " : ""}Al agente ({agNombre.split(" ")[0]})</Chip>}</div>
-            {(v.waCli || (v.waAg && conAg)) && <>
+            <div className="flex flex-wrap gap-2">{!esClienteDeOtro && <Chip on={v.waCli} onClick={() => setV({ ...v, waCli: !v.waCli })}>{v.waCli ? "✓ " : ""}Al cliente</Chip>}{conAg && <Chip on={v.waAg} onClick={() => setV({ ...v, waAg: !v.waAg })}>{v.waAg ? "✓ " : ""}Al agente ({agNombre.split(" ")[0]})</Chip>}</div>
+            {(waCliActivo || (v.waAg && conAg)) && <>
               <Fld l="¿Cuándo enviar?"><Seg o={MOMENTOS_WA.map((m) => m[1])} v={MOMENTOS_WA.find((m) => m[0] === v.waCuando)[1]} set={(l) => setV({ ...v, waCuando: MOMENTOS_WA.find((m) => m[1] === l)[0] })} /></Fld>
-              {v.waCli && <Fld l="Mensaje para el cliente"><textarea rows={4} value={txtCli} onChange={(e) => setV({ ...v, txtCli: e.target.value })} className="w-full rounded-xl px-3 py-2 text-xs" style={inp} /></Fld>}
+              {waCliActivo && <Fld l="Mensaje para el cliente"><textarea rows={4} value={txtCli} onChange={(e) => setV({ ...v, txtCli: e.target.value })} className="w-full rounded-xl px-3 py-2 text-xs" style={inp} /></Fld>}
               {v.waAg && conAg && <Fld l={`Mensaje para ${agNombre}`}><textarea rows={3} value={txtAg} onChange={(e) => setV({ ...v, txtAg: e.target.value })} className="w-full rounded-xl px-3 py-2 text-xs" style={inp} /></Fld>}
               {(v.txtCli !== null || v.txtAg !== null) && <button onClick={() => setV({ ...v, txtCli: null, txtAg: null })} className="text-xs underline" style={{ color: C.mute }}>Restaurar mensajes sugeridos</button>}
               <div className="text-xs" style={{ color: C.mute }}>A la hora elegida, el mensaje aparece arriba en Visitas y en Alertas, listo para enviarse con un toque desde tu WhatsApp.</div>
             </>}
-          </div> : <div className="text-xs rounded-xl p-2.5" style={{ background: "#fff", color: C.mute }}>🔒 Programar confirmaciones por WhatsApp al cliente y al agente: disponible en el plan Premium.</div>}
+            </div> : !esClienteDeOtro && <div className="text-xs rounded-xl p-2.5" style={{ background: "#fff", color: C.mute }}>🔒 Programar confirmaciones por WhatsApp al cliente y al agente: disponible en el plan Premium.</div>}
           <button onClick={save} className="w-full py-3 rounded-xl font-semibold text-white" style={{ background: C.lila }}>Agendar para el {sd} de {MESES[sm - 1].toLowerCase()}</button>
         </div>
       )}
@@ -622,7 +627,7 @@ function Extra({ onRepublicar, nivelReal, sub, ops, setOps, props, setProps, rep
   const [borrarId, setBorrarId] = useState(null);
   const [nuevo, setNuevo] = useState(false);
   const [o, setO] = useState({ pid: "", monto: "", com: "", colab: "" });
-  const [d, setD] = useState(() => ({ tel: "", bio: "", ciu: [], ...(PERFIL.datos || {}) }));
+  const [d, setD] = useState(() => ({ tel: "", bio: "", ciu: [], foto: null, ...(PERFIL.datos || {}) }));
   const [sg, setSg] = useState({ cat: "", txt: "" });
   const [rfOpen, setRfOpen] = useState(false);
   useEffect(() => { if (pre) { setNuevo(true); setO((x) => ({ ...x, pid: pre })); clearPre(); } }, [pre]);
@@ -654,7 +659,10 @@ function Extra({ onRepublicar, nivelReal, sub, ops, setOps, props, setProps, rep
       <Fld l="WhatsApp de contacto"><input value={d.tel} onChange={(e) => setD({ ...d, tel: e.target.value })} className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
       <Fld l="Ciudades donde trabajas"><div className="flex flex-wrap gap-2">{Object.keys(ZONAS).map((c) => <Chip key={c} on={d.ciu.includes(c)} onClick={() => setD({ ...d, ciu: d.ciu.includes(c) ? d.ciu.filter((x) => x !== c) : [...d.ciu, c] })}>{c}</Chip>)}</div></Fld>
       <Fld l="Presentación profesional"><textarea rows={3} value={d.bio} onChange={(e) => setD({ ...d, bio: e.target.value })} className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
-      <button className="w-full py-3 rounded-xl text-sm" style={{ border: `1px dashed ${C.mute}`, color: C.mute }}>📷 Cambiar foto de perfil</button>
+      <div className="flex items-center gap-3">
+        {d.foto ? <img src={d.foto} alt="Tu foto" className="rounded-full object-cover shrink-0" style={{ width: 56, height: 56 }} /> : <div className="rounded-full flex items-center justify-center shrink-0 text-white font-semibold" style={{ width: 56, height: 56, background: C.lila }}>{ME.split(" ").filter(Boolean).slice(0, 2).map((x) => x[0].toUpperCase()).join("") || "?"}</div>}
+        <label className="flex-1 py-3 rounded-xl text-sm text-center cursor-pointer" style={{ border: `1px dashed ${C.mute}`, color: C.mute }}>📷 {d.foto ? "Cambiar" : "Subir"} foto de perfil<input type="file" accept="image/*" className="hidden" onChange={async (e) => { const file = e.target.files && e.target.files[0]; e.target.value = ""; if (!file) return; const u = await subir(file); if (u) setD((x) => ({ ...x, foto: u })); }} /></label>
+      </div>
       <button onClick={() => { PERFIL.guardar(d); flash("Datos guardados."); }} className="w-full py-3 rounded-xl font-semibold text-white" style={{ background: C.grad }}>Guardar cambios</button>
     </div>
   );
@@ -762,10 +770,41 @@ let ZONAS = ZONAS_BASE;
 const ESTADOS = ["Disponible", "Reservado", "En pausa", "Cerrado", "Retirada"];
 const EMO = { Disponible: "🟢", Reservado: "🟡", "En pausa": "⏸️", Cerrado: "🔴", Retirada: "⚪" };
 const inp = { border: `1px solid ${C.line}`, background: C.card, color: C.ink };
+function BuscarPropiedad({ abiertas, pid, onSel }) {
+  const [q, setQ] = useState("");
+  const [abierto, setAbierto] = useState(!pid);
+  const elegido = pid === "__otra" ? { t: "✏️ Otra propiedad (no está en Vortex)" } : abiertas.find((p) => String(p.id) === pid);
+  if (!abierto && elegido) {
+    return (
+      <div className="rounded-xl p-2.5 flex justify-between items-center gap-2" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+        <span className="text-sm truncate" style={{ color: C.ink }}>{elegido.t}</span>
+        <button onClick={() => setAbierto(true)} className="text-xs underline shrink-0" style={{ color: C.lilaDk }}>Cambiar</button>
+      </div>
+    );
+  }
+  const f = q.trim().toLowerCase();
+  const resultados = (!f ? abiertas : abiertas.filter((p) => `${p.t} ${p.zona} ${p.ciudad} ${p.tipo} ${p.op}`.toLowerCase().includes(f))).slice(0, 30);
+  return (
+    <div className="space-y-1.5">
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Busca por título, zona, ciudad o tipo…" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} autoFocus />
+      <div className="rounded-xl overflow-y-auto" style={{ border: `1px solid ${C.line}`, maxHeight: 190 }}>
+        {!resultados.length && <div className="text-xs p-3 text-center" style={{ color: C.mute }}>Sin resultados.{abiertas.length > 0 ? "" : " No hay captaciones abiertas todavía."}</div>}
+        {resultados.map((p) => (
+          <button key={p.id} onClick={() => { onSel(String(p.id)); setAbierto(false); setQ(""); }} className="w-full text-left px-3 py-2" style={{ borderBottom: `1px solid ${C.line}`, background: "#fff" }}>
+            <div className="text-sm font-medium truncate" style={{ color: C.ink }}>{p.t}</div>
+            <div className="text-xs" style={{ color: C.mute }}>{p.op} · {p.zona}, {p.ciudad}</div>
+          </button>
+        ))}
+        {abiertas.length > 30 && resultados.length === 30 && <div className="text-xs p-2 text-center" style={{ color: C.mute }}>Hay más resultados: sigue escribiendo para acotar la búsqueda.</div>}
+      </div>
+      <button onClick={() => { onSel("__otra"); setAbierto(false); setQ(""); }} className="text-xs underline" style={{ color: C.lilaDk }}>✏️ Otra propiedad (no está en Vortex)</button>
+    </div>
+  );
+}
 const Seg = ({ o, v, set }) => <div className="flex flex-wrap gap-2">{o.map((x) => <Chip key={x} on={v === x} onClick={() => set(x)}>{x}</Chip>)}</div>;
 const Fld = ({ l, children, x }) => <div className="space-y-1.5" style={x ? { background: C.amberSoft, borderRadius: 12, padding: 8, outline: `1.5px solid ${C.amber}` } : undefined}><div className="text-xs font-medium" style={{ color: x ? C.amber : C.mute }}>{l}</div>{children}</div>;
 
-const TIPOS_INM = ["Casa", "Departamento", "Terreno", "Oficina", "Comercial"];
+const TIPOS_INM = ["Casa", "Departamento", "Monoambiente", "Terreno", "Oficina", "Comercial"];
 const toF = (p) => ({ tcModo: p.tcModo || "dia", tc: p.tc ? String(p.tc) : "", op: p.op, tipo: TIPOS_INM.includes(p.tipo) ? p.tipo : "Otro", tipoOtro: TIPOS_INM.includes(p.tipo) || p.tipo === "Otro" ? "" : p.tipo, ciudad: p.ciudad, zona: p.zona, t: p.t, precio: String(p.precio), mon: p.mon, dorm: String(p.dorm), ban: String(p.ban), m2: String(p.m2), garaje: p.garaje ? "Sí" : "No", gTipo: p.gTipo || "Independiente", gAparte: p.gAparte ? "Sí" : "No", gPrecio: p.gPrecio || "", mascotas: p.mascotas, mascCond: p.mascCond || "", amoblado: p.amoblado, com: p.com, condComp: p.condComp || "", desc: p.desc || "", fotos: p.fotos || [] });
 
 function Form({ onSave, init, maxFotos = 3, autoCopy = false }) {
@@ -943,6 +982,7 @@ function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, s
 
 function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, ops, sugs, setSugs, pagos, setPagos, cfg, setCfg, flash, cuentas, visitas = [], reviews = [], agenda = [], setAgenda }) {
   const [s, setS] = useState("pag");
+  const [verQr, setVerQr] = useState(null);
   const [menuAb, setMenuAb] = useState(false);
   useAtras(menuAb, () => setMenuAb(false));
   useAtras(s !== "pag" && !menuAb, () => setS("pag"));
@@ -1105,6 +1145,7 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
         </div>
       </>}
       {s === "cfg" && <>
+        {verQr && <VisorImagen src={verQr} titulo="QR de pago" onClose={() => setVerQr(null)} />}
         <div className="text-sm font-semibold" style={{ color: C.ink }}>💱 Moneda</div>
         <div className="grid grid-cols-2 gap-2">
           <Fld l="Moneda principal de la app"><Seg o={["Bs", "USD"]} v={(cfg.moneda || "BOB") === "BOB" ? "Bs" : "USD"} set={(x) => setCfg({ ...cfg, moneda: x === "Bs" ? "BOB" : "USD" })} /></Fld>
@@ -1121,7 +1162,7 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
         <Fld l="Número de cuenta"><input value={cfg.cuenta} onChange={(e) => setCfg({ ...cfg, cuenta: e.target.value })} className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
         <div className="grid grid-cols-2 gap-3"><Fld l="WhatsApp de soporte prioritario"><input value={cfg.waSoporte} onChange={(e) => setCfg({ ...cfg, waSoporte: e.target.value })} placeholder="591..." inputMode="tel" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld><Fld l="Respuesta objetivo (horas)"><input value={cfg.slaPrio} onChange={(e) => setCfg({ ...cfg, slaPrio: e.target.value.replace(/\D/g, "") })} inputMode="numeric" placeholder="Opcional" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld></div>
         <label className="block w-full py-3 rounded-xl text-sm text-center cursor-pointer" style={{ border: `1px dashed ${C.mute}`, color: C.mute }}>{cfg.qr ? "✓ QR cargado (cambiar)" : "📷 Subir imagen del QR de cobro"}<input type="file" accept="image/*" className="hidden" onChange={async (e) => { const u = e.target.files[0] && await subir(e.target.files[0]); if (u) setCfg((x) => ({ ...x, qr: u })); }} /></label>
-        {cfg.qr && <img src={cfg.qr} alt="QR" className="rounded-xl mx-auto" style={{ width: 140, height: 140, objectFit: "cover" }} />}
+        {cfg.qr && <button onClick={() => setVerQr(cfg.qr)} className="block mx-auto"><img src={cfg.qr} alt="QR" className="rounded-xl" style={{ width: 140, height: 140, objectFit: "cover" }} /><span className="text-xs underline block mt-1" style={{ color: C.brandDk }}>Ver en tamaño completo</span></button>}
         <div style={{ height: 1, background: C.line }} />
         <AdminCiudades ciudades={cfg.ciudades && Object.keys(cfg.ciudades).length ? cfg.ciudades : ZONAS_BASE} setCiudades={(c) => setCfg({ ...cfg, ciudades: c })} log={log} />
         <div style={{ height: 1, background: C.line }} />
@@ -1483,6 +1524,25 @@ const textoGrupo = (p) => [
 ].filter((x) => x !== undefined && x !== null && x !== false).join("\n").replace(/\n{3,}/g, "\n\n");
 // ── Fotos: descargar o enviar ──
 const nombreArchivo = (t) => (t || "foto").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 40).toLowerCase() || "foto";
+function VisorImagen({ src, titulo, onClose }) {
+  const [ocup, setOcup] = useState(false);
+  return (
+    <div className="fixed inset-0 z-[70] flex flex-col" style={{ background: "rgba(10,8,20,.92)" }} onClick={onClose}>
+      <div className="flex justify-between items-center p-3" style={{ paddingTop: "calc(12px + env(safe-area-inset-top, 0px))" }} onClick={(e) => e.stopPropagation()}>
+        <span className="text-sm text-white">{titulo}</span>
+        <button onClick={onClose} className="text-2xl leading-none text-white px-2">×</button>
+      </div>
+      <div className="flex-1 flex items-center justify-center p-4 overflow-auto" onClick={(e) => e.stopPropagation()}>
+        <img src={src} alt={titulo} className="max-w-full max-h-full rounded-xl object-contain" />
+      </div>
+      <div className="p-4 grid grid-cols-2 gap-2" style={{ paddingBottom: "calc(16px + env(safe-area-inset-bottom, 0px))" }} onClick={(e) => e.stopPropagation()}>
+        <button disabled={ocup} onClick={async () => { setOcup(true); try { await descargarFotos([src], titulo || "imagen"); } finally { setOcup(false); } }} className="py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: "#7928CA" }}>{ocup ? "Descargando…" : "⬇ Descargar"}</button>
+        <a href={src} target="_blank" rel="noreferrer" className="py-2.5 rounded-xl text-sm font-semibold text-center" style={{ background: "#fff", color: "#1F1B3A" }}>Abrir en una pestaña</a>
+      </div>
+      <div className="text-center text-xs text-white pb-3" style={{ opacity: .8 }}>En el celular, mantén el dedo sobre la imagen para guardarla directamente.</div>
+    </div>
+  );
+}
 const bajarBlob = async (u) => { const r = await fetch(u, { mode: "cors" }); if (!r.ok) throw new Error("descarga"); return r.blob(); };
 async function descargarFotos(urls, base, desde = 1) {
   for (let i = 0; i < urls.length; i++) {
@@ -1574,6 +1634,7 @@ function Sus(props) {
   return <SusPago {...props} />;
 }
 function SusPago({ acceso, users, setUsers, pagos, setPagos, cfg, flash, nivel, trial }) {
+  const [verQr, setVerQr] = useState(null);
   const [plan, setPlan] = useState(["Inicial", "Profesional", "Premium"].includes(nivel) ? nivel : "Profesional");
   const [metodo, setMetodo] = useState("QR");
   const [meses, setMeses] = useState(1);
@@ -1613,7 +1674,8 @@ function SusPago({ acceso, users, setUsers, pagos, setPagos, cfg, flash, nivel, 
       <div className="rounded-xl p-3 text-sm font-semibold" style={{ background: est[1], color: est[2] }}>{est[0]}</div>
       <div className="rounded-xl p-3 text-sm space-y-1" style={{ background: C.lilaSoft, color: C.lilaDk }}>
         <div className="font-semibold">📅 Cómo se paga</div>
-        <div>Todos los pagos se hacen el <b>día {cfg.dia} de cada mes</b>.{renov ? "" : ` Si te suscribes hoy, pagas solo los días que faltan hasta el próximo corte (${fechaL(pr.fin)}) y desde ahí pagas el mes completo.`}</div>
+        <div>El plazo para pagar es del <b>día 1 al día {cfg.dia} de cada mes</b>. Si no se registra el pago dentro de ese plazo, el acceso se corta el día {cfg.dia + 1}{renov ? " y el plan pasa a Gratuito hasta que se regularice" : ""}.</div>
+        {!renov && <div>Como hoy no es el día {cfg.dia}, tu <b>primer pago es menor</b> al precio normal: solo pagas los <b>{pr.resta} días</b> que faltan hasta el próximo corte ({fechaL(pr.fin)}), en vez del mes completo. Es un ajuste único llamado <b>prorrateo</b>, para que no pagues por días que aún no usaste. Desde el {fechaL(pr.fin)} ya pagas el mes completo, dentro del plazo del 1 al {cfg.dia}.</div>}
       </div>
       <div className="grid gap-2">{cfg.planes.map((pl) => { const p = pl.nombre; const x = prorrateo(pl.precio, cfg.dia); return (
         <button key={p} onClick={() => setPlan(p)} className="rounded-2xl p-3 text-left" style={{ background: C.card, border: `2px solid ${plan === p ? C.lila : C.line}` }}>
@@ -1630,6 +1692,15 @@ function SusPago({ acceso, users, setUsers, pagos, setPagos, cfg, flash, nivel, 
             <div className="text-sm font-bold">{l}</div><div className="text-xs">{bs(precioDe(cfg, accion === "renov" ? planRen : plan) * fx)}</div>{m > 1 && <div style={{ fontSize: 10 }}>{m - fx} {m - fx > 1 ? "meses" : "mes"} gratis</div>}
           </button>))}</div>
       </div>}
+      {verQr && <VisorImagen src={verQr} titulo="QR de pago" onClose={() => setVerQr(null)} />}
+      {accion === "alta" && pr.resta < 30 && <div className="rounded-xl p-3 text-xs space-y-1" style={{ background: C.lilaSoft, color: C.lilaDk }}>
+        <div className="font-semibold">¿Por qué el primer pago es menor?</div>
+        <div>Es un cobro proporcional (prorrateo): solo pagas los <b>{pr.resta} días</b> que faltan hasta el próximo corte, el {fechaL(pr.fin)}. Desde ahí, cada mes pagarás el precio completo del plan.</div>
+      </div>}
+      <div className="rounded-xl p-3 text-xs space-y-1" style={{ background: C.amberSoft, color: C.amber }}>
+        <div className="font-semibold">Plazo de pago</div>
+        <div>El cobro es el día {cfg.dia} de cada mes. Tienes del <b>día 1 al {cfg.dia}</b> para pagar; pasado ese plazo, el servicio se corta y pasas al plan Gratuito hasta que regularices el pago.</div>
+      </div>
       <div className="rounded-xl p-3 text-sm" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.ink }}>
         {mesesPago > 1 ? <>{accion === "alta" ? <>Pagas los {pr.resta} días hasta el corte ({bs(pr.monto)}) + {mesesPago} meses de {plan} por el precio de {factorPeriodo(mesesPago)}: <b>{bs(monto)}</b>.</> : <>Renovación de {planRen} por {mesesPago} meses (pagas {factorPeriodo(mesesPago)}): <b>{bs(monto)}</b>.</>} Tu acceso quedará activo hasta el {fechaL(new Date((accion === "renov" && mi.venc ? isoD(mi.venc) : pr.fin).getFullYear(), (accion === "renov" && mi.venc ? isoD(mi.venc) : pr.fin).getMonth() + mesesPago, cfg.dia))}.</> : accion === "renov" ? <>Tu renovación del mes completo ({planRen}): <b>{bs(monto)}</b>.{mi.planProx ? " Incluye el cambio de plan que programaste." : ""}</> : accion === "mejora" ? <>Mejora a <b>{plan}</b>: hoy pagas solo la diferencia por los {pr.resta} de {pr.ciclo} días que quedan: <b>{bs(monto)}</b>. Desde el próximo corte pagas {bs(precioDe(cfg, plan))}.</> : accion === "baja" ? <>Cambio a <b>{plan}</b>: sin pago ahora.</> : <>Primer pago prorrateado: <b>{bs(monto)}</b> ({pr.resta} de {pr.ciclo} días, hasta el {fechaL(pr.fin)}). Desde el {fechaL(pr.fin)} pagas <b>{bs(precioDe(cfg, plan))}</b> cada mes.</>}
       </div>
@@ -1641,7 +1712,7 @@ function SusPago({ acceso, users, setUsers, pagos, setPagos, cfg, flash, nivel, 
           <div className="grid grid-cols-2 gap-2">{[["front", "Anverso"], ["back", "Reverso"]].map(([k, l]) => <label key={k} className="flex items-center justify-center rounded-xl text-xs text-center cursor-pointer overflow-hidden" style={{ height: 96, border: `1px dashed ${C.mute}`, color: C.mute }}>{ci[k] ? <img src={ci[k]} alt={l} className="w-full h-full object-cover" /> : `📷 ${l}`}<input type="file" accept="image/*" className="hidden" onChange={async (e) => { const u = e.target.files[0] && await subirPrivado(e.target.files[0]); if (u) setCi((x) => ({ ...x, [k]: u })); }} /></label>)}</div>
         </div> : <div className="rounded-xl p-2.5 text-xs" style={{ background: C.okSoft, color: C.ok }}>🪪 Identidad ya verificada · no necesitas volver a subir tu carnet.</div>}
         <Seg o={["QR", "Cuenta bancaria"]} v={metodo} set={setMetodo} />
-        {metodo === "QR" ? <div className="flex flex-col items-center gap-2">{cfg.qr ? <img src={cfg.qr} alt="QR de pago" className="rounded-xl" style={{ width: 170, height: 170, objectFit: "cover" }} /> : <div className="flex items-center justify-center rounded-xl text-xs text-center" style={{ width: 170, height: 170, border: `1px dashed ${C.mute}`, color: C.mute }}>QR de ejemplo<br />(lo sube el administrador)</div>}<div className="text-sm" style={{ color: C.ink }}>Escanea y paga exactamente <b>{bs(monto)}</b></div></div>
+        {metodo === "QR" ? <div className="flex flex-col items-center gap-2">{cfg.qr ? <><button onClick={() => setVerQr(cfg.qr)}><img src={cfg.qr} alt="QR de pago" className="rounded-xl" style={{ width: 170, height: 170, objectFit: "cover" }} /></button><button onClick={() => setVerQr(cfg.qr)} className="text-xs underline" style={{ color: C.brandDk }}>Ver en tamaño completo para descargar o escanear</button></> : <div className="flex items-center justify-center rounded-xl text-xs text-center" style={{ width: 170, height: 170, border: `1px dashed ${C.mute}`, color: C.mute }}>QR de ejemplo<br />(lo sube el administrador)</div>}<div className="text-sm" style={{ color: C.ink }}>Escanea y paga exactamente <b>{bs(monto)}</b></div></div>
           : <div className="rounded-xl p-3 text-sm space-y-0.5" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.ink }}><div>Titular: <b>{cfg.titular}</b></div><div>Banco: {cfg.banco}</div><div>Cuenta: {cfg.cuenta}</div><div>Monto exacto: <b>{bs(monto)}</b></div></div>}
         <label className="block w-full py-2.5 rounded-xl text-sm text-center cursor-pointer" style={{ border: `1px dashed ${C.mute}`, color: C.mute }}>{f.comp ? "✓ Comprobante cargado (cambiar)" : "🧾 Subir foto del comprobante (baucher)"}<input type="file" accept="image/*" className="hidden" onChange={async (e) => { const u = e.target.files[0] && await subir(e.target.files[0]); if (u) setF((x) => ({ ...x, comp: u })); }} /></label>
         <input value={f.ref} onChange={(e) => setF({ ...f, ref: e.target.value })} placeholder="Número de comprobante o referencia (opcional)" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} />
@@ -1888,7 +1959,7 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas, onIngresar, o
       <div className="relative flex flex-col overflow-hidden vx-frame" style={{ background: C.bg }}>
         <div className="px-4 pt-3 pb-2 flex items-center justify-between" style={{ background: "#fff" }}>
           <div className="flex items-center gap-2"><img src={LOGO_ISO} alt="Vortex" style={{ height: 36 }} /><div><img src={LOGO_WM} alt="Vortex" style={{ height: 17, display: "block" }} /><div style={{ fontSize: 9, letterSpacing: ".12em", color: C.mute, marginTop: 4 }}>{acceso === "admin" ? "PANEL SUPERADMIN" : "RED DE AGENTES INMOBILIARIOS"}</div></div></div>
-          {visitante ? <div className="flex items-center gap-2"><button onClick={onIngresar} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: C.lilaSoft, color: C.lilaDk }}>Ingresar</button><button onClick={onRegistro} className="px-3 py-1.5 rounded-full text-xs font-semibold text-white" style={{ background: C.grad }}>Registrarme</button></div> : <div className="flex items-center gap-2">{esAdmin && sim !== "admin" && <button onClick={onMenu} className="px-2 py-1 rounded-full text-xs font-semibold" style={{ background: C.amberSoft, color: C.amber }}>👁 {(CUENTAS.find((c) => c[0] === sim) || [0, ""])[1]}</button>}<button onClick={onMenu} title="Mi cuenta" className="w-9 h-9 rounded-full flex items-center justify-center text-base" style={{ background: C.lilaSoft, color: C.lilaDk }}>⚙️</button><button onClick={() => { setTab("perfil"); setSel(null); }} className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold text-white" style={{ background: C.lila }}>{iniciales}</button></div>}
+          {visitante ? <div className="flex items-center gap-2"><button onClick={onIngresar} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: C.lilaSoft, color: C.lilaDk }}>Ingresar</button><button onClick={onRegistro} className="px-3 py-1.5 rounded-full text-xs font-semibold text-white" style={{ background: C.grad }}>Registrarme</button></div> : <div className="flex items-center gap-2">{esAdmin && sim !== "admin" && <button onClick={onMenu} className="px-2 py-1 rounded-full text-xs font-semibold" style={{ background: C.amberSoft, color: C.amber }}>👁 {(CUENTAS.find((c) => c[0] === sim) || [0, ""])[1]}</button>}<button onClick={onMenu} title="Mi cuenta" className="w-9 h-9 rounded-full flex items-center justify-center text-base" style={{ background: C.lilaSoft, color: C.lilaDk }}>⚙️</button><button onClick={() => { setTab("perfil"); setSel(null); }} className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold text-white" style={{ background: C.lila }}>{PERFIL.datos && PERFIL.datos.foto ? <img src={PERFIL.datos.foto} alt="" className="w-full h-full rounded-full object-cover" /> : iniciales}</button></div>}
         </div>
         <div style={{ height: 3, background: C.grad }} />
         {banner && <button onClick={goSub} className="w-full text-left text-xs px-4 py-2 font-medium" style={{ background: banner[1], color: banner[2] }}>{banner[0]}{visitante ? " ›" : " · Ver planes ›"}</button>}

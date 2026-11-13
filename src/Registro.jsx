@@ -2,6 +2,7 @@
 // Al terminar, la cuenta queda con 48 h de prueba y la sesión iniciada.
 import { useState } from "react";
 import { supabase } from "./supabase";
+import { notificar } from "./push";
 import { TerminosModal } from "./Extras";
 import { C, LOGO_ISO } from "./Vortex";
 import { inp, Campo, Boton, MsgError, ClaveInput } from "./ui";
@@ -34,6 +35,7 @@ export default function Registro({ onLogin, onVolver, terminos }) {
       setPaso("Entrando…");
       const { error: e4 } = await supabase.auth.signInWithPassword({ email, password: f.pass });
       if (e4) throw e4;
+      notificar("registro", { nombre: f.nombre.trim() });
     } catch (e) {
       setErr(creada ? "Tu cuenta se creó. Inicia sesión con tu correo y contraseña." : limpiarMsg(e.message || String(e)));
       setPaso("");

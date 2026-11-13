@@ -37,7 +37,8 @@ export function leerCopy(copy, ZONAS) {
 
   // Tipo de inmueble
   const tipo = primero(t, [
-    [/\b(departamento|depto|dpto|dep\.|monoambiente|garzonier|garsonier|penthouse|duplex|loft)\b/, "Departamento"],
+    [/\b(monoambiente|garzonier|garsonier)\b/, "Monoambiente"],
+    [/\b(departamento|depto|dpto|dep\.|penthouse|duplex|loft)\b/, "Departamento"],
     [/\bcasa\b/, "Casa"], [/\b(terreno|lote)\b/, "Terreno"], [/\boficinas?\b/, "Oficina"],
     [/\b(local comercial|local|tienda|comercial)\b/, "Comercial"],
     [/\b(galpon|quinta|edificio|habitacion|cuarto|cabana|hotel|consultorio|deposito)\b/, (m) => "Otro:" + m[1]],

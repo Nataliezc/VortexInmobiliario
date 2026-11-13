@@ -6,7 +6,7 @@ self.addEventListener("push", (e) => {
   try { d = e.data ? e.data.json() : {}; } catch { d = { titulo: "Vortex", cuerpo: e.data ? e.data.text() : "" }; }
   e.waitUntil(self.registration.showNotification(d.titulo || "Vortex", {
     body: d.cuerpo || "", icon: "/icono-192.png", badge: "/icono-192.png", data: { url: d.url || "/" }, tag: d.tag, renotify: !!d.tag,
-    requireInteraction: !!d.importante, vibrate: [300, 150, 300, 150, 300], silent: false,
+    requireInteraction: !!d.importante, vibrate: d.importante ? [300, 150, 300, 150, 300] : undefined, silent: !d.importante,
   }));
 });
 self.addEventListener("notificationclick", (e) => {
