@@ -93,12 +93,13 @@ const Chip = ({ on, children, ...r }) => (
   <button {...r} className="px-3 py-1.5 rounded-full text-sm whitespace-nowrap" style={{ background: on ? C.lila : C.card, color: on ? "#fff" : C.ink, border: `1px solid ${on ? C.lila : C.line}` }}>{children}</button>
 );
 const EstBadge = ({ est }) => {
-  const c = { Reservado: [C.amber, C.amberSoft], "En pausa": [C.mute, C.lilaSoft], Retirada: [C.red, C.redSoft] }[est];
+  const c = { Reservado: [C.amber, C.amberSoft], "En pausa": [C.mute, C.lilaSoft], Caído: [C.red, C.redSoft] }[est];
   return c ? <span className="text-xs px-2 py-0.5 rounded-md font-medium" style={{ background: c[1], color: c[0] }}>{EMO[est]} {est}</span> : null;
 };
-const RK = { Disponible: 0, Reservado: 1, "En pausa": 2, Retirada: 3 };
-const CERRADAS = ["Cerrado", "Retirada", "Caído"]; // ya no son captaciones activas
-const MOTIVOS_RETIRO = ["El propietario la retiró del mercado", "El propietario la vendió o alquiló por su cuenta", "La tomó otra inmobiliaria o agente", "El propietario ya no responde", "Otro motivo"];
+const RK = { Disponible: 0, Reservado: 1, "En pausa": 2, Caído: 3 };
+const INACTIVAS = ["Cerrado", "Caído"]; // no aparecen en el buscador ni se pueden agendar visitas
+const SALE_A_CIERRES = ["Cerrado"]; // al tomar este estado, la captación se mueve a Perfil → Cierres
+const MOTIVOS_CAIDA = ["El propietario la retiró del mercado", "El propietario la vendió o alquiló por su cuenta", "La tomó otra inmobiliaria o agente", "El propietario ya no responde", "Otro motivo"];
 const Badge = ({ v }) => (<span className="text-xs px-2 py-0.5 rounded-md font-medium" style={{ background: v.bg, color: v.c }}>{v.l}</span>);
 // Miniatura: las fotos nuevas se suben también en versión pequeña (…-t.jpg) para listas rápidas
 const miniatura = (u) => (typeof u === "string" && /-m\.jpg$/.test(u) ? u.replace(/-m\.jpg$/, "-t.jpg") : u);
@@ -116,7 +117,7 @@ const Photo = ({ hue, h = 120, label, src }) => src ? (
 function Card({ p, onOpen, locked, rate, perm }) {
   const v = vigencia(p, perm.vigDet), est = p.est || "Disponible";
   return (
-    <button onClick={() => onOpen(p)} className="text-left w-full rounded-2xl p-3 flex gap-3" style={{ background: C.card, border: `1px solid ${C.line}`, opacity: v.n === 2 || est === "En pausa" || est === "Retirada" ? 0.7 : 1 }}>
+    <button onClick={() => onOpen(p)} className="text-left w-full rounded-2xl p-3 flex gap-3" style={{ background: C.card, border: `1px solid ${C.line}`, opacity: v.n === 2 || est === "En pausa" || est === "Caído" ? 0.7 : 1 }}>
       <div style={{ width: 92, flexShrink: 0 }}><Photo hue={p.hue} h={92} src={p.fotos?.[0]} /></div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 text-xs" style={{ color: C.mute }}><span>{p.op}</span><span>{p.tipo}</span></div>
@@ -375,7 +376,7 @@ function Visitas({ visitas, setVisitas, props, clientes, flash, notify, users, p
   const go = (n) => { const d = new Date(vm.y, vm.m + n, 1); setVm({ y: d.getFullYear(), m: d.getMonth() }); setSel(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-01`); setNuevo(false); };
   const [sy, sm, sd] = sel.split("-").map(Number);
   const delDia = visitas.filter((x) => x.f === sel).sort((a, b) => a.h.localeCompare(b.h));
-  const abiertas = props.filter((p) => !CERRADAS.includes(p.est || "Disponible"));
+  const abiertas = props.filter((p) => !INACTIVAS.includes(p.est || "Disponible"));
   const prop = abiertas.find((p) => String(p.id) === v.pid);
   const manual = v.pid === "__otra";
   const cli = clientes.find((c) => String(c.id) === v.cid);
@@ -693,7 +694,7 @@ function Extra({ onRepublicar, nivelReal, sub, ops, setOps, props, setProps, rep
     </div>
   );
   if (!perm.cierre) return <Lock t="Cierres y operaciones" plan="Inicial" go={goSub} />;
-  const abiertas = props.filter((p) => !CERRADAS.includes(p.est || "Disponible") || p.opPend);
+  const abiertas = props.filter((p) => !INACTIVAS.includes(p.est || "Disponible") || p.opPend);
   const pend = props.filter((p) => p.cap.n === ME && p.est === "Cerrado" && p.opPend);
   const sel = abiertas.find((x) => String(x.id) === o.pid);
   const mia = sel && sel.cap.n === ME;
@@ -738,13 +739,13 @@ function Extra({ onRepublicar, nivelReal, sub, ops, setOps, props, setProps, rep
       </div>
       <button onClick={() => setNuevo(true)} className="w-full py-2.5 rounded-xl font-semibold text-white" style={{ background: C.grad }}>+ Registrar cierre</button>
       {!perm.hist && <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>🔒 El historial de cierres y tu parte acumulada están disponibles desde el plan Profesional.</div>}
-      {(() => { const cerradas = props.filter((p) => p.cap.n === ME && CERRADAS.includes(p.est) && !p.opPend); const meses = retencion(nivelReal || nivel); return <>
+      {(() => { const cerradas = props.filter((p) => p.cap.n === ME && SALE_A_CIERRES.includes(p.est) && !p.opPend); const meses = retencion(nivelReal || nivel); return <>
         <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>📦 Las captaciones cerradas se guardan <b>{meses} meses</b> con tu plan actual (Inicial 3 · Profesional 7 · Premium 12). Pasado ese tiempo se eliminan sus fotos y datos para liberar espacio; el registro del cierre se conserva.</div>
-        {cerradas.length > 0 && <div className="text-sm font-semibold pt-1" style={{ color: C.ink }}>Mis captaciones cerradas y retiradas ({cerradas.length})</div>}
+        {cerradas.length > 0 && <div className="text-sm font-semibold pt-1" style={{ color: C.ink }}>Mis captaciones cerradas ({cerradas.length})</div>}
         {cerradas.map((p) => <div key={p.id} className="rounded-2xl p-3 flex gap-3 items-center" style={{ background: C.card, border: `1px solid ${C.line}` }}>
           {p.fotos && p.fotos[0] ? <img src={p.fotos[0]} alt={p.t} className="rounded-xl object-cover shrink-0" style={{ width: 60, height: 60 }} /> : <div className="shrink-0 rounded-xl" style={{ width: 60, height: 60, background: `hsl(${p.hue || 260} 45% 90%)` }} />}
           <div className="flex-1 min-w-0"><div className="text-sm font-semibold" style={{ color: C.ink }}>{p.t}</div><div className="text-xs" style={{ color: C.mute }}>{p.op} · {money(p)} · {p.zona}</div>
-            <div className="text-xs font-semibold" style={{ color: p.est === "Cerrado" ? C.ok : C.red }}>{p.est === "Cerrado" ? "🔴 Cerrada" : `⚪ Retirada${p.motivoRet ? `: ${p.motivoRet}` : ""}`}</div>
+            <div className="text-xs font-semibold" style={{ color: C.ok }}>🔴 Cerrada</div>
             {p.cerradaF && <div className="text-xs" style={{ color: C.mute }}>Se eliminará el {fechaL(new Date(sumarMeses(p.cerradaF, meses)))}</div>}
             <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
               <button onClick={() => onRepublicar && onRepublicar(p)} className="text-xs font-semibold underline" style={{ color: C.lilaDk }}>✏️ Editar y volver a publicar</button>
@@ -807,8 +808,8 @@ const ZONAS_BASE = {
 };
 // Lista activa de ciudades: la define el administrador (Panel → Cobros → Ciudades). Vortex la actualiza en cada render.
 let ZONAS = ZONAS_BASE;
-const ESTADOS = ["Disponible", "Reservado", "En pausa", "Cerrado", "Retirada"];
-const EMO = { Disponible: "🟢", Reservado: "🟡", "En pausa": "⏸️", Cerrado: "🔴", Retirada: "⚪" };
+const ESTADOS = ["Disponible", "Reservado", "En pausa", "Cerrado", "Caído"];
+const EMO = { Disponible: "🟢", Reservado: "🟡", "En pausa": "⏸️", Cerrado: "🔴", Caído: "⚪" };
 const inp = { border: `1px solid ${C.line}`, background: C.card, color: C.ink };
 function BuscarPropiedad({ abiertas, pid, onSel }) {
   const [q, setQ] = useState("");
@@ -947,9 +948,14 @@ function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, s
   useAtras(sub !== "capt" && !menuAb, () => setSub("capt"));
   useEffect(() => { if (subInit) { setSub(subInit); clearSub(); } }, [subInit]);
   const mine = props.filter((p) => p.cap.n === ME);
-  const enLista = mine.filter((p) => !CERRADAS.includes(p.est));
+  const enLista = mine.filter((p) => !SALE_A_CIERRES.includes(p.est));
+  const [filtroCapt, setFiltroCapt] = useState("Disponible");
   const [retirando, setRetirando] = useState(null);
-  const [motivo, setMotivo] = useState({ m: MOTIVOS_RETIRO[0], d: "" });
+  const [motivo, setMotivo] = useState({ m: MOTIVOS_CAIDA[0], d: "" });
+  const [reservando, setReservando] = useState(null);
+  const [resF, setResF] = useState({ monto: "", fechaSaldo: "", fechaFirma: "" });
+  const [pausando, setPausando] = useState(null);
+  const [pausaF, setPausaF] = useState("");
   const [eliminando, setEliminando] = useState(null);
   const upd = (id, patch) => setProps(props.map((p) => (p.id === id ? { ...p, ...patch } : p)));
   const vencido = false;
@@ -1017,7 +1023,9 @@ function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, s
         <button disabled={bloq} onClick={() => setNueva(true)} className="text-sm px-3 py-1.5 rounded-full text-white" style={{ background: bloq ? C.mute : C.grad }}>+ Nueva captación</button>
       </div>
       <div className="text-xs rounded-xl p-2.5" style={{ background: bloq ? C.amberSoft : C.lilaSoft, color: bloq ? C.amber : C.lilaDk }}>{nivel === "gratuito" ? (ult24.length ? `Plan Gratuito: 1 captación cada 24 horas. Podrás publicar de nuevo a las ${new Date(ult24[0].creada + 864e5).toLocaleTimeString("es-BO", { hour: "2-digit", minute: "2-digit" })}.` : "Plan Gratuito: puedes publicar 1 captación cada 24 horas.") : perm.maxCapt ? `Captaciones activas: ${activas} de ${perm.maxCapt} (plan ${nivel}).${bloq ? " Alcanzaste el límite: cierra, pausa o mejora tu plan." : ""}` : "Prueba gratuita: acceso completo. El límite de captaciones durante la prueba está por definir."}</div>
-      {enLista.map((p) => {
+      <div className="flex gap-2 overflow-x-auto pb-1">{["Disponible", "En pausa", "Reservado", "Caído"].map((e) => <Chip key={e} on={filtroCapt === e} onClick={() => setFiltroCapt(e)}>{EMO[e]} {e} ({enLista.filter((p) => (p.est || "Disponible") === e).length})</Chip>)}</div>
+      {!enLista.filter((p) => (p.est || "Disponible") === filtroCapt).length && <div className="text-center py-6 text-sm" style={{ color: C.mute }}>No tienes captaciones en «{filtroCapt}».</div>}
+      {enLista.filter((p) => (p.est || "Disponible") === filtroCapt).map((p) => {
         const v = vigencia(p), est = p.est || "Disponible";
         return (
           <div key={p.id} className="rounded-2xl p-3 space-y-2" style={{ background: C.card, border: `1px solid ${C.line}` }}>
@@ -1031,20 +1039,51 @@ function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, s
             </div>
             {perm.stats && <div className="flex gap-3 text-xs" style={{ color: C.lilaDk }}><span>👁 {p.vistas || 0} visualizaciones</span><span>♥ {(p.guardados || 0) + favs.filter((f) => f.pid === p.id).length} guardaron</span></div>}
             <div className="flex gap-2">
-              <select disabled={vencido} value={est} onChange={(e) => { const nv = e.target.value; if (nv === "Retirada") { setRetirando(p.id); setMotivo({ m: MOTIVOS_RETIRO[0], d: "" }); return; } if (nv === "Cerrado") { upd(p.id, { est: "Cerrado", opPend: true }); setPre(String(p.id)); setSub("ops"); flash("Ya no aparece en el buscador. Registra el cierre para completarlo oficialmente."); } else if (["Disponible", "Reservado"].includes(nv) && !["Disponible", "Reservado"].includes(est) && perm.maxCapt && activas >= perm.maxCapt) flash(`Tu plan ${nivel} permite ${perm.maxCapt} captaciones activas.`); else upd(p.id, { est: nv, opPend: false }); }} className="flex-1 rounded-lg px-2 py-1.5 text-sm" style={inp}>{ESTADOS.filter((e) => e !== "Cerrado" || est === "Cerrado").map((e) => <option key={e} value={e}>{EMO[e]} {e}</option>)}</select>
+              <select disabled={vencido} value={est} onChange={(e) => {
+                const nv = e.target.value;
+                if (nv === "Caído") { setRetirando(p.id); setMotivo({ m: MOTIVOS_CAIDA[0], d: "" }); return; }
+                if (nv === "Cerrado") { upd(p.id, { est: "Cerrado", opPend: true }); setPre(String(p.id)); setSub("ops"); flash("Ya no aparece en el buscador. Registra el cierre para completarlo oficialmente."); return; }
+                if (["Disponible", "Reservado"].includes(nv) && !["Disponible", "Reservado"].includes(est) && perm.maxCapt && activas >= perm.maxCapt) { flash(`Tu plan ${nivel} permite ${perm.maxCapt} captaciones activas.`); return; }
+                upd(p.id, { est: nv, opPend: false });
+                setFiltroCapt(nv);
+                if (nv === "Reservado") { setReservando(p.id); setResF({ monto: p.reservaMonto ? String(p.reservaMonto) : "", fechaSaldo: p.reservaFechaSaldo || "", fechaFirma: p.reservaFechaFirma || "" }); }
+                else if (nv === "En pausa") { setPausando(p.id); setPausaF(p.pausaMotivo || ""); }
+              }} className="flex-1 rounded-lg px-2 py-1.5 text-sm" style={inp}>{ESTADOS.filter((e) => e !== "Cerrado" || est === "Cerrado").map((e) => <option key={e} value={e}>{EMO[e]} {e}</option>)}</select>
               <button onClick={async () => { const ok = await copiarTexto(textoCopy(p, miTel())); flash(ok ? (waNum(miTel()).length < 8 ? "Copy copiado. Tip: agrega tu WhatsApp en Mis datos para incluir tu enlace." : "Copy copiado con tu enlace de WhatsApp. Pégalo en el chat de tu cliente.") : "No se pudo copiar automáticamente."); }} className="px-3 py-1.5 rounded-lg text-sm font-semibold text-white" style={{ background: C.lila }}>📋 Copiar copy</button>
               {(p.est || "Disponible") === "Disponible" && <a href={`https://wa.me/?text=${encodeURIComponent(textoGrupo(p))}`} target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-lg text-sm font-semibold text-white" style={{ background: "#25D366" }}>📢 Compartir en grupos</a>}
             </div>
             {retirando === p.id && <div className="rounded-xl p-3 space-y-2" style={{ background: C.redSoft }}>
-              <div className="text-sm font-semibold" style={{ color: C.red }}>Retirar captación</div>
-              <div className="text-xs" style={{ color: C.ink }}>Sale del buscador y de tus captaciones, y pasa a Cierres. Podrás volver a publicarla si regresa al mercado.</div>
-              <Fld l="Motivo"><select value={motivo.m} onChange={(e) => setMotivo({ ...motivo, m: e.target.value })} className="w-full rounded-lg px-2 py-2 text-sm" style={inp}>{MOTIVOS_RETIRO.map((m) => <option key={m}>{m}</option>)}</select></Fld>
+              <div className="text-sm font-semibold" style={{ color: C.red }}>Marcar como caída</div>
+              <div className="text-xs" style={{ color: C.ink }}>Sale del buscador. La verás en la pestaña «Caído» de tus captaciones, y puedes volver a publicarla cuando quieras.</div>
+              <Fld l="Motivo"><select value={motivo.m} onChange={(e) => setMotivo({ ...motivo, m: e.target.value })} className="w-full rounded-lg px-2 py-2 text-sm" style={inp}>{MOTIVOS_CAIDA.map((m) => <option key={m}>{m}</option>)}</select></Fld>
               <textarea rows={2} value={motivo.d} onChange={(e) => setMotivo({ ...motivo, d: e.target.value })} placeholder={motivo.m === "Otro motivo" ? "Cuenta brevemente qué pasó" : "Detalle (opcional)"} className="w-full rounded-lg px-2 py-1.5 text-sm" style={inp} />
               <div className="grid grid-cols-2 gap-2">
-                <button onClick={() => { if (motivo.m === "Otro motivo" && motivo.d.trim().length < 3) { flash("Escribe el motivo."); return; } upd(p.id, { est: "Retirada", opPend: false, motivoRet: motivo.m === "Otro motivo" ? motivo.d.trim() : motivo.m + (motivo.d.trim() ? ` · ${motivo.d.trim()}` : ""), cerradaF: Date.now() }); setRetirando(null); setSub("ops"); flash("Captación retirada. Ahora está en Cierres."); }} className="py-2 rounded-lg text-sm font-semibold text-white" style={{ background: C.red }}>Retirar</button>
+                <button onClick={() => { if (motivo.m === "Otro motivo" && motivo.d.trim().length < 3) { flash("Escribe el motivo."); return; } upd(p.id, { est: "Caído", opPend: false, motivoRet: motivo.m === "Otro motivo" ? motivo.d.trim() : motivo.m + (motivo.d.trim() ? ` · ${motivo.d.trim()}` : ""), fechaCaidaProp: isoOf(HOY) }); setRetirando(null); setFiltroCapt("Caído"); flash("Captación marcada como caída."); }} className="py-2 rounded-lg text-sm font-semibold text-white" style={{ background: C.red }}>Marcar como caída</button>
                 <button onClick={() => setRetirando(null)} className="py-2 rounded-lg text-sm" style={{ background: "#fff", color: C.mute }}>Cancelar</button>
               </div>
             </div>}
+            {reservando === p.id && <div className="rounded-xl p-3 space-y-2" style={{ background: C.amberSoft }}>
+              <div className="text-sm font-semibold" style={{ color: C.amber }}>Detalles de la reserva (opcional)</div>
+              <Fld l={`¿Con cuánto dinero se hizo la reserva? (${p.mon})`}><input value={resF.monto} onChange={(e) => setResF({ ...resF, monto: e.target.value.replace(/\D/g, "") })} inputMode="numeric" placeholder="Ej. 500" className="w-full rounded-lg px-2 py-1.5 text-sm" style={inp} /></Fld>
+              {+resF.monto > 0 && <div className="text-xs" style={{ color: C.ink }}>Saldo pendiente: {fm(Math.max(0, p.precio - (+resF.monto || 0)), p.mon)}</div>}
+              <Fld l="¿Cuándo vence el plazo para pagar el saldo?"><input type="date" value={resF.fechaSaldo} onChange={(e) => setResF({ ...resF, fechaSaldo: e.target.value })} className="w-full rounded-lg px-2 py-1.5 text-sm" style={inp} /></Fld>
+              <Fld l="¿Cuándo es la firma y el pago del restante?"><input type="date" value={resF.fechaFirma} onChange={(e) => setResF({ ...resF, fechaFirma: e.target.value })} className="w-full rounded-lg px-2 py-1.5 text-sm" style={inp} /></Fld>
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => { upd(p.id, { reservaMonto: +resF.monto || null, reservaFechaSaldo: resF.fechaSaldo || null, reservaFechaFirma: resF.fechaFirma || null }); setReservando(null); flash("Detalles de la reserva guardados."); }} className="py-2 rounded-lg text-sm font-semibold text-white" style={{ background: C.amber }}>Guardar</button>
+                <button onClick={() => setReservando(null)} className="py-2 rounded-lg text-sm" style={{ background: "#fff", color: C.mute }}>Omitir por ahora</button>
+              </div>
+            </div>}
+            {pausando === p.id && <div className="rounded-xl p-3 space-y-2" style={{ background: C.lilaSoft }}>
+              <div className="text-sm font-semibold" style={{ color: C.lilaDk }}>Motivo de la pausa (opcional)</div>
+              <textarea rows={2} value={pausaF} onChange={(e) => setPausaF(e.target.value)} placeholder="Ej. El propietario está de viaje hasta fin de mes" className="w-full rounded-lg px-2 py-1.5 text-sm" style={inp} />
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => { upd(p.id, { pausaMotivo: pausaF.trim() || null }); setPausando(null); flash("Motivo guardado."); }} className="py-2 rounded-lg text-sm font-semibold text-white" style={{ background: C.lila }}>Guardar</button>
+                <button onClick={() => setPausando(null)} className="py-2 rounded-lg text-sm" style={{ background: "#fff", color: C.mute }}>Omitir por ahora</button>
+              </div>
+            </div>}
+            {est === "Reservado" && reservando !== p.id && p.reservaMonto > 0 && <div className="text-xs rounded-lg px-2.5 py-1.5" style={{ background: C.amberSoft, color: C.amber }}>Reserva: {fm(p.reservaMonto, p.mon)} · Saldo {fm(Math.max(0, p.precio - p.reservaMonto), p.mon)}{p.reservaFechaSaldo ? ` · vence el ${fechaL(isoD(p.reservaFechaSaldo))}` : ""}{p.reservaFechaFirma ? ` · firma el ${fechaL(isoD(p.reservaFechaFirma))}` : ""} <button onClick={() => { setReservando(p.id); setResF({ monto: String(p.reservaMonto || ""), fechaSaldo: p.reservaFechaSaldo || "", fechaFirma: p.reservaFechaFirma || "" }); }} className="underline font-semibold">Editar</button></div>}
+            {est === "En pausa" && pausando !== p.id && p.pausaMotivo && <div className="text-xs rounded-lg px-2.5 py-1.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Motivo: {p.pausaMotivo} <button onClick={() => { setPausando(p.id); setPausaF(p.pausaMotivo || ""); }} className="underline font-semibold">Editar</button></div>}
+            {est === "Caído" && p.motivoRet && <div className="text-xs rounded-lg px-2.5 py-1.5" style={{ background: C.redSoft, color: C.red }}>Motivo: {p.motivoRet}{p.fechaCaidaProp ? ` · ${fechaL(isoD(p.fechaCaidaProp))}` : ""}</div>}
             {eliminando === p.id ? <div className="rounded-xl p-3 space-y-2" style={{ background: C.redSoft }}>
               <div className="text-xs" style={{ color: C.ink }}>¿Eliminar <b>{p.t}</b> para siempre? Se borran sus fotos y datos. No se puede deshacer.</div>
               <div className="grid grid-cols-2 gap-2"><button onClick={() => { borrarFotos(p.fotos); setProps(props.filter((x) => x.id !== p.id)); setEliminando(null); flash("Captación eliminada."); }} className="py-2 rounded-lg text-sm font-semibold text-white" style={{ background: C.red }}>Sí, eliminar</button><button onClick={() => setEliminando(null)} className="py-2 rounded-lg text-sm" style={{ background: "#fff", color: C.mute }}>Cancelar</button></div>
@@ -1054,7 +1093,7 @@ function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, s
           </div>
         );
       })}
-      {mine.length > enLista.length && <button onClick={() => setSub("ops")} className="w-full text-xs underline" style={{ color: C.mute }}>Ver mis {mine.length - enLista.length} captaciones cerradas o retiradas en Cierres ›</button>}
+      {mine.length > enLista.length && <button onClick={() => setSub("ops")} className="w-full text-xs underline" style={{ color: C.mute }}>Ver mis {mine.length - enLista.length} captaciones cerradas en Cierres ›</button>}
       {!mine.length && <div className="text-center py-8 text-sm" style={{ color: C.mute }}>Aún no tienes captaciones. Registra la primera para que otros agentes la encuentren.</div>}
       </>}
     </div>
@@ -1960,7 +1999,7 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas, onIngresar, o
   useEffect(() => {
     if (visitante) return;
     const meses = esAdmin ? 12 : retencion(nivel), ahora = Date.now();
-    const mias = props.filter((p) => p.cap && p.cap.n === ME && CERRADAS.includes(p.est));
+    const mias = props.filter((p) => p.cap && p.cap.n === ME && SALE_A_CIERRES.includes(p.est));
     const sinFecha = mias.filter((p) => !p.cerradaF);
     const vencidas = mias.filter((p) => p.cerradaF && ahora > sumarMeses(p.cerradaF, meses));
     if (!sinFecha.length && !vencidas.length) return;

@@ -39,7 +39,7 @@ const haceCuanto = (t) => {
 // Lo que llega de la base de datos → como lo usa la app
 function desde(t, datos, fila) {
   if (t === "perfiles") return { ...(fila.datos || {}), n: fila.nombre, _uid: fila.id, _email: fila.email, _rol: fila.rol, _alta: fila.creado_en };
-  if (t === "propiedades" && datos.est === "Caído") datos = { ...datos, est: "Retirada" }; // nombre anterior
+  if (t === "propiedades" && datos.est === "Retirada") datos = { ...datos, est: "Caído" }; // nombre anterior
   if (t === "propiedades" && datos._conf) return { ...datos, dias: Math.max(0, Math.floor((Date.now() - datos._conf) / DIA)) };
   if (t === "notificaciones" && datos._t) return { ...datos, h: haceCuanto(datos._t) };
   return datos;
