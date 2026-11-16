@@ -164,11 +164,12 @@ export default function App() {
   );
   if (!datos || !perfil) return <Centro><div className="text-sm" style={{ color: C.mute }}>Cargando tus datos…</div></Centro>;
 
-  const Comp = perfil.rol === "cliente" ? VortexCliente : Vortex;
+  const simCliente = perfil.rol === "admin" && sim === "cliente";
+  const Comp = perfil.rol === "cliente" || simCliente ? VortexCliente : Vortex;
   return (
     <>
       <InstalarBanner />
-      <Comp key={perfil.uid} inicial={datos} sesion={perfil} onMenu={() => setMenu(true)} cuentas={perfil.rol === "admin" ? cuentas : null} sim={sim} setSim={setSim} finPrueba={finPrueba} />
+      <Comp key={perfil.uid} inicial={datos} sesion={perfil} onMenu={() => setMenu(true)} cuentas={perfil.rol === "admin" ? cuentas : null} sim={sim} setSim={setSim} finPrueba={finPrueba} previewAdmin={simCliente} />
       {modalTerminos}
       {menu && <MenuCuenta onTerminos={() => { setMenu(false); setVerTerminos(true); }} sesion={perfil} onClose={() => setMenu(false)} vista={perfil.rol === "admin" ? { sim, setSim, terminarPrueba: () => { setFinPrueba(Date.now()); setMenu(false); } } : null} />}
       {(avisoTxt || subiendo > 0) && (

@@ -595,7 +595,7 @@ function Cierre({ p, props, setProps, ops, setOps, reviews, setReviews, flash, o
     if (!f.monto || !f.com || !colab) { setErr("Indica el monto, la comisión y con quién se hizo el cierre."); return; }
     if (!f.pt) { setErr("Califica tu experiencia con el otro agente para terminar el cierre."); return; }
     setOps([{ id: Date.now(), de: ME, pid: p.id, t: p.t, op: p.op, monto: +f.monto, com, mon: p.mon, colab, reg: !libre, tel: f.tel, rol: "Captador", fecha: fechaL(HOY), iso: isoOf(HOY), pt: f.pt, txt: f.txt }, ...ops]);
-    setReviews([{ id: Date.now() + 1, ag: colab, s: f.pt, de: ME }, ...reviews]);
+    setReviews([{ id: Date.now() + 1, ag: colab, s: f.pt, de: ME, tipo: "agente" }, ...reviews]);
     setProps(props.map((x) => (x.id === p.id ? { ...x, est: "Cerrado", opPend: false } : x)));
     flash("Captación cerrada y cierre registrado. La encuentras en Perfil → Cierres.");
     onDone(true);
@@ -822,7 +822,7 @@ function Extra({ onRepublicar, nivelReal, sub, ops, setOps, props, setProps, rep
             </div>
           ) : (
             <div className="flex items-center justify-between pt-1">
-              {x.pt ? <span className="text-xs" style={{ color: C.ok }}>Puntuaste a {x.colab}: {"★".repeat(x.pt)}</span> : <div className="flex items-center gap-1"><span className="text-xs" style={{ color: C.mute }}>Puntuar a {x.colab.split(" ")[0]}:</span>{[1, 2, 3, 4, 5].map((n) => <button key={n} onClick={() => { setReviews([{ id: Date.now(), ag: x.colab, s: n, de: ME }, ...reviews]); setOps(ops.map((o2) => (o2.id === x.id ? { ...o2, pt: n } : o2))); flash("Puntuación enviada."); }} className="text-lg leading-none" style={{ color: C.lila }}>☆</button>)}</div>}
+              {x.pt ? <span className="text-xs" style={{ color: C.ok }}>Puntuaste a {x.colab}: {"★".repeat(x.pt)}</span> : <div className="flex items-center gap-1"><span className="text-xs" style={{ color: C.mute }}>Puntuar a {x.colab.split(" ")[0]}:</span>{[1, 2, 3, 4, 5].map((n) => <button key={n} onClick={() => { setReviews([{ id: Date.now(), ag: x.colab, s: n, de: ME, tipo: "agente" }, ...reviews]); setOps(ops.map((o2) => (o2.id === x.id ? { ...o2, pt: n } : o2))); flash("Puntuación enviada."); }} className="text-lg leading-none" style={{ color: C.lila }}>☆</button>)}</div>}
               <button onClick={() => onReport({ cap: { n: x.colab } })} className="text-xs underline" style={{ color: C.mute }}>Reportar trabajo</button>
             </div>
           )}
@@ -984,7 +984,7 @@ function Form({ onSave, init, maxFotos = 3, autoCopy = false }) {
   );
 }
 
-function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, setProps, flash, ops, setOps, reports, favs, reviews, setReviews, onReport, sugs, setSugs, users, setUsers, pagos, setPagos, cfg, subInit, clearSub, perm, nivel, goSub, onPublicada, trial, setReports, clientes, visitas, autos, setAutos }) {
+function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, setProps, flash, ops, setOps, reports, favs, reviews, setReviews, solicitudes = [], setSolicitudes, onReport, sugs, setSugs, users, setUsers, pagos, setPagos, cfg, subInit, clearSub, perm, nivel, goSub, onPublicada, trial, setReports, clientes, visitas, autos, setAutos }) {
   const [nueva, setNueva] = useState(false); // false | true | captación a editar
   const [sub, setSub] = useState("capt");
   const [pre, setPre] = useState(null);
@@ -1086,6 +1086,15 @@ function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, s
               </div>
             </div>
             {perm.stats && <div className="flex gap-3 text-xs" style={{ color: C.lilaDk }}><span>👁 {p.vistas || 0} visualizaciones</span><span>♥ {(p.guardados || 0) + favs.filter((f) => f.pid === p.id).length} guardaron</span></div>}
+            {est !== "Cerrado" && solicitudes.filter((s) => s.pid === p.id && s.cap === ME && s.est === "pendiente").map((s) => (
+              <div key={s.id} className="rounded-xl p-2.5 space-y-2" style={{ background: C.amberSoft }}>
+                <div className="text-sm" style={{ color: C.amber }}>📣 <b>{s.de}</b> avisó que ya cerraron trato en esta propiedad. ¿Confirmas el cierre?</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => { setSolicitudes(solicitudes.map((x) => (x.id === s.id ? { ...x, est: "aprobada" } : x))); setCerrando(p); }} className="py-2 rounded-lg text-sm font-semibold text-white" style={{ background: C.ok }}>✔ Sí, ya cerramos</button>
+                  <button onClick={() => { setSolicitudes(solicitudes.map((x) => (x.id === s.id ? { ...x, est: "rechazada" } : x))); flash("Le avisamos al cliente que todavía no se cerró."); }} className="py-2 rounded-lg text-sm" style={{ background: "#fff", color: C.mute }}>Todavía no</button>
+                </div>
+              </div>
+            ))}
             <div className="flex gap-2">
               <select disabled={vencido} value={est} onChange={(e) => {
                 const nv = e.target.value;
@@ -1432,21 +1441,43 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
   );
 }
 
-function Ficha({ n, props, users, rate, onClose }) {
+function Ficha({ n, props, users, reviews = [], onClose }) {
   const u = users.find((x) => x.n === n) || { ant: 0 };
-  const r = rate(n);
+  const propias = reviews.filter((r) => r.ag === n);
+  const deCliente = propias.filter((r) => r.tipo === "cliente");
+  const deColegas = propias.filter((r) => r.tipo !== "cliente");
+  const promedio = (lista) => (lista.length ? lista.reduce((a, x) => a + x.s, 0) / lista.length : null);
+  const avgCliente = promedio(deCliente), avgColegas = promedio(deColegas);
+  const avgTotal = promedio(propias);
   const ciu = [...new Set(props.filter((p) => p.cap.n === n).map((p) => p.cap.ciu))];
   const act = props.filter((p) => p.cap.n === n && ["Disponible", "Reservado"].includes(p.est || "Disponible")).length;
+  const ListaResenas = ({ titulo, lista }) => !lista.length ? null : (
+    <div className="space-y-1.5">
+      <div className="text-xs font-semibold uppercase" style={{ color: C.mute, letterSpacing: ".04em" }}>{titulo}</div>
+      {lista.map((r) => (
+        <div key={r.id} className="rounded-xl p-2.5" style={{ background: C.lilaSoft }}>
+          <div className="flex items-center justify-between gap-2"><span className="font-semibold text-sm" style={{ color: C.ink }}>{r.de || "Anónimo"}</span><span style={{ color: C.lila }}>{"★".repeat(r.s)}{"☆".repeat(5 - r.s)}</span></div>
+          {r.coment && <div className="text-xs mt-0.5" style={{ color: C.ink }}>{r.coment}</div>}
+        </div>
+      ))}
+    </div>
+  );
   return (
     <div className="absolute inset-0 z-10 flex items-end" style={{ background: "rgba(30,27,58,.55)" }}>
-      <div className="w-full rounded-t-3xl p-4 space-y-3" style={{ background: C.card }}>
+      <div className="w-full rounded-t-3xl p-4 space-y-3 overflow-y-auto" style={{ background: C.card, maxHeight: "90%" }}>
         <div className="flex justify-between"><div className="flex items-center gap-3"><div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold" style={{ background: C.lila }}>{n[0]}</div><div><div className="font-semibold" style={{ color: C.ink }}>{n}</div><div className="text-xs" style={{ color: C.mute }}>Agente inmobiliario independiente</div></div></div><button onClick={onClose} style={{ color: C.mute }}>Cerrar</button></div>
         <div className="grid grid-cols-3 gap-2 text-center">
-          {[["Puntuación", r ? `⭐ ${r.avg.toFixed(1)}` : "—"], ["Reseñas", r ? r.n : 0], ["Captaciones", act]].map(([a, b]) => <div key={a} className="rounded-xl py-2" style={{ background: C.lilaSoft }}><div className="font-semibold" style={{ ...serif, color: C.lilaDk, fontSize: 18 }}>{b}</div><div className="text-xs" style={{ color: C.mute }}>{a}</div></div>)}
+          {[["Puntuación", avgTotal ? `⭐ ${avgTotal.toFixed(1)}` : "—"], ["Reseñas", propias.length], ["Captaciones", act]].map(([a, b]) => <div key={a} className="rounded-xl py-2" style={{ background: C.lilaSoft }}><div className="font-semibold" style={{ ...serif, color: C.lilaDk, fontSize: 18 }}>{b}</div><div className="text-xs" style={{ color: C.mute }}>{a}</div></div>)}
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-center">
+          <div className="rounded-xl py-1.5" style={{ border: `1px solid ${C.line}` }}><div className="font-semibold text-sm" style={{ color: C.ink }}>{avgCliente ? `⭐ ${avgCliente.toFixed(1)}` : "—"}</div><div className="text-xs" style={{ color: C.mute }}>De clientes ({deCliente.length})</div></div>
+          <div className="rounded-xl py-1.5" style={{ border: `1px solid ${C.line}` }}><div className="font-semibold text-sm" style={{ color: C.ink }}>{avgColegas ? `⭐ ${avgColegas.toFixed(1)}` : "—"}</div><div className="text-xs" style={{ color: C.mute }}>De colegas ({deColegas.length})</div></div>
         </div>
         <div className="text-sm" style={{ color: C.ink }}>Trabaja en: {ciu.join(", ") || "—"}</div>
         <div className="text-sm" style={{ color: u.ant ? C.amber : C.ok }}>{u.ant ? `⚠️ ${u.ant} antecedente(s) confirmado(s) por la administración` : "✓ Sin antecedentes confirmados"}</div>
-        <div className="text-xs" style={{ color: C.mute }}>La puntuación proviene de agentes que cerraron negocios con este agente.</div>
+        <ListaResenas titulo="Reseñas de clientes" lista={deCliente} />
+        <ListaResenas titulo="Reseñas de colegas (otros captadores)" lista={deColegas} />
+        {!propias.length && <div className="text-xs" style={{ color: C.mute }}>Todavía no tiene reseñas.</div>}
       </div>
     </div>
   );
@@ -1546,9 +1577,10 @@ const permisos = (n) => { const r = ORD[n] ?? 0; return { nivel: n, ficha: r >= 
 const RETENCION = { Inicial: 3, Profesional: 7, Premium: 12 };
 const retencion = (nivel) => RETENCION[nivel] || (nivel === "admin" ? 12 : 3);
 const sumarMeses = (ts, m) => { const d = new Date(ts); d.setMonth(d.getMonth() + m); return d.getTime(); };
-const CUENTAS = [["admin", "SuperAdmin"], ["prueba", "Prueba"], ["gratuito", "Gratuito"], ["Inicial", "Inicial"], ["Profesional", "Profesional"], ["Premium", "Premium"]];
+const CUENTAS = [["admin", "SuperAdmin"], ["cliente", "Cliente"], ["prueba", "Prueba"], ["gratuito", "Gratuito"], ["Inicial", "Inicial"], ["Profesional", "Profesional"], ["Premium", "Premium"]];
 const RESUMEN = {
   admin: "Panel de administración: aprobar pagos, configurar cobros y planes, crear y gestionar usuarios, revisar reportes, sugerencias y auditoría.",
+  cliente: "Vista del público registrado como cliente (no es agente): buscador con ficha completa de las propiedades, solo el botón de contactar al captador por WhatsApp, favoritos («Guardados») con aviso si cambian, búsquedas guardadas, comparador y calificar al captador tras un cierre. No tiene captaciones, requerimientos, visitas ni herramientas de agente.",
   prueba: "48 horas con acceso completo (igual que Premium). Al terminar, la cuenta pasa automáticamente a Gratuito hasta que pague un plan.",
   gratuito: "Solo puede buscar y ver datos básicos de las propiedades. Bloqueado: ficha completa, contacto con captadores, requerimientos, visitas, captaciones, reportes y todo lo de los planes.",
   Inicial: "Hasta 5 captaciones · 3 fotos por captación · cerradas guardadas 3 meses · ficha completa y WhatsApp con captadores · requerimientos de clientes · agenda de visitas · reportes. Sin favoritos, coincidencias avanzadas ni estadísticas.",
@@ -2002,6 +2034,7 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas, onIngresar, o
   const [notifs, setNotifs] = useSync("notificaciones", inicial.notificaciones, sesion);
   const [perfilDe, setPerfilDe] = useState(null);
   const [reviews, setReviews] = useSync("resenas", inicial.resenas, sesion);
+  const [solicitudes, setSolicitudes] = useSync("solicitudes", inicial.solicitudes, sesion);
   const [fin, setFin] = useState(() => { const yo = inicial.perfiles.find((u) => u.n === ME) || {}; return esAdmin ? Date.now() + 48 * 36e5 : yo.est === "Prueba" && yo.prueba ? yo.prueba.fin : 0; });
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const i = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(i); }, []);
@@ -2157,9 +2190,9 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas, onIngresar, o
             : tab === "clientes" ? (perm.req ? <Clientes acceso={acceso} open={open} props={props} clientes={clientes} setClientes={setClientes} favs={favs} toggleFav={toggleFav} delCliente={delCliente} perm={perm} visitas={visitas} goSub={goSub}  flash={flash} /> : <div className="p-4"><Lock t="Requerimientos de clientes" plan="Inicial" go={goSub} /></div>)
             : tab === "visitas" ? (perm.vis ? <Visitas visitas={visitas} setVisitas={setVisitas} props={props} clientes={clientes} flash={flash} notify={notify} users={users} perm={perm} autos={autos} onRespuestas={setRr} /> : <div className="p-4"><Lock t="Agenda de visitas" plan="Inicial" go={goSub} /></div>)
             : tab === "alertas" ? <Alertas go={go} notifs={notifs} visitas={visitas} props={props} clientes={clientes} perm={perm} autos={autos} goSub={goSub} avisos={avisosPlan} />
-            : <Perfil plantillas={plantillas} setPlantillas={setPlantillas} acceso={acceso} props={props} setProps={setProps} flash={flash} ops={ops} setOps={setOps} reports={reports} favs={favs} reviews={reviews} setReviews={setReviews} onReport={setReportando} sugs={sugs} setSugs={setSugs} users={users} setUsers={setUsers} pagos={pagos} setPagos={setPagos} cfg={cfg} subInit={perfilSub} clearSub={() => setPerfilSub(null)} perm={perm} nivel={nivel} goSub={goSub} onPublicada={onPublicada} trial={{ inicio: fin - 48 * 36e5, fin }} setReports={setReports} clientes={clientes} visitas={visitas} autos={autos} setAutos={setAutos} />}
+            : <Perfil plantillas={plantillas} setPlantillas={setPlantillas} acceso={acceso} props={props} setProps={setProps} flash={flash} ops={ops} setOps={setOps} reports={reports} favs={favs} reviews={reviews} setReviews={setReviews} solicitudes={solicitudes} setSolicitudes={setSolicitudes} onReport={setReportando} sugs={sugs} setSugs={setSugs} users={users} setUsers={setUsers} pagos={pagos} setPagos={setPagos} cfg={cfg} subInit={perfilSub} clearSub={() => setPerfilSub(null)} perm={perm} nivel={nivel} goSub={goSub} onPublicada={onPublicada} trial={{ inicio: fin - 48 * 36e5, fin }} setReports={setReports} clientes={clientes} visitas={visitas} autos={autos} setAutos={setAutos} />}
         </div>
-        {perfilDe && <Ficha n={perfilDe} props={props} users={users} rate={rate} onClose={() => setPerfilDe(null)} />}
+        {perfilDe && <Ficha n={perfilDe} props={props} users={users} reviews={reviews} onClose={() => setPerfilDe(null)} />}
         {rr && <RespuestasRapidas plantillas={plantillas} datos={rr} onClose={() => setRr(null)} flash={flash} />}
         {!visitante && mi.n && (!mi.terminos || (cfg.terminosF && mi.terminos < cfg.terminosF)) && <TerminosModal texto={cfg.terminos} onAceptar={() => setUsers((us) => us.map((u) => (u.n === ME ? { ...u, terminos: isoOf(HOY) } : u)))} />}
         {reportando && <Reportar p={reportando} onClose={() => setReportando(null)} onSend={(r) => { setReports([{ ...r, prio: nivel === "Premium" }, ...reports]); setReportando(null); flash(nivel === "Premium" ? "Reporte enviado con prioridad." : "Reporte enviado. Un administrador lo revisará."); }} />}
@@ -2184,10 +2217,16 @@ export default function Vortex({ inicial, sesion, onMenu, cuentas, onIngresar, o
 // ═══════════════════════════════════════════════════════════════════
 
 function CalificarCaptador({ p, onCalificar }) {
+  const [n, setN] = useState(0);
+  const [coment, setComent] = useState("");
   return (
     <div className="rounded-2xl p-3 space-y-2 text-center" style={{ background: C.lilaSoft }}>
       <div className="text-sm font-semibold" style={{ color: C.lilaDk }}>🏁 ¡Esta propiedad se cerró! ¿Cómo fue tu experiencia con {p.cap.n.split(" ")[0]}?</div>
-      <div className="flex justify-center gap-1.5">{[1, 2, 3, 4, 5].map((n) => <button key={n} onClick={() => onCalificar(p, n)} className="text-2xl leading-none" style={{ color: C.lila }}>☆</button>)}</div>
+      <div className="flex justify-center gap-1.5">{[1, 2, 3, 4, 5].map((x) => <button key={x} onClick={() => setN(x)} className="text-2xl leading-none" style={{ color: C.lila }}>{x <= n ? "★" : "☆"}</button>)}</div>
+      {n > 0 && <>
+        <textarea rows={2} value={coment} onChange={(e) => setComent(e.target.value)} placeholder="Cuenta brevemente tu experiencia (opcional)" className="w-full rounded-lg px-2 py-1.5 text-sm" style={{ border: `1px solid ${C.line}`, background: "#fff" }} />
+        <button onClick={() => onCalificar(p, n, coment)} className="w-full py-2 rounded-lg text-sm font-semibold text-white" style={{ background: C.lila }}>Enviar calificación</button>
+      </>}
     </div>
   );
 }
@@ -2208,7 +2247,7 @@ function CompartirCliente({ p }) {
   );
 }
 
-function DetalleCliente({ p, onBack, isFav, toggleFav, rate, users, onProfile, onCalificar, pendiente, onContactar, onReportarCierre, yaReportada, enComparar, toggleComparar }) {
+function DetalleCliente({ p, onBack, isFav, toggleFav, rate, users, onProfile, onCalificar, pendiente, onContactar, onReportarCierre, solicitud, enComparar, toggleComparar }) {
   const cap = users.find((x) => x.n === p.cap.n) || { ant: 0 };
   const telCap = (cap.perfil && cap.perfil.tel) || p.cap.tel || "";
   const v = vigencia(p);
@@ -2246,8 +2285,10 @@ function DetalleCliente({ p, onBack, isFav, toggleFav, rate, users, onProfile, o
       {waNum(telCap).length >= 8 ? <a href={waLink(telCap, `Hola ${p.cap.n.split(" ")[0]}, vi tu propiedad en Vortex: *${p.t}* (${moneyOrig(p)}, ${p.zona}). ¿Sigue disponible?`)} target="_blank" rel="noreferrer" onClick={() => onContactar(p)} className="block text-center py-3 rounded-xl font-semibold text-white" style={{ background: "#1FA855" }}>💬 Escribir al captador por WhatsApp</a>
         : <div className="py-3 rounded-xl text-xs text-center" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.mute }}>El captador aún no registró su WhatsApp</div>}
       <CompartirCliente p={p} />
-      {isFav(p.id) && p.est !== "Cerrado" && (yaReportada
-        ? <div className="text-xs text-center" style={{ color: C.ok }}>✓ Ya avisamos que cerraste trato con esta propiedad.</div>
+      {isFav(p.id) && p.est !== "Cerrado" && (solicitud && solicitud.est === "pendiente"
+        ? <div className="text-xs text-center" style={{ color: C.amber }}>⏳ Avisado. Falta que {p.cap.n.split(" ")[0]} confirme el cierre.</div>
+        : solicitud && solicitud.est === "rechazada"
+        ? <button onClick={() => onReportarCierre(p)} className="w-full text-xs underline" style={{ color: C.mute }}>El captador dijo que aún no se cerró. ¿Avisar de nuevo?</button>
         : <button onClick={() => onReportarCierre(p)} className="w-full text-xs underline" style={{ color: C.mute }}>¿Ya alquilaste o compraste esta propiedad? Avísanos</button>)}
       {v.n > 0 && <div className="text-xs" style={{ color: C.mute }}>El captador debe confirmar que esta propiedad sigue disponible. Mientras tanto aparece con menos prioridad en las búsquedas.</div>}
     </div>
@@ -2326,32 +2367,35 @@ function ComparadorModal({ ids, props, onClose, onQuitar }) {
   );
 }
 
-function GuardadosCliente({ favs, props, open, toggleFav, onCalificar, onReportarCierre }) {
+function GuardadosCliente({ favs, props, open, toggleFav, onCalificar, onReportarCierre, solicitudPendiente }) {
   const guardadas = favs.filter((f) => f.cid == null).map((f) => ({ fav: f, p: props.find((x) => x.id === f.pid) }));
   return (
     <div className="space-y-2">
       <div className="font-semibold text-sm" style={{ color: C.ink }}>♥ Guardados</div>
       {!guardadas.length && <div className="text-xs" style={{ color: C.mute }}>Todavía no guardaste ninguna propiedad. Ábrela en el buscador y toca «Guardar».</div>}
-      {guardadas.map(({ fav, p }) => p ? (
-        <div key={fav.pid} className="rounded-2xl p-3 space-y-1.5" style={{ background: C.card, border: `1px solid ${C.line}` }}>
-          <button onClick={() => open(p)} className="text-left w-full">
-            <div className="flex items-center justify-between"><span className="font-semibold text-sm" style={{ color: C.ink }}>{p.t}</span><EstBadge est={p.est || "Disponible"} /></div>
-            <div className="text-xs" style={{ color: C.mute }}>{p.zona}, {p.ciudad} · {money(p)}</div>
-          </button>
-          {p.est === "Cerrado" && !fav.val && <div className="flex items-center justify-between gap-2 text-xs rounded-lg px-2 py-1.5" style={{ background: C.okSoft, color: C.ok }}><span>¡Se cerró! Califica a {p.cap.n.split(" ")[0]}</span><div className="flex gap-0.5">{[1, 2, 3, 4, 5].map((n) => <button key={n} onClick={() => onCalificar(p, n)} style={{ color: C.lila }}>☆</button>)}</div></div>}
-          {p.est === "Cerrado" && fav.val && <div className="text-xs" style={{ color: C.ok }}>✓ Ya calificaste a {p.cap.n.split(" ")[0]}</div>}
-          {p.est !== "Cerrado" && !fav.reportado && <button onClick={() => onReportarCierre(p)} className="text-xs underline block" style={{ color: C.mute }}>¿Ya alquilaste o compraste esta propiedad? Avísanos</button>}
-          {p.est !== "Cerrado" && fav.reportado && <div className="text-xs" style={{ color: C.ok }}>✓ Avisamos que cerraste trato con esta propiedad</div>}
-          <button onClick={() => toggleFav(p.id)} className="text-xs underline" style={{ color: C.mute }}>Quitar de guardados</button>
-        </div>
-      ) : (
-        <div key={fav.pid} className="rounded-2xl p-3 flex items-center justify-between gap-2 text-xs" style={{ background: C.redSoft, color: C.red }}><span>⚠️ Una propiedad que guardaste ya no está disponible en Vortex.</span><button onClick={() => toggleFav(fav.pid)} className="underline shrink-0">Quitar</button></div>
-      ))}
+      {guardadas.map(({ fav, p }) => {
+        if (!p) return <div key={fav.pid} className="rounded-2xl p-3 flex items-center justify-between gap-2 text-xs" style={{ background: C.redSoft, color: C.red }}><span>⚠️ Una propiedad que guardaste ya no está disponible en Vortex.</span><button onClick={() => toggleFav(fav.pid)} className="underline shrink-0">Quitar</button></div>;
+        const sol = solicitudPendiente(p.id);
+        return (
+          <div key={fav.pid} className="rounded-2xl p-3 space-y-1.5" style={{ background: C.card, border: `1px solid ${C.line}` }}>
+            <button onClick={() => open(p)} className="text-left w-full">
+              <div className="flex items-center justify-between"><span className="font-semibold text-sm" style={{ color: C.ink }}>{p.t}</span><EstBadge est={p.est || "Disponible"} /></div>
+              <div className="text-xs" style={{ color: C.mute }}>{p.zona}, {p.ciudad} · {money(p)}</div>
+            </button>
+            {p.est === "Cerrado" && !fav.val && <div className="flex items-center justify-between gap-2 text-xs rounded-lg px-2 py-1.5" style={{ background: C.okSoft, color: C.ok }}><span>¡Se cerró! Califica a {p.cap.n.split(" ")[0]}</span><div className="flex gap-0.5">{[1, 2, 3, 4, 5].map((n) => <button key={n} onClick={() => onCalificar(p, n)} style={{ color: C.lila }}>☆</button>)}</div></div>}
+            {p.est === "Cerrado" && fav.val && <div className="text-xs" style={{ color: C.ok }}>✓ Ya calificaste a {p.cap.n.split(" ")[0]}</div>}
+            {p.est !== "Cerrado" && (!sol || sol.est === "rechazada") && <button onClick={() => onReportarCierre(p)} className="text-xs underline block" style={{ color: C.mute }}>¿Ya alquilaste o compraste esta propiedad? Avísanos</button>}
+            {p.est !== "Cerrado" && sol && sol.est === "pendiente" && <div className="text-xs" style={{ color: C.amber }}>⏳ Avisamos a {p.cap.n.split(" ")[0]}. Falta que confirme el cierre.</div>}
+            {p.est !== "Cerrado" && sol && sol.est === "rechazada" && <div className="text-xs" style={{ color: C.mute }}>El captador indicó que esta operación todavía no se cerró.</div>}
+            <button onClick={() => toggleFav(p.id)} className="text-xs underline" style={{ color: C.mute }}>Quitar de guardados</button>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-function PerfilCliente({ sesion, users, setUsers, favs, toggleFav, props, open, onCalificar, onReportarCierre, flash, onMenu, contactos }) {
+function PerfilCliente({ sesion, users, setUsers, favs, toggleFav, props, open, onCalificar, onReportarCierre, solicitudPendiente, flash, onMenu, contactos }) {
   const mi = users.find((u) => u.n === ME) || {};
   const [tel, setTel] = useState((mi.perfil && mi.perfil.tel) || "");
   const guardarTel = () => { setUsers(users.map((u) => (u.n === ME ? { ...u, perfil: { ...(u.perfil || {}), tel } } : u))); flash("Tu WhatsApp se actualizó."); };
@@ -2367,7 +2411,7 @@ function PerfilCliente({ sesion, users, setUsers, favs, toggleFav, props, open, 
         <div className="flex gap-2"><input value={tel} onChange={(e) => setTel(e.target.value)} placeholder="Ej. 70012345" inputMode="tel" className="flex-1 rounded-xl px-3 py-2 text-sm" style={{ border: `1px solid ${C.line}` }} /><button onClick={guardarTel} className="px-4 rounded-xl text-sm font-semibold text-white" style={{ background: C.lila }}>Guardar</button></div>
       </div>
       <button onClick={onMenu} className="w-full py-2.5 rounded-xl text-sm font-semibold text-left px-4" style={{ background: C.lilaSoft, color: C.lilaDk }}>⚙️ Notificaciones, contraseña y cerrar sesión</button>
-      <GuardadosCliente favs={favs} props={props} open={open} toggleFav={toggleFav} onCalificar={onCalificar} onReportarCierre={onReportarCierre} />
+      <GuardadosCliente favs={favs} props={props} open={open} toggleFav={toggleFav} onCalificar={onCalificar} onReportarCierre={onReportarCierre} solicitudPendiente={solicitudPendiente} />
       {!!contactos.length && (
         <div className="space-y-2">
           <div className="font-semibold text-sm" style={{ color: C.ink }}>💬 Mis contactos recientes</div>
@@ -2383,7 +2427,7 @@ function PerfilCliente({ sesion, users, setUsers, favs, toggleFav, props, open, 
   );
 }
 
-export function VortexCliente({ inicial, sesion, onMenu }) {
+export function VortexCliente({ inicial, sesion, onMenu, previewAdmin }) {
   const [tab, setTab] = useState("buscar");
   const [sel, setSel] = useState(null);
   const [perfilDe, setPerfilDe] = useState(null);
@@ -2395,6 +2439,7 @@ export function VortexCliente({ inicial, sesion, onMenu }) {
   const [notifs, setNotifs] = useSync("notificaciones", inicial.notificaciones, sesion);
   const [users, setUsers] = useSync("perfiles", inicial.perfiles, sesion);
   const [busq, setBusq] = useSync("busquedas", inicial.busquedas, sesion);
+  const [solicitudes, setSolicitudes] = useSync("solicitudes", inicial.solicitudes, sesion);
   const [moneda, setMonedaSt] = useState(() => leerMoneda() || (inicial.cfg && inicial.cfg.moneda) || "BOB");
   const setMoneda = (m) => { setMonedaSt(m); try { localStorage.setItem("vx-moneda", m); } catch {} };
   const [cfg] = useSyncObj("ajustes", "cfg", { ...CFG0, ...(inicial.cfg || {}) }, sesion);
@@ -2421,8 +2466,8 @@ export function VortexCliente({ inicial, sesion, onMenu }) {
   const toggleFav = (pid) => setFavs(isFav(pid) ? favs.filter((f) => !(f.pid === pid && f.cid == null)) : [...favs, { pid, cid: null }]);
   const toggleComparar = (pid) => setComparar((c) => { if (c.includes(pid)) return c.filter((x) => x !== pid); if (c.length >= 3) { flash("Puedes comparar hasta 3 propiedades a la vez."); return c; } return [...c, pid]; });
   const open = (p) => { setSel(p); setProps((ps) => ps.map((x) => (x.id === p.id ? { ...x, vistas: (x.vistas || 0) + 1 } : x))); };
-  const calificar = (p, n) => {
-    setReviews([{ id: Date.now(), ag: p.cap.n, s: n, de: ME, pid: p.id }, ...reviews]);
+  const calificar = (p, n, coment = "") => {
+    setReviews([{ id: Date.now(), ag: p.cap.n, s: n, de: ME, pid: p.id, tipo: "cliente", coment: coment.trim() || undefined }, ...reviews]);
     setFavs(favs.map((f) => (f.pid === p.id && f.cid == null ? { ...f, val: true } : f)));
     flash("¡Gracias por tu calificación!");
   };
@@ -2431,10 +2476,16 @@ export function VortexCliente({ inicial, sesion, onMenu }) {
     const tel = (cap.perfil && cap.perfil.tel) || p.cap.tel || "";
     setContObj((o) => ({ ...o, lista: [{ id: Date.now(), cap: p.cap.n, t: p.t, pid: p.id, tel }, ...(o.lista || [])].slice(0, 30) }));
   };
+  // Avisar un cierre NO lo registra de inmediato: queda pendiente hasta que el
+  // propio captador lo confirme desde "Mis captaciones". Así ningún cliente puede
+  // declarar unilateralmente que una operación se cerró.
+  const solicitudPendiente = (pid) => solicitudes.filter((s) => s.pid === pid && s.de === ME).sort((a, b) => b.id - a.id)[0];
   const reportarCierre = (p) => {
-    setFavs(favs.map((f) => (f.pid === p.id && f.cid == null ? { ...f, reportado: true } : f)));
-    notificar("cierre_cliente", { titulo: p.t, de: ME, cap: p.cap.n });
-    flash("¡Gracias! Avisamos a la administración.");
+    const s = solicitudPendiente(p.id);
+    if (s && s.est === "pendiente") return;
+    setSolicitudes([{ id: Date.now(), pid: p.id, tit: p.t, cap: p.cap.n, de: ME, est: "pendiente" }, ...solicitudes]);
+    notificar("cierre_cliente", { titulo: p.t, de: ME, para: p.cap.n });
+    flash("¡Avisado! Tu agente debe confirmar el cierre para que quede registrado.");
   };
   const pendientesCalificar = useMemo(() => favs.filter((f) => f.cid == null && !f.val).map((f) => props.find((p) => p.id === f.pid)).filter((p) => p && p.est === "Cerrado"), [favs, props]);
 
@@ -2465,12 +2516,12 @@ export function VortexCliente({ inicial, sesion, onMenu }) {
     if (avisos.length) {
       setNotifs((n) => [...avisos.map((a, i) => ({
         id: Date.now() + i,
-        ic: a.est === "_borrada" ? "⚠️" : "🔔",
-        t: a.est === "_borrada" ? "Una propiedad guardada ya no está disponible" : "Cambió una propiedad que guardaste",
-        s: a.p ? `${a.p.t}${a.est !== "_borrada" ? `: ahora está "${a.est}"` : ""}` : "Revisa tus guardados en Perfil.",
+        ic: a.est === "_borrada" ? "⚠️" : a.est === "Cerrado" ? "🏁" : "🔔",
+        t: a.est === "_borrada" ? "Una propiedad guardada ya no está disponible" : a.est === "Cerrado" ? "¡Se cerró una propiedad que guardaste!" : "Cambió una propiedad que guardaste",
+        s: a.p ? (a.est === "Cerrado" ? `${a.p.t}: el cierre ya quedó registrado. ¿Quieres calificar a ${a.p.cap.n.split(" ")[0]}?` : `${a.p.t}${a.est !== "_borrada" ? `: ahora está "${a.est}"` : ""}`) : "Revisa tus guardados en Perfil.",
         to: a.p ? { tab: "buscar", p: a.p.id } : null, h: "Ahora",
       })), ...n]);
-      notificar("guardado_cambio", { titulo: avisos[0].p ? avisos[0].p.t : "", detalle: avisos.length > 1 ? `y ${avisos.length - 1} más` : avisos[0].est === "_borrada" ? "ya no está disponible" : `ahora: ${avisos[0].est}`, quitada: avisos.some((a) => a.est === "_borrada") });
+      notificar("guardado_cambio", { titulo: avisos[0].p ? avisos[0].p.t : "", detalle: avisos.length > 1 ? `y ${avisos.length - 1} más` : avisos[0].est === "_borrada" ? "ya no está disponible" : `ahora: ${avisos[0].est}`, quitada: avisos.some((a) => a.est === "_borrada"), cerrado: avisos[0].est === "Cerrado", cap: avisos[0].p && avisos[0].p.cap ? avisos[0].p.cap.n : "" });
     }
     if (cambio || !vig.ini) setVig((v0) => ({ ...v0, ini: true, f }));
   }, [props, favs]);
@@ -2506,15 +2557,16 @@ export function VortexCliente({ inicial, sesion, onMenu }) {
           <div className="flex items-center gap-2"><button onClick={onMenu} title="Mi cuenta" className="w-9 h-9 rounded-full flex items-center justify-center text-base" style={{ background: C.lilaSoft, color: C.lilaDk }}>⚙️</button><button onClick={() => { setTab("perfil"); setSel(null); }} className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold text-white" style={{ background: C.lila }}>{iniciales}</button></div>
         </div>
         <div style={{ height: 3, background: C.grad }} />
+        {previewAdmin && <div className="px-4 py-2 text-xs font-medium" style={{ background: C.amberSoft, color: C.amber }}>👁 Vista previa: así ve la app un Cliente. Toca ⚙️ para volver a SuperAdmin.</div>}
         <div className="flex-1 overflow-y-auto">
-          {sel ? <DetalleCliente p={sel} onBack={() => setSel(null)} isFav={isFav} toggleFav={toggleFav} rate={rate} users={users} onProfile={setPerfilDe} onCalificar={calificar} pendiente={pendientesCalificar.some((p) => p.id === sel.id)} onContactar={contactar} onReportarCierre={reportarCierre} yaReportada={!!(getFav(sel.id) && getFav(sel.id).reportado)} enComparar={comparar.includes(sel.id)} toggleComparar={toggleComparar} />
+          {sel ? <DetalleCliente p={sel} onBack={() => setSel(null)} isFav={isFav} toggleFav={toggleFav} rate={rate} users={users} onProfile={setPerfilDe} onCalificar={calificar} pendiente={pendientesCalificar.some((p) => p.id === sel.id)} onContactar={contactar} onReportarCierre={reportarCierre} solicitud={solicitudPendiente(sel.id)} enComparar={comparar.includes(sel.id)} toggleComparar={toggleComparar} />
             : tab === "buscar" ? <BuscarCliente props={props} favs={favs} rate={rate} open={open} moneda={moneda} setMoneda={setMoneda} busq={busq} setBusq={setBusq} comparar={comparar} toggleComparar={toggleComparar} />
-            : <PerfilCliente sesion={sesion} users={users} setUsers={setUsers} favs={favs} toggleFav={toggleFav} props={props} open={open} onCalificar={calificar} onReportarCierre={reportarCierre} flash={flash} onMenu={onMenu} contactos={contactos} />}
+            : <PerfilCliente sesion={sesion} users={users} setUsers={setUsers} favs={favs} toggleFav={toggleFav} props={props} open={open} onCalificar={calificar} onReportarCierre={reportarCierre} solicitudPendiente={solicitudPendiente} flash={flash} onMenu={onMenu} contactos={contactos} />}
         </div>
         {!sel && tab === "buscar" && comparar.length >= 2 && <button onClick={() => setComparando(true)} className="absolute left-4 right-4 bottom-20 py-3 rounded-xl font-semibold text-white text-sm" style={{ background: C.grad }}>⇄ Comparar {comparar.length} propiedades</button>}
         {comparando && <ComparadorModal ids={comparar} props={props} onClose={() => setComparando(false)} onQuitar={(id) => setComparar((c) => c.filter((x) => x !== id))} />}
-        {perfilDe && <Ficha n={perfilDe} props={props} users={users} rate={rate} onClose={() => setPerfilDe(null)} />}
-        {mi.n && (!mi.terminosCliente || (cfg.terminosClienteF && mi.terminosCliente < cfg.terminosClienteF)) && <TerminosModal texto={cfg.terminosCliente ?? TERMINOS_BASE_CLIENTE} onAceptar={() => setUsers((us) => us.map((u) => (u.n === ME ? { ...u, terminosCliente: isoOf(HOY) } : u)))} />}
+        {perfilDe && <Ficha n={perfilDe} props={props} users={users} reviews={reviews} onClose={() => setPerfilDe(null)} />}
+        {!previewAdmin && mi.n && (!mi.terminosCliente || (cfg.terminosClienteF && mi.terminosCliente < cfg.terminosClienteF)) && <TerminosModal texto={cfg.terminosCliente ?? TERMINOS_BASE_CLIENTE} onAceptar={() => setUsers((us) => us.map((u) => (u.n === ME ? { ...u, terminosCliente: isoOf(HOY) } : u)))} />}
         {toast && <div className="absolute left-4 right-4 bottom-20 text-sm text-white px-3 py-2 rounded-xl text-center" style={{ background: C.lila }}>{toast}</div>}
         <div className="grid grid-cols-2" style={{ background: C.card, borderTop: `1px solid ${C.line}` }}>
           {[["buscar", "🔍", "Buscador"], ["perfil", "🧑", "Perfil"]].map(([k, ic, l]) => (

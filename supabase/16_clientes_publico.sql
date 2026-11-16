@@ -59,23 +59,54 @@ grant execute on function public.registrarse_cliente(text, text, text, text, boo
 --    reseñas entre agentes; la columna "de" ya identifica quién la escribió).
 --    La tabla "resenas" ya permite insertar/leer a cualquier usuario autenticado
 --    (ver archivo 1_esquema.sql), así que no se necesita ningún cambio de permisos.
+--    Las reseñas de cliente se guardan con "tipo":"cliente" y pueden llevar un
+--    comentario ("coment") además del puntaje; las de colega llevan "tipo":"agente".
+
+-- 3.1) Tabla "solicitudes": un cliente avisa que se cerró trato en una propiedad,
+--      pero esto NO cuenta como cierre real hasta que el captador lo confirme.
+--      Misma forma que las demás tablas compartidas (propiedades, resenas...).
+--      La ve quien la creó (el cliente), el captador mencionado (datos->>'cap')
+--      y los administradores; solo el captador o un admin pueden aprobarla/rechazarla.
+create table if not exists public.solicitudes (
+  id             text primary key,
+  datos          jsonb not null default '{}'::jsonb,
+  creado_por     uuid default auth.uid() references auth.users(id) on delete set null,
+  creado_en      timestamptz not null default now(),
+  actualizado_en timestamptz not null default now()
+);
+alter table public.solicitudes enable row level security;
+create index if not exists solicitudes_creado_idx on public.solicitudes (creado_en);
+drop policy if exists solicitudes_ver on public.solicitudes;
+drop policy if exists solicitudes_crear on public.solicitudes;
+drop policy if exists solicitudes_editar on public.solicitudes;
+drop policy if exists solicitudes_borrar on public.solicitudes;
+create policy solicitudes_ver on public.solicitudes for select to authenticated using (
+  creado_por = auth.uid() or datos->>'cap' = public.mi_nombre() or public.es_admin()
+);
+create policy solicitudes_crear on public.solicitudes for insert to authenticated with check (creado_por = auth.uid());
+create policy solicitudes_editar on public.solicitudes for update to authenticated using (
+  datos->>'cap' = public.mi_nombre() or public.es_admin()
+) with check (true);
+create policy solicitudes_borrar on public.solicitudes for delete to authenticated using (
+  creado_por = auth.uid() or datos->>'cap' = public.mi_nombre() or public.es_admin()
+);
 
 -- 4) Avisos push para clientes:
 --    - "guardado_cambio": una propiedad guardada cambió de estado o ya no existe (al cliente mismo)
 --    - "cliente_match": nueva propiedad que coincide con una búsqueda guardada (al cliente mismo)
---    - "cierre_cliente": un cliente avisó que cerró trato con una propiedad (a los administradores)
+--    - "cierre_cliente": un cliente avisó un cierre pendiente de confirmar (al captador, p_para = su nombre)
 create or replace function public.push_destinos(p_evento text, p_para text default null)
 returns setof jsonb language plpgsql stable security definer set search_path = public as $$
 begin
   if auth.uid() is null then raise exception 'Debes iniciar sesión'; end if;
   if p_evento in ('prueba', 'guardado_cambio', 'cliente_match') then
     return query select s.datos from public.push_suscripciones s where s.usuario = auth.uid();
-  elsif p_evento in ('pago', 'registro', 'cierre_cliente') then
+  elsif p_evento in ('pago', 'registro') then
     return query select s.datos from public.push_suscripciones s join public.perfiles p on p.id = s.usuario where p.rol = 'admin';
   elsif p_evento in ('pago_revisado', 'verificado') then
     if not public.es_admin() then raise exception 'No permitido'; end if;
     return query select s.datos from public.push_suscripciones s join public.perfiles p on p.id = s.usuario where p.nombre = p_para;
-  elsif p_evento = 'visita' then
+  elsif p_evento in ('visita', 'cierre_cliente') then
     return query select s.datos from public.push_suscripciones s join public.perfiles p on p.id = s.usuario where p.nombre = p_para and p.id <> auth.uid();
   end if;
 end $$;
@@ -87,5 +118,5 @@ grant execute on function public.push_destinos(text, text) to authenticated;
 -- Recuerda también actualizar netlify/functions/notificar.mjs (ya incluido en el proyecto)
 -- para que reconozca los eventos "guardado_cambio", "cliente_match" y "cierre_cliente".
 -- No se necesita ningún otro cambio de base de datos para las búsquedas guardadas, el
--- historial de contactos ni "avisar cierre": usan las tablas "busquedas" y
--- "ajustes_usuario" que ya existen desde el archivo 1_esquema.sql.
+-- historial de contactos ni "avisar cierre": usan las tablas "busquedas", "solicitudes"
+-- y "ajustes_usuario", ya creadas en este archivo y en 1_esquema.sql.

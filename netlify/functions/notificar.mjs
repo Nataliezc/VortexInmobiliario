@@ -9,9 +9,9 @@ const MENSAJES = {
   pago_revisado: (d) => ({ titulo: d.est === "Aprobado" ? "✅ Pago aprobado" : "⚠️ Pago rechazado", cuerpo: d.est === "Aprobado" ? `Tu plan ${d.plan || ""} ya está activo. ¡Gracias!` : `Revisa el motivo en Perfil → Suscripción${d.mot ? `: ${d.mot}` : ""}.` }),
   verificado: (d) => ({ titulo: d.ok ? "✅ Cuenta verificada" : "⚠️ No pudimos verificar tu cuenta", cuerpo: d.ok ? "Tu prueba de 48 horas con acceso completo ya está activa." : `Motivo: ${d.mot || "revisa tu carnet"}.` }),
   visita: (d) => ({ titulo: "📅 Nueva visita agendada", cuerpo: `${d.de || "Un agente"} agendó una visita a ${d.prop || "tu propiedad"} el ${d.fecha || ""} a las ${d.hora || ""}.` }),
-  guardado_cambio: (d) => ({ titulo: d.quitada ? "⚠️ Una propiedad guardada ya no está disponible" : "🔔 Cambió una propiedad que guardaste", cuerpo: d.titulo ? `${d.titulo}${d.detalle ? ` · ${d.detalle}` : ""}` : "Revisa tus propiedades guardadas en Vortex.", tag: "guardado-" + Date.now() }),
+  guardado_cambio: (d) => ({ titulo: d.quitada ? "⚠️ Una propiedad guardada ya no está disponible" : d.cerrado ? "🏁 ¡Se cerró una propiedad que guardaste!" : "🔔 Cambió una propiedad que guardaste", cuerpo: d.cerrado ? `${d.titulo || "Tu propiedad"} ya se cerró. ¿Quieres calificar a ${d.cap ? d.cap.split(" ")[0] : "tu agente"}? Abre Vortex para calificarlo.` : d.titulo ? `${d.titulo}${d.detalle ? ` · ${d.detalle}` : ""}` : "Revisa tus propiedades guardadas en Vortex.", tag: "guardado-" + Date.now() }),
   cliente_match: (d) => ({ titulo: "🔔 Nueva propiedad que coincide con tu búsqueda", cuerpo: d.titulo ? `${d.titulo}${d.detalle ? ` · ${d.detalle}` : ""}` : "Hay una propiedad nueva que coincide con una búsqueda que guardaste.", tag: "match-" + Date.now() }),
-  cierre_cliente: (d) => ({ titulo: "🏁 Un cliente avisó un cierre", cuerpo: `${d.de || "Un cliente"} avisó que cerró trato en "${d.titulo || "una propiedad"}" con ${d.cap || "el captador"}. Revísalo en el panel.`, tag: "cierre-cliente-" + Date.now(), importante: true }),
+  cierre_cliente: (d) => ({ titulo: "🏁 Un cliente avisa un cierre pendiente", cuerpo: `${d.de || "Un cliente"} avisó que cerró trato en "${d.titulo || "una propiedad"}". Confírmalo en Vortex → Mis captaciones para registrar el cierre oficialmente.`, tag: "cierre-cliente-" + Date.now(), importante: true }),
 };
 
 export default async (req) => {

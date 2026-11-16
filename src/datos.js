@@ -14,6 +14,7 @@ export const TABLAS = {
   operaciones: { orden: "desc" },
   resenas: { orden: "desc" },
   reportes: { orden: "desc" },
+  solicitudes: { orden: "desc" },
   sugerencias: { orden: "desc" },
   pagos: { orden: "desc" },
   visitas: { orden: "asc" },
