@@ -2580,4 +2580,51 @@ export function VortexCliente({ inicial, sesion, onMenu, previewAdmin }) {
   );
 }
 
+// Buscador público para alguien que todavía no tiene cuenta y eligió entrar
+// como "cliente que busca": sin banners de plan/prueba (eso es solo para
+// agentes), sin inicio de sesión obligatorio. Puede ver y comparar propiedades
+// libremente; guardar, calificar o avisar un cierre lo invita a registrarse.
+export function VisitanteCliente({ inicial, onIngresar, onRegistro, onIngresarAgente }) {
+  const [sel, setSel] = useState(null);
+  const [perfilDe, setPerfilDe] = useState(null);
+  const [comparando, setComparando] = useState(false);
+  const [comparar, setComparar] = useState([]);
+  const [moneda, setMonedaSt] = useState(() => leerMoneda() || (inicial.cfg && inicial.cfg.moneda) || "BOB");
+  const setMoneda = (m) => { setMonedaSt(m); try { localStorage.setItem("vx-moneda", m); } catch {} };
+  const props = inicial.propiedades || [];
+  const cfg = { ...CFG0, ...(inicial.cfg || {}) };
+  ZONAS = cfg.ciudades && Object.keys(cfg.ciudades).length ? cfg.ciudades : ZONAS_BASE;
+  BOB = +cfg.tc > 0 ? +cfg.tc : 6.96;
+  ES_VISITANTE = true;
+  MONEDA = moneda;
+  useAtras(!!sel, () => setSel(null));
+  useAtras(!!perfilDe, () => setPerfilDe(null));
+  useAtras(comparando, () => setComparando(false));
+  const rate = () => null;
+  const toggleComparar = (pid) => setComparar((c) => { if (c.includes(pid)) return c.filter((x) => x !== pid); if (c.length >= 3) return c; return [...c, pid]; });
+  const open = (p) => setSel(p);
+  return (
+    <div className="vx-shell" style={{ fontFamily: "'Montserrat', 'Avenir Next', 'Segoe UI', system-ui, sans-serif" }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap');`}</style>
+      <div className="relative flex flex-col overflow-hidden vx-frame" style={{ background: C.bg }}>
+        <div className="px-4 pt-3 pb-2 flex items-center justify-between" style={{ background: "#fff" }}>
+          <div className="flex items-center gap-2"><img src={LOGO_ISO} alt="Vortex" style={{ height: 36 }} /><div><img src={LOGO_WM} alt="Vortex" style={{ height: 17, display: "block" }} /><div style={{ fontSize: 9, letterSpacing: ".12em", color: C.mute, marginTop: 4 }}>BUSCADOR DE PROPIEDADES</div></div></div>
+          <div className="flex items-center gap-2"><button onClick={onIngresar} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: C.lilaSoft, color: C.lilaDk }}>Ingresar</button><button onClick={onRegistro} className="px-3 py-1.5 rounded-full text-xs font-semibold text-white" style={{ background: C.grad }}>Registrarme</button></div>
+        </div>
+        <div style={{ height: 3, background: C.grad }} />
+        <div className="flex-1 overflow-y-auto">
+          {sel ? <DetalleCliente p={sel} onBack={() => setSel(null)} isFav={() => false} toggleFav={onRegistro} rate={rate} users={[]} onProfile={setPerfilDe} onCalificar={() => {}} pendiente={false} onContactar={() => {}} onReportarCierre={() => {}} solicitud={null} enComparar={comparar.includes(sel.id)} toggleComparar={toggleComparar} />
+            : <BuscarCliente props={props} favs={[]} rate={rate} open={open} moneda={moneda} setMoneda={setMoneda} busq={[]} setBusq={onRegistro} comparar={comparar} toggleComparar={toggleComparar} />}
+        </div>
+        {!sel && comparar.length >= 2 && <button onClick={() => setComparando(true)} className="absolute left-4 right-4 bottom-4 py-3 rounded-xl font-semibold text-white text-sm" style={{ background: C.grad }}>⇄ Comparar {comparar.length} propiedades</button>}
+        {comparando && <ComparadorModal ids={comparar} props={props} onClose={() => setComparando(false)} onQuitar={(id) => setComparar((c) => c.filter((x) => x !== id))} />}
+        {perfilDe && <Ficha n={perfilDe} props={props} users={[]} reviews={[]} onClose={() => setPerfilDe(null)} />}
+        <div className="px-4 py-2.5 text-center text-xs" style={{ borderTop: `1px solid ${C.line}`, color: C.mute, background: C.card }}>
+          ¿Eres agente inmobiliario? <button onClick={onIngresarAgente} className="underline font-semibold" style={{ color: C.brandDk }}>Entra a la red de agentes</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export { LOGO_ISO, LOGO_WM, C, CUENTAS, RESUMEN, Chip, Fld, inp, fechaL, isoOf, isoD, bs, waLink, waNum, HOY, serif, copiarTexto, money };

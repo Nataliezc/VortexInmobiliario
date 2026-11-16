@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase, configurado } from "./supabase";
 import { cargarTodo, cargarPublico, hayPendientes } from "./datos";
-import Vortex, { VortexCliente, fijarUsuario, C, LOGO_ISO } from "./Vortex";
+import Vortex, { VortexCliente, VisitanteCliente, fijarUsuario, C, LOGO_ISO } from "./Vortex";
 import Login from "./Login";
 import Registro from "./Registro";
 import { CrearUsuario, AccionesUsuario, MenuCuenta, NuevaClave } from "./Cuentas";
@@ -42,6 +42,7 @@ export default function App() {
   const [sim, setSim] = useState("admin");       // "Ver la app como" (solo administradores)
   const [finPrueba, setFinPrueba] = useState(0);
   const [modo, setModo] = useState(null);
+  const [modoVisitante, setModoVisitante] = useState(null); // "cliente" | "agente" | null = sin elegir aún
   const [recuperar, setRecuperar] = useState(false);
   useTrampaAtras();
   const [verTerminos, setVerTerminos] = useState(false); // null = visitante | "login" | "registro"
@@ -63,7 +64,7 @@ export default function App() {
   // Perfil + datos al iniciar sesión
   useEffect(() => {
     setMenu(false); setSim("admin");
-    if (!sesion) { setPerfil(null); setDatos(null); setError(""); return; }
+    if (!sesion) { setPerfil(null); setDatos(null); setError(""); setModoVisitante(null); return; }
     let vivo = true;
     (async () => {
       try {
@@ -145,6 +146,27 @@ export default function App() {
     if (modo === "registro") return <Registro onLogin={() => setModo("login")} onVolver={() => setModo(null)} terminos={textoTerminos} />;
     if (modo === "loginc") return <>{<Login tipo="cliente" onRegistro={() => setModo("registroc")} onVolver={() => setModo(null)} onTerminos={() => setVerTerminos(true)} />}{modalTerminos}</>;
     if (modo === "registroc") return <Registro tipo="cliente" onLogin={() => setModo("loginc")} onVolver={() => setModo(null)} terminos={textoTerminos} />;
+    if (modoVisitante === null) return (
+      <Centro>
+        <div className="text-lg font-bold" style={{ color: C.ink }}>¿Cómo quieres entrar?</div>
+        <div className="text-sm" style={{ color: C.mute, maxWidth: 320 }}>Elige una opción para continuar. Puedes solo mirar, sin crear cuenta.</div>
+        <div className="w-full space-y-2.5" style={{ maxWidth: 320 }}>
+          <button onClick={() => setModoVisitante("cliente")} className="w-full py-3.5 rounded-xl font-semibold text-white" style={{ background: C.grad }}>🏠 Busco una propiedad</button>
+          <button onClick={() => setModoVisitante("agente")} className="w-full py-3.5 rounded-xl font-semibold" style={{ border: `1.5px solid ${C.line}`, color: C.ink }}>🧑‍💼 Soy agente inmobiliario</button>
+        </div>
+      </Centro>
+    );
+    if (modoVisitante === "cliente") {
+      if (errPub) return (
+        <Centro>
+          <div className="text-base font-bold" style={{ color: C.ink }}>Bienvenido a Vortex</div>
+          <div className="text-sm" style={{ color: C.mute, maxWidth: 340 }}>{errPub}</div>
+          <button onClick={() => setModo("loginc")} className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: C.lila }}>Iniciar sesión</button>
+        </Centro>
+      );
+      if (!publico) return <Centro><div className="text-sm" style={{ color: C.mute }}>Cargando propiedades…</div></Centro>;
+      return <><VisitanteCliente inicial={publico} onIngresar={() => setModo("loginc")} onRegistro={() => setModo("registroc")} onIngresarAgente={() => setModoVisitante("agente")} /><InstalarBanner /></>;
+    }
     if (errPub) return (
       <Centro>
         <div className="text-base font-bold" style={{ color: C.ink }}>Bienvenido a Vortex</div>
@@ -153,7 +175,7 @@ export default function App() {
       </Centro>
     );
     if (!publico) return <Centro><div className="text-sm" style={{ color: C.mute }}>Cargando propiedades…</div></Centro>;
-    return <><Vortex key="visitante" inicial={publico} sesion={{ uid: null, nombre: "", email: "", rol: "visitante" }} onIngresar={() => setModo("login")} onRegistro={() => setModo("registro")} onIngresarCliente={() => setModo("loginc")} onRegistroCliente={() => setModo("registroc")} /><InstalarBanner /></>;
+    return <><Vortex key="visitante" inicial={publico} sesion={{ uid: null, nombre: "", email: "", rol: "visitante" }} onIngresar={() => setModo("login")} onRegistro={() => setModo("registro")} /><InstalarBanner /></>;
   }
   if (error) return (
     <Centro>
