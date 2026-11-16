@@ -11,7 +11,7 @@ import { puedeInstalar, onCambioInstalar, instalarApp, esIOSInstalar, instaladaY
 import { LOGO_ISO } from "./Vortex";
 
 // Activar las notificaciones en este celular
-function PanelPush({ esAdmin }) {
+function PanelPush({ esAdmin, tipo }) {
   const [est, setEst] = useState("…");
   const [msg, setMsg] = useState("");
   const [ocupado, setOcupado] = useState(false);
@@ -21,7 +21,7 @@ function PanelPush({ esAdmin }) {
   return (
     <div className="rounded-2xl p-3 space-y-2" style={{ background: C.brandSoft }}>
       <div className="text-sm font-semibold" style={{ color: C.brandDk }}>🔔 Notificaciones en este celular</div>
-      <div className="text-xs" style={{ color: C.ink }}>{esAdmin ? "Un aviso con sonido cada vez que llegue un pago, y uno silencioso cuando se registre un agente nuevo." : "Te avisaremos cuando aprueben tu pago o tu cuenta, y cuando agenden una visita a tu propiedad."}</div>
+      <div className="text-xs" style={{ color: C.ink }}>{esAdmin ? "Un aviso con sonido cada vez que llegue un pago, y uno silencioso cuando se registre un agente nuevo." : tipo === "cliente" ? "Te avisaremos si una propiedad que guardaste cambia de estado o ya no está disponible." : "Te avisaremos cuando aprueben tu pago o tu cuenta, y cuando agenden una visita a tu propiedad."}</div>
       {est === "activo" ? <><div className="text-xs font-semibold" style={{ color: C.ok }}>✓ Activadas en este celular</div>
           <button onClick={async () => { setOcupado(true); setMsg(""); const r = await notificar("prueba"); setOcupado(false); setMsg(r.ok ? (r.enviados > 0 ? "✓ Enviada. Debe aparecer en unos segundos. Si no llega, revisa los permisos de notificación de tu navegador en los ajustes del celular." : r.destinos ? `No se pudo entregar (${(r.errores || []).join(", ")}). Toca «Desactivar» y vuelve a activarlas.` : "Este celular no quedó registrado. Toca «Desactivar» y vuelve a activarlas.") : `Error del servidor: ${r.error || "desconocido"}. Revisa las variables VAPID en Netlify.`); }} disabled={ocupado} className="w-full py-2 rounded-xl text-sm font-semibold" style={{ background: "#fff", color: C.brandDk }}>{ocupado ? "Enviando…" : "📳 Enviar notificación de prueba"}</button>
           <button onClick={async () => { setOcupado(true); try { await desactivarPush(); await activarPush(); setMsg("✓ Reactivadas en este celular."); } catch (e) { setMsg(e.message || String(e)); } setOcupado(false); }} disabled={ocupado} className="text-xs underline" style={{ color: C.brandDk }}>Volver a activar</button>
@@ -164,7 +164,7 @@ export function MenuCuenta({ sesion, onClose, vista, onTerminos }) {
     <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(30,27,58,.55)" }} onClick={onClose}>
       <div className="w-full rounded-t-3xl p-5 space-y-4 overflow-y-auto" style={{ background: C.card, maxWidth: 480, maxHeight: "92vh", paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))" }} onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-start">
-          <div><div className="font-bold" style={{ color: C.ink }}>{sesion.nombre}</div><div className="text-xs" style={{ color: C.mute }}>{sesion.email} · {sesion.rol === "admin" ? "Administrador" : "Agente"}</div></div>
+          <div><div className="font-bold" style={{ color: C.ink }}>{sesion.nombre}</div><div className="text-xs" style={{ color: C.mute }}>{sesion.email} · {sesion.rol === "admin" ? "Administrador" : sesion.rol === "cliente" ? "Cliente" : "Agente"}</div></div>
           <button onClick={onClose} className="text-xl" style={{ color: C.mute }}>✕</button>
         </div>
         {vista && <div className="rounded-2xl p-3 space-y-2" style={{ background: C.lilaSoft }}>
@@ -177,7 +177,7 @@ export function MenuCuenta({ sesion, onClose, vista, onTerminos }) {
           <button onClick={onClose} className="w-full py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: C.grad }}>Ver la app</button>
         </div>}
         <BotonInstalar />
-        <PanelPush esAdmin={sesion.rol === "admin"} />
+        <PanelPush esAdmin={sesion.rol === "admin"} tipo={sesion.rol} />
         <Campo l="Cambiar mi contraseña"><div className="flex gap-2"><div className="flex-1"><ClaveInput value={pass} onChange={(e) => setPass(e.target.value)} placeholder="Nueva contraseña" autoComplete="new-password" className="w-full rounded-xl px-3 py-2 text-sm" /></div><button onClick={cambiar} className="px-4 rounded-xl text-sm font-semibold text-white" style={{ background: C.lila }}>Guardar</button></div></Campo>
         {ok && <div className="text-xs" style={{ color: C.ok }}>✓ {ok}</div>}
         <MsgError t={err} />

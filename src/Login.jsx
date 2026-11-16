@@ -10,7 +10,8 @@ const traducir = (m = "") =>
   : /fetch|network/i.test(m) ? "No hay conexión con el servidor. Revisa tu internet o los datos de config.js."
   : m;
 
-export default function Login({ onRegistro, onVolver, onTerminos }) {
+export default function Login({ onRegistro, onVolver, onTerminos, tipo = "agente" }) {
+  const cli = tipo === "cliente";
   const [enviado, setEnviado] = useState("");
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
@@ -35,16 +36,16 @@ export default function Login({ onRegistro, onVolver, onTerminos }) {
           <div className="flex flex-col items-center gap-3">
             <img src={LOGO_ISO} alt="Vortex" style={{ height: 72 }} />
             <img src={LOGO_WM} alt="Vortex" style={{ height: 26 }} />
-            <div style={{ fontSize: 10, letterSpacing: ".14em", color: C.mute }}>RED DE AGENTES INMOBILIARIOS</div>
+            <div style={{ fontSize: 10, letterSpacing: ".14em", color: C.mute }}>{cli ? "ACCESO PARA CLIENTES" : "RED DE AGENTES INMOBILIARIOS"}</div>
           </div>
           <form onSubmit={entrar} className="rounded-2xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.line}` }}>
-            <div className="text-lg font-bold" style={{ color: C.ink }}>Iniciar sesión</div>
+            <div className="text-lg font-bold" style={{ color: C.ink }}>{cli ? "Entrar como cliente" : "Entrar como agente"}</div>
             <Campo l="Correo electrónico"><input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-xl px-3 py-2.5 text-sm" style={inp} required /></Campo>
             <Campo l="Contraseña"><ClaveInput autoComplete="current-password" value={pass} onChange={(e) => setPass(e.target.value)} /></Campo>
             <MsgError t={err} />
             <Boton type="submit" disabled={cargando}>{cargando ? "Entrando…" : "Entrar"}</Boton>
             <button type="button" onClick={() => setOlvido(!olvido)} className="w-full text-xs underline" style={{ color: C.mute }}>¿Olvidaste tu contraseña?</button>
-            {onRegistro && <button type="button" onClick={onRegistro} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.lilaSoft, color: C.lilaDk }}>¿No tienes cuenta? Regístrate gratis</button>}
+            {onRegistro && <button type="button" onClick={onRegistro} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.lilaSoft, color: C.lilaDk }}>¿No tienes cuenta? {cli ? "Regístrate gratis como cliente" : "Regístrate gratis como agente"}</button>}
             {olvido && <div className="text-xs rounded-lg p-3 space-y-2" style={{ background: C.lilaSoft, color: C.lilaDk }}>
               <div>Escribe tu correo arriba y te enviaremos un enlace para crear una contraseña nueva.</div>
               <button type="button" onClick={async () => { const em = email.trim().toLowerCase(); if (!/^\S+@\S+\.\S+$/.test(em)) { setErr("Escribe tu correo para enviarte el enlace."); return; } setErr(""); const { error } = await supabase.auth.resetPasswordForEmail(em, { redirectTo: window.location.origin }); if (error) setErr(/rate|seconds/i.test(error.message) ? "Espera un minuto antes de volver a pedir el enlace." : error.message); else setEnviado(em); }} className="w-full py-2 rounded-lg font-semibold text-white" style={{ background: C.lila }}>Enviarme el enlace</button>

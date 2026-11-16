@@ -9,6 +9,7 @@ const MENSAJES = {
   pago_revisado: (d) => ({ titulo: d.est === "Aprobado" ? "✅ Pago aprobado" : "⚠️ Pago rechazado", cuerpo: d.est === "Aprobado" ? `Tu plan ${d.plan || ""} ya está activo. ¡Gracias!` : `Revisa el motivo en Perfil → Suscripción${d.mot ? `: ${d.mot}` : ""}.` }),
   verificado: (d) => ({ titulo: d.ok ? "✅ Cuenta verificada" : "⚠️ No pudimos verificar tu cuenta", cuerpo: d.ok ? "Tu prueba de 48 horas con acceso completo ya está activa." : `Motivo: ${d.mot || "revisa tu carnet"}.` }),
   visita: (d) => ({ titulo: "📅 Nueva visita agendada", cuerpo: `${d.de || "Un agente"} agendó una visita a ${d.prop || "tu propiedad"} el ${d.fecha || ""} a las ${d.hora || ""}.` }),
+  guardado_cambio: (d) => ({ titulo: d.quitada ? "⚠️ Una propiedad guardada ya no está disponible" : "🔔 Cambió una propiedad que guardaste", cuerpo: d.titulo ? `${d.titulo}${d.detalle ? ` · ${d.detalle}` : ""}` : "Revisa tus propiedades guardadas en Vortex.", tag: "guardado-" + Date.now() }),
 };
 
 export default async (req) => {

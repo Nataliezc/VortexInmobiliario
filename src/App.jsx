@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase, configurado } from "./supabase";
 import { cargarTodo, cargarPublico, hayPendientes } from "./datos";
-import Vortex, { fijarUsuario, C, LOGO_ISO } from "./Vortex";
+import Vortex, { VortexCliente, fijarUsuario, C, LOGO_ISO } from "./Vortex";
 import Login from "./Login";
 import Registro from "./Registro";
 import { CrearUsuario, AccionesUsuario, MenuCuenta, NuevaClave } from "./Cuentas";
@@ -140,6 +140,8 @@ export default function App() {
   if (!sesion) {
     if (modo === "login") return <>{<Login onRegistro={() => setModo("registro")} onVolver={() => setModo(null)} onTerminos={() => setVerTerminos(true)} />}{modalTerminos}</>;
     if (modo === "registro") return <Registro onLogin={() => setModo("login")} onVolver={() => setModo(null)} terminos={textoTerminos} />;
+    if (modo === "loginc") return <>{<Login tipo="cliente" onRegistro={() => setModo("registroc")} onVolver={() => setModo(null)} onTerminos={() => setVerTerminos(true)} />}{modalTerminos}</>;
+    if (modo === "registroc") return <Registro tipo="cliente" onLogin={() => setModo("loginc")} onVolver={() => setModo(null)} terminos={textoTerminos} />;
     if (errPub) return (
       <Centro>
         <div className="text-base font-bold" style={{ color: C.ink }}>Bienvenido a Vortex</div>
@@ -148,7 +150,7 @@ export default function App() {
       </Centro>
     );
     if (!publico) return <Centro><div className="text-sm" style={{ color: C.mute }}>Cargando propiedades…</div></Centro>;
-    return <><Vortex key="visitante" inicial={publico} sesion={{ uid: null, nombre: "", email: "", rol: "visitante" }} onIngresar={() => setModo("login")} onRegistro={() => setModo("registro")} /><InstalarBanner /></>;
+    return <><Vortex key="visitante" inicial={publico} sesion={{ uid: null, nombre: "", email: "", rol: "visitante" }} onIngresar={() => setModo("login")} onRegistro={() => setModo("registro")} onIngresarCliente={() => setModo("loginc")} onRegistroCliente={() => setModo("registroc")} /><InstalarBanner /></>;
   }
   if (error) return (
     <Centro>
@@ -159,10 +161,11 @@ export default function App() {
   );
   if (!datos || !perfil) return <Centro><div className="text-sm" style={{ color: C.mute }}>Cargando tus datos…</div></Centro>;
 
+  const Comp = perfil.rol === "cliente" ? VortexCliente : Vortex;
   return (
     <>
       <InstalarBanner />
-      <Vortex key={perfil.uid} inicial={datos} sesion={perfil} onMenu={() => setMenu(true)} cuentas={perfil.rol === "admin" ? cuentas : null} sim={sim} setSim={setSim} finPrueba={finPrueba} />
+      <Comp key={perfil.uid} inicial={datos} sesion={perfil} onMenu={() => setMenu(true)} cuentas={perfil.rol === "admin" ? cuentas : null} sim={sim} setSim={setSim} finPrueba={finPrueba} />
       {modalTerminos}
       {menu && <MenuCuenta onTerminos={() => { setMenu(false); setVerTerminos(true); }} sesion={perfil} onClose={() => setMenu(false)} vista={perfil.rol === "admin" ? { sim, setSim, terminarPrueba: () => { setFinPrueba(Date.now()); setMenu(false); } } : null} />}
       {(avisoTxt || subiendo > 0) && (
