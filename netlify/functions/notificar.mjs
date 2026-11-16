@@ -10,6 +10,8 @@ const MENSAJES = {
   verificado: (d) => ({ titulo: d.ok ? "✅ Cuenta verificada" : "⚠️ No pudimos verificar tu cuenta", cuerpo: d.ok ? "Tu prueba de 48 horas con acceso completo ya está activa." : `Motivo: ${d.mot || "revisa tu carnet"}.` }),
   visita: (d) => ({ titulo: "📅 Nueva visita agendada", cuerpo: `${d.de || "Un agente"} agendó una visita a ${d.prop || "tu propiedad"} el ${d.fecha || ""} a las ${d.hora || ""}.` }),
   guardado_cambio: (d) => ({ titulo: d.quitada ? "⚠️ Una propiedad guardada ya no está disponible" : "🔔 Cambió una propiedad que guardaste", cuerpo: d.titulo ? `${d.titulo}${d.detalle ? ` · ${d.detalle}` : ""}` : "Revisa tus propiedades guardadas en Vortex.", tag: "guardado-" + Date.now() }),
+  cliente_match: (d) => ({ titulo: "🔔 Nueva propiedad que coincide con tu búsqueda", cuerpo: d.titulo ? `${d.titulo}${d.detalle ? ` · ${d.detalle}` : ""}` : "Hay una propiedad nueva que coincide con una búsqueda que guardaste.", tag: "match-" + Date.now() }),
+  cierre_cliente: (d) => ({ titulo: "🏁 Un cliente avisó un cierre", cuerpo: `${d.de || "Un cliente"} avisó que cerró trato en "${d.titulo || "una propiedad"}" con ${d.cap || "el captador"}. Revísalo en el panel.`, tag: "cierre-cliente-" + Date.now(), importante: true }),
 };
 
 export default async (req) => {

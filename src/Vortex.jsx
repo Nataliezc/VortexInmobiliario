@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useSync, useSyncObj } from "./datos";
 import { subir, subirVarios, borrarFotos, subirPrivado, subirConError } from "./archivos";
-import { ImgSegura, TerminosModal, AdminCiudades, AdminVerificar, AdminMetricas, AdminBorrarTodo, AdminAgenda, Plantillas, RespuestasRapidas, PLANTILLAS_BASE, TERMINOS_BASE } from "./Extras";
+import { ImgSegura, TerminosModal, AdminCiudades, AdminVerificar, AdminMetricas, AdminBorrarTodo, AdminAgenda, Plantillas, RespuestasRapidas, PLANTILLAS_BASE, TERMINOS_BASE, TERMINOS_BASE_CLIENTE } from "./Extras";
 import { supabase } from "./supabase";
 import { useAtras } from "./atras";
 import { notificar } from "./push";
@@ -1341,8 +1341,16 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
         <div className="text-xs" style={{ color: C.mute }}>Este texto lo aceptan los agentes al registrarse. Te recomendamos que un abogado lo revise.{cfg.terminosF ? ` Versión vigente desde el ${fechaL(isoD(cfg.terminosF))}.` : ""}</div>
         <textarea rows={8} value={cfg.terminos ?? TERMINOS_BASE} onChange={(e) => setCfg({ ...cfg, terminos: e.target.value })} className="w-full rounded-xl px-3 py-2 text-xs" style={inp} />
         <div className="grid grid-cols-2 gap-2">
-          <button onClick={() => { setCfg({ ...cfg, terminosF: isoOf(HOY) }); log("Nueva versión de términos publicada"); flash("Listo. Todos los usuarios deberán aceptar los términos al volver a entrar."); }} className="py-2 rounded-xl text-xs font-semibold text-white" style={{ background: C.lila }}>Pedir que todos acepten de nuevo</button>
+          <button onClick={() => { setCfg({ ...cfg, terminosF: isoOf(HOY) }); log("Nueva versión de términos publicada"); flash("Listo. Todos los agentes deberán aceptar los términos al volver a entrar."); }} className="py-2 rounded-xl text-xs font-semibold text-white" style={{ background: C.lila }}>Pedir que todos los agentes acepten de nuevo</button>
           <button onClick={() => setCfg({ ...cfg, terminos: TERMINOS_BASE })} className="py-2 rounded-xl text-xs" style={{ border: `1px solid ${C.line}`, color: C.mute }}>Restaurar texto sugerido</button>
+        </div>
+        <div style={{ height: 1, background: C.line }} />
+        <div className="text-sm font-semibold" style={{ color: C.ink }}>📄 Términos y política de privacidad (clientes)</div>
+        <div className="text-xs" style={{ color: C.mute }}>Este es un texto distinto, pensado para el público que busca propiedades (no para agentes). Lo aceptan al registrarse como cliente.{cfg.terminosClienteF ? ` Versión vigente desde el ${fechaL(isoD(cfg.terminosClienteF))}.` : ""}</div>
+        <textarea rows={8} value={cfg.terminosCliente ?? TERMINOS_BASE_CLIENTE} onChange={(e) => setCfg({ ...cfg, terminosCliente: e.target.value })} className="w-full rounded-xl px-3 py-2 text-xs" style={inp} />
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={() => { setCfg({ ...cfg, terminosClienteF: isoOf(HOY) }); log("Nueva versión de términos para clientes publicada"); flash("Listo. Todos los clientes deberán aceptar los términos al volver a entrar."); }} className="py-2 rounded-xl text-xs font-semibold text-white" style={{ background: C.lila }}>Pedir que todos los clientes acepten de nuevo</button>
+          <button onClick={() => setCfg({ ...cfg, terminosCliente: TERMINOS_BASE_CLIENTE })} className="py-2 rounded-xl text-xs" style={{ border: `1px solid ${C.line}`, color: C.mute }}>Restaurar texto sugerido</button>
         </div>
         <div style={{ height: 1, background: C.line }} />
         <div className="text-sm font-semibold" style={{ color: C.red }}>Zona de cuidado</div>
@@ -2184,7 +2192,23 @@ function CalificarCaptador({ p, onCalificar }) {
   );
 }
 
-function DetalleCliente({ p, onBack, isFav, toggleFav, rate, users, onProfile, onCalificar, pendiente }) {
+// Compartir una propiedad por WhatsApp o enlace, sin necesidad de tener cuenta para verla
+function CompartirCliente({ p }) {
+  const [abierto, setAbierto] = useState(false);
+  const url = `${window.location.origin}${window.location.pathname}?p=${p.id}`;
+  const txt = `🏠 ${p.op} · ${p.tipo}\n${p.t}\n📍 ${p.zona}, ${p.ciudad}\n💰 ${moneyOrig(p)}\nVer en Vortex: ${url}`;
+  return (
+    <div>
+      <button onClick={() => setAbierto(!abierto)} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.lilaSoft, color: C.lilaDk }}>📤 Compartir esta propiedad</button>
+      {abierto && <div className="grid grid-cols-2 gap-2 mt-2">
+        <a href={`https://wa.me/?text=${encodeURIComponent(txt)}`} target="_blank" rel="noreferrer" className="block text-center py-2 rounded-lg text-sm font-semibold text-white" style={{ background: "#25D366" }}>WhatsApp</a>
+        <button onClick={async () => { const ok = await copiarTexto(url); setAbierto(false); if (!ok) window.prompt("Copia el enlace:", url); }} className="py-2 rounded-lg text-sm font-semibold" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.ink }}>📋 Copiar enlace</button>
+      </div>}
+    </div>
+  );
+}
+
+function DetalleCliente({ p, onBack, isFav, toggleFav, rate, users, onProfile, onCalificar, pendiente, onContactar, onReportarCierre, yaReportada, enComparar, toggleComparar }) {
   const cap = users.find((x) => x.n === p.cap.n) || { ant: 0 };
   const telCap = (cap.perfil && cap.perfil.tel) || p.cap.tel || "";
   const v = vigencia(p);
@@ -2196,7 +2220,10 @@ function DetalleCliente({ p, onBack, isFav, toggleFav, rate, users, onProfile, o
       <h2 className="font-semibold text-xl leading-snug" style={{ color: C.ink }}>{p.t}</h2>
       <div style={{ ...serif, fontSize: 28, fontWeight: 700, color: C.ink }}>{money(p)}</div>
       {notaPrecio(p) && <div className="text-xs -mt-2" style={{ color: C.mute }}>{notaPrecio(p)}</div>}
-      <Chip on={isFav(p.id)} onClick={() => toggleFav(p.id)}>{isFav(p.id) ? "♥ Guardada" : "♡ Guardar"}</Chip>
+      <div className="flex gap-2 overflow-x-auto">
+        <Chip on={isFav(p.id)} onClick={() => toggleFav(p.id)}>{isFav(p.id) ? "♥ Guardada" : "♡ Guardar"}</Chip>
+        <Chip on={enComparar} onClick={() => toggleComparar(p.id)}>{enComparar ? "✓ En comparación" : "⇄ Comparar"}</Chip>
+      </div>
       <div className="grid grid-cols-3 gap-2 text-center">
         {[["Dormitorios", p.dorm || "—"], ["Baños", p.ban || "—"], ["Superficie", `${p.m2} m²`]].map(([a, b]) => (
           <div key={a} className="rounded-xl py-2" style={{ background: C.card, border: `1px solid ${C.line}` }}><div className="font-semibold" style={{ color: C.ink }}>{b}</div><div className="text-xs" style={{ color: C.mute }}>{a}</div></div>
@@ -2216,14 +2243,20 @@ function DetalleCliente({ p, onBack, isFav, toggleFav, rate, users, onProfile, o
         <div className="flex-1"><div className="font-semibold" style={{ color: C.ink }}>{p.cap.n}</div><div className="text-xs" style={{ color: C.mute }}>Captador{rate(p.cap.n) ? ` · ⭐ ${rate(p.cap.n).avg.toFixed(1)} (${rate(p.cap.n).n})` : ""}</div></div>
         <button onClick={() => onProfile(p.cap.n)} className="text-xs px-2 py-1 rounded-md" style={{ background: C.lilaSoft, color: C.lilaDk }}>Ver perfil</button>
       </div>
-      {waNum(telCap).length >= 8 ? <a href={waLink(telCap, `Hola ${p.cap.n.split(" ")[0]}, vi tu propiedad en Vortex: *${p.t}* (${moneyOrig(p)}, ${p.zona}). ¿Sigue disponible?`)} target="_blank" rel="noreferrer" className="block text-center py-3 rounded-xl font-semibold text-white" style={{ background: "#1FA855" }}>💬 Escribir al captador por WhatsApp</a>
+      {waNum(telCap).length >= 8 ? <a href={waLink(telCap, `Hola ${p.cap.n.split(" ")[0]}, vi tu propiedad en Vortex: *${p.t}* (${moneyOrig(p)}, ${p.zona}). ¿Sigue disponible?`)} target="_blank" rel="noreferrer" onClick={() => onContactar(p)} className="block text-center py-3 rounded-xl font-semibold text-white" style={{ background: "#1FA855" }}>💬 Escribir al captador por WhatsApp</a>
         : <div className="py-3 rounded-xl text-xs text-center" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.mute }}>El captador aún no registró su WhatsApp</div>}
+      <CompartirCliente p={p} />
+      {isFav(p.id) && p.est !== "Cerrado" && (yaReportada
+        ? <div className="text-xs text-center" style={{ color: C.ok }}>✓ Ya avisamos que cerraste trato con esta propiedad.</div>
+        : <button onClick={() => onReportarCierre(p)} className="w-full text-xs underline" style={{ color: C.mute }}>¿Ya alquilaste o compraste esta propiedad? Avísanos</button>)}
       {v.n > 0 && <div className="text-xs" style={{ color: C.mute }}>El captador debe confirmar que esta propiedad sigue disponible. Mientras tanto aparece con menos prioridad en las búsquedas.</div>}
     </div>
   );
 }
 
-function BuscarCliente({ props, favs, rate, open, moneda, setMoneda }) {
+const matchBusq = (b, p) => (p.est || "Disponible") === "Disponible" && (b.op === "Todas" || p.op === b.op) && (b.ciu === "Todas" || p.ciudad === b.ciu) && (b.dorm === "Todos" || (b.dorm === "4+" ? p.dorm >= 4 : p.dorm === Number(b.dorm)));
+
+function BuscarCliente({ props, favs, rate, open, moneda, setMoneda, busq, setBusq, comparar, toggleComparar }) {
   const [op, setOp] = useState("Todas");
   const [ciu, setCiu] = useState("Todas");
   const [dorm, setDorm] = useState("Todos");
@@ -2240,14 +2273,60 @@ function BuscarCliente({ props, favs, rate, open, moneda, setMoneda }) {
         <Chip on={fv} onClick={() => setFv(!fv)}>♥ Guardadas</Chip>
       </div>
       <div className="flex gap-2 overflow-x-auto items-center"><span className="text-xs" style={{ color: C.mute }}>Dormitorios</span>{["Todos", "1", "2", "3", "4+"].map((x) => <Chip key={x} on={dorm === x} onClick={() => setDorm(x)}>{x}</Chip>)}</div>
+      <div className="flex gap-2 overflow-x-auto items-center">
+        <button onClick={() => setBusq([...busq, { id: Date.now(), n: [op, ciu, dorm !== "Todos" ? dorm + " dorm" : ""].filter((x) => x && x !== "Todas").join(" · ") || "Todas", op, ciu, dorm }])} className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px dashed ${C.lila}`, color: C.lilaDk }}>🔔 Avisarme de esta búsqueda</button>
+        {busq.map((b) => <span key={b.id} className="flex items-center rounded-full text-xs whitespace-nowrap" style={{ background: C.lilaSoft, color: C.lilaDk }}><button onClick={() => { setOp(b.op); setCiu(b.ciu); setDorm(b.dorm); }} className="pl-3 pr-1 py-1.5">{b.n}</button><button onClick={() => setBusq(busq.filter((x) => x.id !== b.id))} className="pr-2">✕</button></span>)}
+      </div>
       <div className="text-xs" style={{ color: C.mute }}>{list.length} propiedades disponibles · primero las confirmadas</div>
-      {list.map((p) => <Card key={p.id} p={p} onOpen={open} locked={false} rate={rate} perm={{ vigDet: true }} />)}
+      {list.map((p) => (
+        <div key={p.id} className="flex items-start gap-2">
+          <button onClick={() => toggleComparar(p.id)} title="Agregar a comparar" className="mt-3 shrink-0 w-6 h-6 rounded-md text-xs flex items-center justify-center" style={{ background: comparar.includes(p.id) ? C.lila : C.card, color: comparar.includes(p.id) ? "#fff" : C.mute, border: `1px solid ${comparar.includes(p.id) ? C.lila : C.line}` }}>{comparar.includes(p.id) ? "✓" : "+"}</button>
+          <div className="flex-1"><Card p={p} onOpen={open} locked={false} rate={rate} perm={{ vigDet: true }} /></div>
+        </div>
+      ))}
       {!list.length && <div className="text-center py-10 text-sm" style={{ color: C.mute }}>Sin resultados. Prueba quitando algún filtro.</div>}
     </div>
   );
 }
 
-function GuardadosCliente({ favs, props, open, toggleFav, onCalificar }) {
+function ComparadorModal({ ids, props, onClose, onQuitar }) {
+  const lista = ids.map((id) => props.find((p) => p.id === id)).filter(Boolean);
+  const filas = [
+    ["Precio", (p) => money(p)],
+    ["Operación", (p) => p.op],
+    ["Tipo", (p) => p.tipo],
+    ["Zona", (p) => `${p.zona}, ${p.ciudad}`],
+    ["Dormitorios", (p) => p.dorm || "—"],
+    ["Baños", (p) => p.ban || "—"],
+    ["Superficie", (p) => `${p.m2} m²`],
+    ["Garaje", (p) => (p.garaje ? "Sí" : "No")],
+    ["Mascotas", (p) => p.mascotas],
+    ["Amoblado", (p) => p.amoblado],
+    ["Estado", (p) => p.est || "Disponible"],
+  ];
+  return (
+    <div className="absolute inset-0 z-20 flex items-end justify-center" style={{ background: "rgba(30,27,58,.55)" }} onClick={onClose}>
+      <div className="w-full rounded-t-3xl flex flex-col" style={{ background: C.card, maxHeight: "85%" }} onClick={(e) => e.stopPropagation()}>
+        <div className="p-4 flex justify-between items-center" style={{ borderBottom: `1px solid ${C.line}` }}><div className="font-bold" style={{ color: C.ink }}>⇄ Comparar propiedades</div><button onClick={onClose} className="text-xl" style={{ color: C.mute }}>✕</button></div>
+        <div className="p-4 overflow-auto">
+          {!lista.length ? <div className="text-sm text-center" style={{ color: C.mute }}>Ya no hay propiedades para comparar.</div> : (
+            <table className="w-full text-xs" style={{ color: C.ink }}>
+              <thead><tr>
+                <th className="text-left pb-2"></th>
+                {lista.map((p) => <th key={p.id} className="text-left pb-2 pl-3 align-top"><div className="font-semibold" style={{ fontSize: 13 }}>{p.t}</div><button onClick={() => onQuitar(p.id)} className="underline" style={{ color: C.mute }}>Quitar</button></th>)}
+              </tr></thead>
+              <tbody>
+                {filas.map(([l, f]) => <tr key={l} style={{ borderTop: `1px solid ${C.line}` }}><td className="py-1.5 pr-2 font-medium whitespace-nowrap" style={{ color: C.mute }}>{l}</td>{lista.map((p) => <td key={p.id} className="py-1.5 pl-3">{f(p)}</td>)}</tr>)}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GuardadosCliente({ favs, props, open, toggleFav, onCalificar, onReportarCierre }) {
   const guardadas = favs.filter((f) => f.cid == null).map((f) => ({ fav: f, p: props.find((x) => x.id === f.pid) }));
   return (
     <div className="space-y-2">
@@ -2261,6 +2340,8 @@ function GuardadosCliente({ favs, props, open, toggleFav, onCalificar }) {
           </button>
           {p.est === "Cerrado" && !fav.val && <div className="flex items-center justify-between gap-2 text-xs rounded-lg px-2 py-1.5" style={{ background: C.okSoft, color: C.ok }}><span>¡Se cerró! Califica a {p.cap.n.split(" ")[0]}</span><div className="flex gap-0.5">{[1, 2, 3, 4, 5].map((n) => <button key={n} onClick={() => onCalificar(p, n)} style={{ color: C.lila }}>☆</button>)}</div></div>}
           {p.est === "Cerrado" && fav.val && <div className="text-xs" style={{ color: C.ok }}>✓ Ya calificaste a {p.cap.n.split(" ")[0]}</div>}
+          {p.est !== "Cerrado" && !fav.reportado && <button onClick={() => onReportarCierre(p)} className="text-xs underline block" style={{ color: C.mute }}>¿Ya alquilaste o compraste esta propiedad? Avísanos</button>}
+          {p.est !== "Cerrado" && fav.reportado && <div className="text-xs" style={{ color: C.ok }}>✓ Avisamos que cerraste trato con esta propiedad</div>}
           <button onClick={() => toggleFav(p.id)} className="text-xs underline" style={{ color: C.mute }}>Quitar de guardados</button>
         </div>
       ) : (
@@ -2270,7 +2351,7 @@ function GuardadosCliente({ favs, props, open, toggleFav, onCalificar }) {
   );
 }
 
-function PerfilCliente({ sesion, users, setUsers, favs, toggleFav, props, open, onCalificar, flash, onMenu }) {
+function PerfilCliente({ sesion, users, setUsers, favs, toggleFav, props, open, onCalificar, onReportarCierre, flash, onMenu, contactos }) {
   const mi = users.find((u) => u.n === ME) || {};
   const [tel, setTel] = useState((mi.perfil && mi.perfil.tel) || "");
   const guardarTel = () => { setUsers(users.map((u) => (u.n === ME ? { ...u, perfil: { ...(u.perfil || {}), tel } } : u))); flash("Tu WhatsApp se actualizó."); };
@@ -2278,15 +2359,26 @@ function PerfilCliente({ sesion, users, setUsers, favs, toggleFav, props, open, 
     <div className="p-4 space-y-4">
       <div className="rounded-2xl p-4 flex items-center gap-3" style={{ background: C.card, border: `1px solid ${C.line}` }}>
         <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold" style={{ background: C.lila }}>{(sesion.nombre || "?")[0]}</div>
-        <div><div className="font-semibold" style={{ color: C.ink }}>{sesion.nombre}</div><div className="text-xs" style={{ color: C.mute }}>{sesion.email} · Cliente</div></div>
+        <div><div className="font-semibold" style={{ color: C.ink }}>{sesion.nombre}</div><div className="text-xs" style={{ color: C.mute }}>{sesion.email} · Cliente{waNum(tel).length >= 8 ? " · 📱 WhatsApp registrado" : ""}</div></div>
       </div>
       <div className="rounded-2xl p-3 space-y-2" style={{ background: C.card, border: `1px solid ${C.line}` }}>
         <div className="text-sm font-semibold" style={{ color: C.ink }}>Mi WhatsApp</div>
-        <div className="text-xs" style={{ color: C.mute }}>Opcional: así el captador puede devolverte el contacto si tú le escribes primero.</div>
+        <div className="text-xs" style={{ color: C.mute }}>Opcional: así el captador puede devolverte el contacto si tú le escribes primero, y tu nombre se ve con un sello de confianza para los agentes.</div>
         <div className="flex gap-2"><input value={tel} onChange={(e) => setTel(e.target.value)} placeholder="Ej. 70012345" inputMode="tel" className="flex-1 rounded-xl px-3 py-2 text-sm" style={{ border: `1px solid ${C.line}` }} /><button onClick={guardarTel} className="px-4 rounded-xl text-sm font-semibold text-white" style={{ background: C.lila }}>Guardar</button></div>
       </div>
       <button onClick={onMenu} className="w-full py-2.5 rounded-xl text-sm font-semibold text-left px-4" style={{ background: C.lilaSoft, color: C.lilaDk }}>⚙️ Notificaciones, contraseña y cerrar sesión</button>
-      <GuardadosCliente favs={favs} props={props} open={open} toggleFav={toggleFav} onCalificar={onCalificar} />
+      <GuardadosCliente favs={favs} props={props} open={open} toggleFav={toggleFav} onCalificar={onCalificar} onReportarCierre={onReportarCierre} />
+      {!!contactos.length && (
+        <div className="space-y-2">
+          <div className="font-semibold text-sm" style={{ color: C.ink }}>💬 Mis contactos recientes</div>
+          {contactos.slice(0, 8).map((c) => (
+            <div key={c.id} className="rounded-xl p-2.5 flex items-center justify-between gap-2 text-xs" style={{ background: C.card, border: `1px solid ${C.line}` }}>
+              <div><div className="font-semibold" style={{ color: C.ink }}>{c.cap}</div><div style={{ color: C.mute }}>{c.t}</div></div>
+              {waNum(c.tel).length >= 8 && <a href={waLink(c.tel, `Hola ${c.cap.split(" ")[0]}, te escribo de nuevo por *${c.t}* en Vortex.`)} target="_blank" rel="noreferrer" className="underline shrink-0" style={{ color: C.brandDk }}>Escribir de nuevo</a>}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -2295,20 +2387,26 @@ export function VortexCliente({ inicial, sesion, onMenu }) {
   const [tab, setTab] = useState("buscar");
   const [sel, setSel] = useState(null);
   const [perfilDe, setPerfilDe] = useState(null);
+  const [comparando, setComparando] = useState(false);
+  const [comparar, setComparar] = useState([]);
   const [props, setProps] = useSync("propiedades", inicial.propiedades, sesion);
   const [favs, setFavs] = useSync("favoritos", inicial.favoritos, sesion);
   const [reviews, setReviews] = useSync("resenas", inicial.resenas, sesion);
   const [notifs, setNotifs] = useSync("notificaciones", inicial.notificaciones, sesion);
   const [users, setUsers] = useSync("perfiles", inicial.perfiles, sesion);
+  const [busq, setBusq] = useSync("busquedas", inicial.busquedas, sesion);
   const [moneda, setMonedaSt] = useState(() => leerMoneda() || (inicial.cfg && inicial.cfg.moneda) || "BOB");
   const setMoneda = (m) => { setMonedaSt(m); try { localStorage.setItem("vx-moneda", m); } catch {} };
   const [cfg] = useSyncObj("ajustes", "cfg", { ...CFG0, ...(inicial.cfg || {}) }, sesion);
-  const [vig, setVig] = useSyncObj("ajustes_usuario", "vigCliente", { ini: false, f: {}, ...(inicial.vigCliente || {}) }, sesion);
+  const [vig, setVig] = useSyncObj("ajustes_usuario", "vigCliente", { ini: false, f: {}, pb: [], ...(inicial.vigCliente || {}) }, sesion);
+  const [contObj, setContObj] = useSyncObj("ajustes_usuario", "contactos", { lista: [], ...(inicial.contactos || {}) }, sesion);
+  const contactos = contObj.lista || [];
   const [toast, setToast] = useState("");
   const flash = (m) => { setToast(m); setTimeout(() => setToast(""), 2200); };
   useAtras(tab !== "buscar", () => setTab("buscar"));
   useAtras(!!sel, () => setSel(null));
   useAtras(!!perfilDe, () => setPerfilDe(null));
+  useAtras(comparando, () => setComparando(false));
   ZONAS = cfg.ciudades && Object.keys(cfg.ciudades).length ? cfg.ciudades : ZONAS_BASE;
   BOB = +cfg.tc > 0 ? +cfg.tc : 6.96;
   ES_VISITANTE = false;
@@ -2319,14 +2417,35 @@ export function VortexCliente({ inicial, sesion, onMenu }) {
   const iniciales = (sesion.nombre || "").split(" ").filter(Boolean).slice(0, 2).map((x) => x[0].toUpperCase()).join("") || "?";
   const rate = (n) => { const r = reviews.filter((x) => x.ag === n); return r.length ? { avg: r.reduce((a, x) => a + x.s, 0) / r.length, n: r.length } : null; };
   const isFav = (pid) => favs.some((f) => f.pid === pid && f.cid == null);
+  const getFav = (pid) => favs.find((f) => f.pid === pid && f.cid == null);
   const toggleFav = (pid) => setFavs(isFav(pid) ? favs.filter((f) => !(f.pid === pid && f.cid == null)) : [...favs, { pid, cid: null }]);
+  const toggleComparar = (pid) => setComparar((c) => { if (c.includes(pid)) return c.filter((x) => x !== pid); if (c.length >= 3) { flash("Puedes comparar hasta 3 propiedades a la vez."); return c; } return [...c, pid]; });
   const open = (p) => { setSel(p); setProps((ps) => ps.map((x) => (x.id === p.id ? { ...x, vistas: (x.vistas || 0) + 1 } : x))); };
   const calificar = (p, n) => {
     setReviews([{ id: Date.now(), ag: p.cap.n, s: n, de: ME, pid: p.id }, ...reviews]);
     setFavs(favs.map((f) => (f.pid === p.id && f.cid == null ? { ...f, val: true } : f)));
     flash("¡Gracias por tu calificación!");
   };
+  const contactar = (p) => {
+    const cap = users.find((x) => x.n === p.cap.n) || {};
+    const tel = (cap.perfil && cap.perfil.tel) || p.cap.tel || "";
+    setContObj((o) => ({ ...o, lista: [{ id: Date.now(), cap: p.cap.n, t: p.t, pid: p.id, tel }, ...(o.lista || [])].slice(0, 30) }));
+  };
+  const reportarCierre = (p) => {
+    setFavs(favs.map((f) => (f.pid === p.id && f.cid == null ? { ...f, reportado: true } : f)));
+    notificar("cierre_cliente", { titulo: p.t, de: ME, cap: p.cap.n });
+    flash("¡Gracias! Avisamos a la administración.");
+  };
   const pendientesCalificar = useMemo(() => favs.filter((f) => f.cid == null && !f.val).map((f) => props.find((p) => p.id === f.pid)).filter((p) => p && p.est === "Cerrado"), [favs, props]);
+
+  // Abrir directamente una propiedad si llegan por un enlace compartido (?p=ID)
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("p");
+    if (!q) return;
+    const p = props.find((x) => String(x.id) === q);
+    if (p) { setTab("buscar"); setSel(p); } else flash("Esa propiedad ya no está disponible. Mira otras opciones en el buscador.");
+    window.history.replaceState(null, "", window.location.pathname);
+  }, []);
 
   // Avisa (en la app y por notificación al celular) si una propiedad guardada cambia de
   // estado o deja de existir. No avisa la primera vez que se carga (solo cambios reales).
@@ -2356,6 +2475,28 @@ export function VortexCliente({ inicial, sesion, onMenu }) {
     if (cambio || !vig.ini) setVig((v0) => ({ ...v0, ini: true, f }));
   }, [props, favs]);
 
+  // Avisa de propiedades nuevas que coinciden con una búsqueda que guardaste
+  useEffect(() => {
+    const vistos = new Set(vig.pb || []);
+    const nuevos = [];
+    const avisos = [];
+    for (const p of props) {
+      const pid = String(p.id);
+      if (vistos.has(pid)) continue;
+      nuevos.push(pid);
+      if (vig.ini && busq.length && (p.est || "Disponible") === "Disponible") {
+        const b = busq.find((bb) => matchBusq(bb, p));
+        if (b) avisos.push({ p, b });
+      }
+    }
+    if (!nuevos.length) return;
+    if (avisos.length) {
+      setNotifs((n) => [...avisos.map((a, i) => ({ id: Date.now() + 2000 + i, ic: "🔔", t: "Nueva propiedad que coincide con tu búsqueda", s: `${a.p.t} · ${money(a.p)} · ${a.p.zona}, ${a.p.ciudad} (${a.b.n})`, to: { tab: "buscar", p: a.p.id }, h: "Ahora" })), ...n]);
+      notificar("cliente_match", { titulo: avisos[0].p.t, detalle: avisos.length > 1 ? `y ${avisos.length - 1} más` : avisos[0].b.n });
+    }
+    setVig((v0) => ({ ...v0, pb: [...new Set([...(v0.pb || []), ...nuevos])] }));
+  }, [props, busq]);
+
   return (
     <div className="vx-shell" style={{ fontFamily: "'Montserrat', 'Avenir Next', 'Segoe UI', system-ui, sans-serif" }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap');`}</style>
@@ -2366,12 +2507,14 @@ export function VortexCliente({ inicial, sesion, onMenu }) {
         </div>
         <div style={{ height: 3, background: C.grad }} />
         <div className="flex-1 overflow-y-auto">
-          {sel ? <DetalleCliente p={sel} onBack={() => setSel(null)} isFav={isFav} toggleFav={toggleFav} rate={rate} users={users} onProfile={setPerfilDe} onCalificar={calificar} pendiente={pendientesCalificar.some((p) => p.id === sel.id)} />
-            : tab === "buscar" ? <BuscarCliente props={props} favs={favs} rate={rate} open={open} moneda={moneda} setMoneda={setMoneda} />
-            : <PerfilCliente sesion={sesion} users={users} setUsers={setUsers} favs={favs} toggleFav={toggleFav} props={props} open={open} onCalificar={calificar} flash={flash} onMenu={onMenu} />}
+          {sel ? <DetalleCliente p={sel} onBack={() => setSel(null)} isFav={isFav} toggleFav={toggleFav} rate={rate} users={users} onProfile={setPerfilDe} onCalificar={calificar} pendiente={pendientesCalificar.some((p) => p.id === sel.id)} onContactar={contactar} onReportarCierre={reportarCierre} yaReportada={!!(getFav(sel.id) && getFav(sel.id).reportado)} enComparar={comparar.includes(sel.id)} toggleComparar={toggleComparar} />
+            : tab === "buscar" ? <BuscarCliente props={props} favs={favs} rate={rate} open={open} moneda={moneda} setMoneda={setMoneda} busq={busq} setBusq={setBusq} comparar={comparar} toggleComparar={toggleComparar} />
+            : <PerfilCliente sesion={sesion} users={users} setUsers={setUsers} favs={favs} toggleFav={toggleFav} props={props} open={open} onCalificar={calificar} onReportarCierre={reportarCierre} flash={flash} onMenu={onMenu} contactos={contactos} />}
         </div>
+        {!sel && tab === "buscar" && comparar.length >= 2 && <button onClick={() => setComparando(true)} className="absolute left-4 right-4 bottom-20 py-3 rounded-xl font-semibold text-white text-sm" style={{ background: C.grad }}>⇄ Comparar {comparar.length} propiedades</button>}
+        {comparando && <ComparadorModal ids={comparar} props={props} onClose={() => setComparando(false)} onQuitar={(id) => setComparar((c) => c.filter((x) => x !== id))} />}
         {perfilDe && <Ficha n={perfilDe} props={props} users={users} rate={rate} onClose={() => setPerfilDe(null)} />}
-        {mi.n && (!mi.terminos || (cfg.terminosF && mi.terminos < cfg.terminosF)) && <TerminosModal texto={cfg.terminos} onAceptar={() => setUsers((us) => us.map((u) => (u.n === ME ? { ...u, terminos: isoOf(HOY) } : u)))} />}
+        {mi.n && (!mi.terminosCliente || (cfg.terminosClienteF && mi.terminosCliente < cfg.terminosClienteF)) && <TerminosModal texto={cfg.terminosCliente ?? TERMINOS_BASE_CLIENTE} onAceptar={() => setUsers((us) => us.map((u) => (u.n === ME ? { ...u, terminosCliente: isoOf(HOY) } : u)))} />}
         {toast && <div className="absolute left-4 right-4 bottom-20 text-sm text-white px-3 py-2 rounded-xl text-center" style={{ background: C.lila }}>{toast}</div>}
         <div className="grid grid-cols-2" style={{ background: C.card, borderTop: `1px solid ${C.line}` }}>
           {[["buscar", "🔍", "Buscador"], ["perfil", "🧑", "Perfil"]].map(([k, ic, l]) => (

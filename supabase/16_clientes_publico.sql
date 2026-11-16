@@ -60,15 +60,17 @@ grant execute on function public.registrarse_cliente(text, text, text, text, boo
 --    La tabla "resenas" ya permite insertar/leer a cualquier usuario autenticado
 --    (ver archivo 1_esquema.sql), así que no se necesita ningún cambio de permisos.
 
--- 4) Aviso push cuando una propiedad guardada por un cliente cambia de estado
---    o deja de estar disponible (se agrega el evento "guardado_cambio").
+-- 4) Avisos push para clientes:
+--    - "guardado_cambio": una propiedad guardada cambió de estado o ya no existe (al cliente mismo)
+--    - "cliente_match": nueva propiedad que coincide con una búsqueda guardada (al cliente mismo)
+--    - "cierre_cliente": un cliente avisó que cerró trato con una propiedad (a los administradores)
 create or replace function public.push_destinos(p_evento text, p_para text default null)
 returns setof jsonb language plpgsql stable security definer set search_path = public as $$
 begin
   if auth.uid() is null then raise exception 'Debes iniciar sesión'; end if;
-  if p_evento in ('prueba', 'guardado_cambio') then
+  if p_evento in ('prueba', 'guardado_cambio', 'cliente_match') then
     return query select s.datos from public.push_suscripciones s where s.usuario = auth.uid();
-  elsif p_evento in ('pago', 'registro') then
+  elsif p_evento in ('pago', 'registro', 'cierre_cliente') then
     return query select s.datos from public.push_suscripciones s join public.perfiles p on p.id = s.usuario where p.rol = 'admin';
   elsif p_evento in ('pago_revisado', 'verificado') then
     if not public.es_admin() then raise exception 'No permitido'; end if;
@@ -80,6 +82,10 @@ end $$;
 revoke execute on function public.push_destinos(text, text) from public, anon;
 grant execute on function public.push_destinos(text, text) to authenticated;
 
--- ✅ Listo. Debe aparecer "Success. No rows returned".
--- Recuerda también actualizar el archivo netlify/functions/notificar.mjs (ya incluido
--- en el proyecto) para que reconozca el evento "guardado_cambio".
+-- ✅ Listo. Debe aparecer "Success. No rows returned". Si ya habías corrido una versión
+-- anterior de este archivo, no hay problema: se puede volver a ejecutar completo.
+-- Recuerda también actualizar netlify/functions/notificar.mjs (ya incluido en el proyecto)
+-- para que reconozca los eventos "guardado_cambio", "cliente_match" y "cierre_cliente".
+-- No se necesita ningún otro cambio de base de datos para las búsquedas guardadas, el
+-- historial de contactos ni "avisar cierre": usan las tablas "busquedas" y
+-- "ajustes_usuario" que ya existen desde el archivo 1_esquema.sql.

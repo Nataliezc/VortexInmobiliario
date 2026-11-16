@@ -7,7 +7,7 @@ import Vortex, { VortexCliente, fijarUsuario, C, LOGO_ISO } from "./Vortex";
 import Login from "./Login";
 import Registro from "./Registro";
 import { CrearUsuario, AccionesUsuario, MenuCuenta, NuevaClave } from "./Cuentas";
-import { TerminosModal } from "./Extras";
+import { TerminosModal, TERMINOS_BASE, TERMINOS_BASE_CLIENTE } from "./Extras";
 import { useAtras, useTrampaAtras } from "./atras";
 import InstalarBanner from "./InstalarBanner";
 
@@ -133,7 +133,10 @@ export default function App() {
   }), [recargar]);
 
   if (!configurado) return <><SinConfigurar /><InstalarBanner /></>;
-  const textoTerminos = (datos && datos.cfg && datos.cfg.terminos) || (publico && publico.cfg && publico.cfg.terminos) || null;
+  const modoCliente = modo === "loginc" || modo === "registroc" || (perfil && perfil.rol === "cliente");
+  const textoTerminosAgente = (datos && datos.cfg && datos.cfg.terminos) || (publico && publico.cfg && publico.cfg.terminos) || TERMINOS_BASE;
+  const textoTerminosCliente = (datos && datos.cfg && datos.cfg.terminosCliente) || (publico && publico.cfg && publico.cfg.terminosCliente) || TERMINOS_BASE_CLIENTE;
+  const textoTerminos = modoCliente ? textoTerminosCliente : textoTerminosAgente;
   const modalTerminos = verTerminos && <TerminosModal texto={textoTerminos} onClose={() => setVerTerminos(false)} />;
   if (recuperar && sesion) return <NuevaClave onListo={() => { setRecuperar(false); window.history.replaceState(null, "", window.location.pathname); }} />;
   if (sesion === undefined) return <Centro><div className="text-sm" style={{ color: C.mute }}>Cargando…</div></Centro>;

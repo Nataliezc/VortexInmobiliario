@@ -48,6 +48,34 @@ Estos términos pueden actualizarse. Si hay cambios importantes, se te pedirá a
 
 Al registrarte y usar Vortex aceptas estos términos y el tratamiento de tus datos como se describe aquí.`;
 
+export const TERMINOS_BASE_CLIENTE = `TÉRMINOS DE USO Y POLÍTICA DE PRIVACIDAD — VORTEX (CLIENTES)
+
+1. Qué es Vortex
+Vortex es una plataforma donde agentes inmobiliarios independientes publican propiedades en venta, alquiler o anticrético. Como cliente, puedes buscar propiedades, ver su ficha completa, guardar tus favoritas y contactar directamente por WhatsApp al agente que la publicó (el "captador").
+
+2. Registro y cuenta
+Para guardar propiedades y recibir avisos necesitas una cuenta con tu nombre, correo y (opcionalmente) tu WhatsApp. No se te pide carnet de identidad ni ningún pago: la cuenta de cliente es gratuita. Eres responsable de mantener tu contraseña en reserva.
+
+3. Uso correcto
+Te comprometes a usar la plataforma de buena fe: contactar a los agentes con interés real, no publicar información falsa y no usar Vortex para fines ilegales. Las calificaciones que dejes a un captador deben reflejar tu experiencia real con él.
+
+4. Datos personales que recopilamos
+Nombre, correo, WhatsApp (si lo das), las propiedades que guardas y las calificaciones que dejas.
+
+5. Para qué usamos tus datos
+Para mostrarte la ficha completa de las propiedades, avisarte si algo que guardaste cambia de estado o deja de estar disponible, y para que el captador pueda identificarte si tú le escribes primero. No vendemos tus datos a terceros.
+
+6. Quién ve tus datos
+Tu nombre puede verlo el captador de una propiedad que guardaste o calificaste. Tu WhatsApp solo lo ve el captador si tú se lo compartes (al escribirle) o si lo agregaste en tu perfil. Tus propiedades guardadas son privadas: solo tú las ves.
+
+7. Responsabilidad
+Vortex facilita el contacto entre tú y el agente, pero no es parte de la operación inmobiliaria (compra, alquiler o anticrético) ni garantiza su resultado, el estado de la propiedad o la identidad del captador. Verifica siempre la propiedad y las condiciones directamente antes de cualquier pago o compromiso.
+
+8. Cambios
+Estos términos pueden actualizarse. Si hay cambios importantes, se te pedirá aceptarlos nuevamente.
+
+Al registrarte y usar Vortex como cliente aceptas estos términos y el tratamiento de tus datos como se describe aquí.`;
+
 export function TerminosModal({ texto, onClose, onAceptar }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center" style={{ background: "rgba(30,27,58,.55)" }} onClick={onAceptar ? undefined : onClose}>
