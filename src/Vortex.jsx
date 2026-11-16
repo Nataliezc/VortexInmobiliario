@@ -2589,6 +2589,7 @@ export function VisitanteCliente({ inicial, onIngresar, onRegistro, onIngresarAg
   const [perfilDe, setPerfilDe] = useState(null);
   const [comparando, setComparando] = useState(false);
   const [comparar, setComparar] = useState([]);
+  const [aviso, setAviso] = useState(false); // explica por qué necesita cuenta antes de mandarlo a registrarse
   const [moneda, setMonedaSt] = useState(() => leerMoneda() || (inicial.cfg && inicial.cfg.moneda) || "BOB");
   const setMoneda = (m) => { setMonedaSt(m); try { localStorage.setItem("vx-moneda", m); } catch {} };
   const props = inicial.propiedades || [];
@@ -2600,9 +2601,11 @@ export function VisitanteCliente({ inicial, onIngresar, onRegistro, onIngresarAg
   useAtras(!!sel, () => setSel(null));
   useAtras(!!perfilDe, () => setPerfilDe(null));
   useAtras(comparando, () => setComparando(false));
+  useAtras(aviso, () => setAviso(false));
   const rate = () => null;
   const toggleComparar = (pid) => setComparar((c) => { if (c.includes(pid)) return c.filter((x) => x !== pid); if (c.length >= 3) return c; return [...c, pid]; });
   const open = (p) => setSel(p);
+  const pedirCuenta = () => setAviso(true);
   return (
     <div className="vx-shell" style={{ fontFamily: "'Montserrat', 'Avenir Next', 'Segoe UI', system-ui, sans-serif" }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap');`}</style>
@@ -2613,12 +2616,23 @@ export function VisitanteCliente({ inicial, onIngresar, onRegistro, onIngresarAg
         </div>
         <div style={{ height: 3, background: C.grad }} />
         <div className="flex-1 overflow-y-auto">
-          {sel ? <DetalleCliente p={sel} onBack={() => setSel(null)} isFav={() => false} toggleFav={onRegistro} rate={rate} users={[]} onProfile={setPerfilDe} onCalificar={() => {}} pendiente={false} onContactar={() => {}} onReportarCierre={() => {}} solicitud={null} enComparar={comparar.includes(sel.id)} toggleComparar={toggleComparar} />
-            : <BuscarCliente props={props} favs={[]} rate={rate} open={open} moneda={moneda} setMoneda={setMoneda} busq={[]} setBusq={onRegistro} comparar={comparar} toggleComparar={toggleComparar} />}
+          {sel ? <DetalleCliente p={sel} onBack={() => setSel(null)} isFav={() => false} toggleFav={pedirCuenta} rate={rate} users={[]} onProfile={setPerfilDe} onCalificar={() => {}} pendiente={false} onContactar={() => {}} onReportarCierre={() => {}} solicitud={null} enComparar={comparar.includes(sel.id)} toggleComparar={toggleComparar} />
+            : <BuscarCliente props={props} favs={[]} rate={rate} open={open} moneda={moneda} setMoneda={setMoneda} busq={[]} setBusq={pedirCuenta} comparar={comparar} toggleComparar={toggleComparar} />}
         </div>
         {!sel && comparar.length >= 2 && <button onClick={() => setComparando(true)} className="absolute left-4 right-4 bottom-4 py-3 rounded-xl font-semibold text-white text-sm" style={{ background: C.grad }}>⇄ Comparar {comparar.length} propiedades</button>}
         {comparando && <ComparadorModal ids={comparar} props={props} onClose={() => setComparando(false)} onQuitar={(id) => setComparar((c) => c.filter((x) => x !== id))} />}
         {perfilDe && <Ficha n={perfilDe} props={props} users={[]} reviews={[]} onClose={() => setPerfilDe(null)} />}
+        {aviso && (
+          <div className="absolute inset-0 z-20 flex items-end justify-center" style={{ background: "rgba(30,27,58,.55)" }} onClick={() => setAviso(false)}>
+            <div className="w-full rounded-t-3xl p-5 space-y-3 text-center" style={{ background: C.card }} onClick={(e) => e.stopPropagation()}>
+              <div className="text-lg font-bold" style={{ color: C.ink }}>Para eso necesitas una cuenta</div>
+              <div className="text-sm" style={{ color: C.mute }}>Puedes seguir mirando propiedades sin cuenta. Pero para <b>guardar favoritos</b>, recibir <b>avisos</b> si cambian, y <b>calificar a tu agente</b> cuando cierres un trato, regístrate gratis como cliente: es rápido y no te pedimos carnet.</div>
+              <button onClick={onRegistro} className="w-full py-3 rounded-xl font-semibold text-white" style={{ background: C.grad }}>Registrarme gratis</button>
+              <button onClick={onIngresar} className="w-full py-2.5 rounded-xl text-sm" style={{ border: `1px solid ${C.line}`, color: C.ink }}>Ya tengo cuenta · Ingresar</button>
+              <button onClick={() => setAviso(false)} className="w-full py-2 text-sm underline" style={{ color: C.mute }}>Seguir mirando sin cuenta</button>
+            </div>
+          </div>
+        )}
         <div className="px-4 py-2.5 text-center text-xs" style={{ borderTop: `1px solid ${C.line}`, color: C.mute, background: C.card }}>
           ¿Eres agente inmobiliario? <button onClick={onIngresarAgente} className="underline font-semibold" style={{ color: C.brandDk }}>Entra a la red de agentes</button>
         </div>
