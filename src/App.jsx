@@ -2,7 +2,7 @@
 // carga los datos desde Supabase y muestra la app Vortex.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase, configurado } from "./supabase";
-import { cargarTodo, cargarPublico, hayPendientes } from "./datos";
+import { cargarTodo, cargarPublico, cargarPublicoCliente, hayPendientes } from "./datos";
 import Vortex, { VortexCliente, VisitanteCliente, fijarUsuario, C, LOGO_ISO } from "./Vortex";
 import Login from "./Login";
 import Registro from "./Registro";
@@ -48,6 +48,8 @@ export default function App() {
   const [verTerminos, setVerTerminos] = useState(false); // null = visitante | "login" | "registro"
   const [publico, setPublico] = useState(null);
   const [errPub, setErrPub] = useState("");
+  const [publicoCliente, setPublicoCliente] = useState(null);
+  const [errPubCliente, setErrPubCliente] = useState("");
 
   // Sesión
   useEffect(() => {
@@ -64,7 +66,7 @@ export default function App() {
   // Perfil + datos al iniciar sesión
   useEffect(() => {
     setMenu(false); setSim("admin");
-    if (!sesion) { setPerfil(null); setDatos(null); setError(""); setModoVisitante(null); return; }
+    if (!sesion) { setPerfil(null); setDatos(null); setError(""); setModoVisitante(null); setPublicoCliente(null); setErrPubCliente(""); return; }
     let vivo = true;
     (async () => {
       try {
@@ -86,12 +88,19 @@ export default function App() {
     return () => { vivo = false; };
   }, [sesion]);
 
-  // Catálogo público para visitantes sin cuenta
+  // Catálogo público para visitantes sin cuenta (sin datos del captador)
   useEffect(() => {
     if (!configurado || sesion !== null) return;
     setModo(null);
     cargarPublico().then((d) => { fijarUsuario(""); setPublico(d); setErrPub(""); }).catch((e) => setErrPub(e.message || String(e)));
   }, [sesion]);
+
+  // Catálogo público para quien entra como "cliente que busca": a este sí se le
+  // muestra el nombre y WhatsApp del captador, para poder escribirle sin registrarse
+  useEffect(() => {
+    if (!configurado || sesion !== null || modoVisitante !== "cliente" || publicoCliente) return;
+    cargarPublicoCliente().then((d) => { setPublicoCliente(d); setErrPubCliente(""); }).catch((e) => setErrPubCliente(e.message || String(e)));
+  }, [sesion, modoVisitante]);
 
   // Recarga periódica (para ver lo que hacen los demás usuarios)
   const recargar = useCallback(async (intentos = 6) => {
@@ -157,15 +166,15 @@ export default function App() {
       </Centro>
     );
     if (modoVisitante === "cliente") {
-      if (errPub) return (
+      if (errPubCliente) return (
         <Centro>
           <div className="text-base font-bold" style={{ color: C.ink }}>Bienvenido a Vortex</div>
-          <div className="text-sm" style={{ color: C.mute, maxWidth: 340 }}>{errPub}</div>
+          <div className="text-sm" style={{ color: C.mute, maxWidth: 340 }}>{errPubCliente}</div>
           <button onClick={() => setModo("loginc")} className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: C.lila }}>Iniciar sesión</button>
         </Centro>
       );
-      if (!publico) return <Centro><div className="text-sm" style={{ color: C.mute }}>Cargando propiedades…</div></Centro>;
-      return <><VisitanteCliente inicial={publico} onIngresar={() => setModo("loginc")} onRegistro={() => setModo("registroc")} onIngresarAgente={() => setModoVisitante("agente")} /><InstalarBanner /></>;
+      if (!publicoCliente) return <Centro><div className="text-sm" style={{ color: C.mute }}>Cargando propiedades…</div></Centro>;
+      return <><VisitanteCliente inicial={publicoCliente} onIngresar={() => setModo("loginc")} onRegistro={() => setModo("registroc")} onIngresarAgente={() => setModoVisitante("agente")} /><InstalarBanner /></>;
     }
     if (errPub) return (
       <Centro>

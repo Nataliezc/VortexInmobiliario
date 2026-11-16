@@ -100,6 +100,20 @@ export async function cargarPublico() {
   return out;
 }
 
+// ── catálogo público para quien entra como "cliente que busca" sin cuenta:
+//    a diferencia de cargarPublico(), aquí SÍ viene el nombre y WhatsApp del
+//    captador, para poder escribirle de una vez sin tener que registrarse ──
+export async function cargarPublicoCliente() {
+  const out = { perfiles: [], cfg: null };
+  Object.keys(TABLAS).forEach((t) => { out[t] = []; });
+  const { data, error } = await supabase.rpc("catalogo_publico_cliente");
+  if (error) throw new Error(/catalogo_publico_cliente/.test(error.message) ? "Falta ejecutar el archivo 16_clientes_publico.sql en Supabase (SQL Editor)." : error.message);
+  out.propiedades = (data || []).map((r) => desde("propiedades", r.datos || {}, r));
+  const cfg = await supabase.from("ajustes").select("valor").eq("clave", "cfg").maybeSingle();
+  out.cfg = cfg.data ? cfg.data.valor : null;
+  return out;
+}
+
 // ── escribir cambios de una lista ──
 async function escribir(t, cambios, borrar, ses) {
   const admin = ses.rol === "admin";

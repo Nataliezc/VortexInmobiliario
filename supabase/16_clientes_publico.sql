@@ -91,6 +91,33 @@ create policy solicitudes_borrar on public.solicitudes for delete to authenticat
   creado_por = auth.uid() or datos->>'cap' = public.mi_nombre() or public.es_admin()
 );
 
+-- 3.2) Catálogo público PARA CLIENTES: a diferencia de catalogo_publico() (que
+--      oculta al captador y su teléfono para incentivar que el agente se
+--      registre), a quien entra como "cliente que busca" sin cuenta SÍ se le
+--      muestra el nombre y WhatsApp del captador, para que pueda escribirle
+--      de una vez sin necesidad de registrarse. Guardar, avisos y calificar
+--      sí siguen pidiendo cuenta (eso se controla en la propia app).
+create or replace function public.catalogo_publico_cliente()
+returns table (id text, datos jsonb)
+language sql stable security definer set search_path = public as $$
+  select p.id, jsonb_build_object(
+    'id', p.datos->'id', 'op', p.datos->'op', 'tipo', p.datos->'tipo',
+    'ciudad', p.datos->'ciudad', 'zona', p.datos->'zona',
+    'precio', p.datos->'precio', 'mon', p.datos->'mon', 'tcModo', p.datos->'tcModo', 'tc', p.datos->'tc',
+    'dorm', p.datos->'dorm', 'ban', p.datos->'ban', 'm2', p.datos->'m2',
+    'garaje', p.datos->'garaje', 'gTipo', p.datos->'gTipo', 'gAparte', p.datos->'gAparte', 'gPrecio', p.datos->'gPrecio',
+    'mascotas', p.datos->'mascotas', 'mascCond', p.datos->'mascCond', 'amoblado', p.datos->'amoblado',
+    'condComp', p.datos->'condComp', 'desc', p.datos->'desc',
+    'est', p.datos->'est', 'dias', p.datos->'dias', '_conf', p.datos->'_conf', 'hue', p.datos->'hue',
+    'cap', jsonb_build_object('n', p.datos->'cap'->'n', 'tel', p.datos->'cap'->'tel', 'ciu', p.datos->'ciudad'),
+    'fotos', coalesce(p.datos->'fotos', '[]'::jsonb))
+  from public.propiedades p
+  where coalesce(p.datos->>'est', 'Disponible') = 'Disponible'
+  order by p.creado_en desc
+  limit 2000;
+$$;
+grant execute on function public.catalogo_publico_cliente() to anon, authenticated;
+
 -- 4) Avisos push para clientes:
 --    - "guardado_cambio": una propiedad guardada cambió de estado o ya no existe (al cliente mismo)
 --    - "cliente_match": nueva propiedad que coincide con una búsqueda guardada (al cliente mismo)
