@@ -1871,15 +1871,24 @@ async function compartirFotos(urls, base, texto) {
   } catch (e) { if (e && e.name === "AbortError") return true; }
   return false;
 }
-// ── Compartir en grupos: SIEMPRE manda el copy completo con el enlace a la
-//    ficha. No se adjunta la foto como archivo: varios celulares (sobre todo
-//    Android) ignoran el texto cuando se comparte un archivo junto con él y
-//    WhatsApp termina mandando solo la foto sin el copy. La foto de portada
-//    se ve igual, automáticamente, en la vista previa del enlace una vez
-//    enviado el mensaje (eso ya lo genera propiedad_publica() del lado del
-//    servidor), así que el texto es el único camino: es el que nunca falla ──
-function compartirGrupo(p, tel, flash) {
+// ── Compartir en grupos: adjunta la foto de portada (fotos[0]) de ESA
+//    captación junto con el copy completo, usando "Compartir" del celular.
+//    Si por lo que sea no se puede adjuntar la foto (sin internet, la foto no
+//    se pudo descargar, o el navegador no admite adjuntar archivos así), no
+//    se pierde el mensaje: se abre WhatsApp con el copy completo en texto. ──
+async function compartirGrupo(p, tel, flash) {
   const texto = textoGrupo(p, tel);
+  const foto = p.fotos && p.fotos[0];
+  if (foto && typeof navigator !== "undefined" && navigator.share) {
+    try {
+      const b = await bajarBlob(foto);
+      const file = new File([b], `${nombreArchivo(p.t)}.jpg`, { type: b.type || "image/jpeg" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], text: texto }); return; }
+    } catch (e) {
+      if (e && e.name === "AbortError") return; // el agente cerró el cuadro de compartir
+      flash && flash("No se pudo adjuntar la foto (revisa tu conexión). Se abrió WhatsApp con el copy en texto.");
+    }
+  }
   const w = window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, "_blank");
   if (!w) flash && flash("El navegador bloqueó la ventana. Permite las ventanas emergentes para compartir en grupos.");
 }
