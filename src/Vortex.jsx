@@ -2298,17 +2298,18 @@ function CalificarCaptador({ p, onCalificar }) {
   );
 }
 
-// Compartir una propiedad por WhatsApp o enlace, sin necesidad de tener cuenta para verla
-function CompartirCliente({ p }) {
+// Compartir una propiedad por WhatsApp o enlace, sin necesidad de tener cuenta para verla.
+// Usa el mismo copy completo (textoGrupo) y, si el celular lo permite, adjunta también
+// la foto de portada — igual que cuando el captador comparte en grupos.
+function CompartirCliente({ p, tel = "" }) {
   const [abierto, setAbierto] = useState(false);
-  const url = `${window.location.origin}${window.location.pathname}?p=${p.id}`;
-  const txt = `🏠 ${p.op} · ${p.tipo}\n${p.t}\n📍 ${p.zona}, ${p.ciudad}\n💰 ${moneyOrig(p)}\nVer en Vortex: ${url}`;
+  const texto = textoGrupo(p, tel);
   return (
     <div>
       <button onClick={() => setAbierto(!abierto)} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.lilaSoft, color: C.lilaDk }}>📤 Compartir esta propiedad</button>
       {abierto && <div className="grid grid-cols-2 gap-2 mt-2">
-        <a href={`https://wa.me/?text=${encodeURIComponent(txt)}`} target="_blank" rel="noreferrer" className="block text-center py-2 rounded-lg text-sm font-semibold text-white" style={{ background: "#25D366" }}>WhatsApp</a>
-        <button onClick={async () => { const ok = await copiarTexto(url); setAbierto(false); if (!ok) window.prompt("Copia el enlace:", url); }} className="py-2 rounded-lg text-sm font-semibold" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.ink }}>📋 Copiar enlace</button>
+        <button onClick={() => compartirGrupo(p, tel)} className="py-2 rounded-lg text-sm font-semibold text-white" style={{ background: "#25D366" }}>WhatsApp</button>
+        <button onClick={async () => { const ok = await copiarTexto(texto); setAbierto(false); if (!ok) window.prompt("Copia el texto:", texto); }} className="py-2 rounded-lg text-sm font-semibold" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.ink }}>📋 Copiar copy</button>
       </div>}
     </div>
   );
@@ -2352,7 +2353,7 @@ function DetalleCliente({ p, onBack, isFav, toggleFav, rate, users, onProfile, o
       </div>
       {waNum(telCap).length >= 8 ? <a href={waLink(telCap, `Hola ${p.cap.n.split(" ")[0]}, vi tu propiedad en Vortex: *${p.t}* (${moneyOrig(p)}, ${p.zona}). ¿Sigue disponible?`)} target="_blank" rel="noreferrer" onClick={() => onContactar(p)} className="block text-center py-3 rounded-xl font-semibold text-white" style={{ background: "#1FA855" }}>💬 Escribir al captador por WhatsApp</a>
         : <div className="py-3 rounded-xl text-xs text-center" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.mute }}>El captador aún no registró su WhatsApp</div>}
-      <CompartirCliente p={p} />
+      <CompartirCliente p={p} tel={telCap} />
       {isFav(p.id) && p.est !== "Cerrado" && (solicitud && solicitud.est === "pendiente"
         ? <div className="text-xs text-center" style={{ color: C.amber }}>⏳ Avisado. Falta que {p.cap.n.split(" ")[0]} confirme el cierre.</div>
         : solicitud && solicitud.est === "rechazada"

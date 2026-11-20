@@ -59,7 +59,17 @@ export default function Registro({ onLogin, onVolver, terminos, tipo = "agente" 
               <Campo l="Contraseña"><ClaveInput value={f.pass} onChange={s("pass")} autoComplete="new-password" /></Campo>
               <Campo l="Repetir contraseña"><ClaveInput value={f.pass2} onChange={s("pass2")} autoComplete="new-password" /></Campo>
             </div>
-            <label className="flex items-start gap-2 text-xs cursor-pointer" style={{ color: C.ink }}><input type="checkbox" checked={acepto} onChange={(e) => setAcepto(e.target.checked)} className="mt-0.5" /><span>Acepto los <button type="button" onClick={() => setVerTerm(true)} className="underline font-semibold" style={{ color: C.lilaDk }}>términos de uso y la política de privacidad</button> de Vortex.</span></label>
+            {!cli && (
+              <div className="rounded-xl p-3 space-y-2" style={{ background: C.amberSoft, border: "1px solid #F1D79B" }}>
+                <div className="text-sm font-semibold" style={{ color: C.amber }}>⚠️ 3 reglas de la comunidad de agentes</div>
+                <ol className="text-xs space-y-1.5 list-decimal pl-4" style={{ color: C.ink }}>
+                  <li><b>Comisión 50/50 entre agentes.</b> Si trabajas con un tercero que no es de Vortex, ese arreglo lo resuelves tú con tu 50%; el otro agente de Vortex siempre recibe su 50% completo. No cumplir esto se puede reportar, y quien no respete la regla será excluido de la app y quedará reportado para que todos los demás agentes lo vean dentro de la app.</li>
+                  <li><b>Foto y nombre reales son obligatorios.</b> Tu perfil debe mostrar tu foto y tu nombre verdadero para que los demás agentes sepan con quién tratan.</li>
+                  <li><b>Respeto y buen trato entre agentes es obligatorio.</b> Esta es una comunidad profesional: no se tolera el mal trato ni la falta de respeto hacia otros agentes.</li>
+                </ol>
+              </div>
+            )}
+            <label className="flex items-start gap-2 text-xs cursor-pointer" style={{ color: C.ink }}><input type="checkbox" checked={acepto} onChange={(e) => setAcepto(e.target.checked)} className="mt-0.5" /><span>Acepto los <button type="button" onClick={() => setVerTerm(true)} className="underline font-semibold" style={{ color: C.lilaDk }}>términos de uso y la política de privacidad</button> de Vortex{!cli ? " y las 3 reglas de la comunidad de agentes" : ""}.</span></label>
             {cli ? <div className="text-xs rounded-lg p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Con tu cuenta puedes ver la ficha completa de cada propiedad, guardar tus favoritas, recibir un aviso si cambian y escribir directo al captador por WhatsApp.</div>
               : <div className="text-xs rounded-lg p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Tu prueba de 48 h empieza apenas creas tu cuenta. Cuando elijas un plan de pago te pediremos la foto de tu carnet una sola vez.</div>}
             <MsgError t={err} />
