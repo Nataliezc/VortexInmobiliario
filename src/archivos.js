@@ -87,6 +87,45 @@ export async function subir(file) {
   return url;
 }
 
+// ── Video de la captación: solo plan Premium (o prueba/admin), y tiene que ser
+//    corto para no llenar el almacenamiento rápido. Se sube sin comprimir
+//    (sería muy lento hacerlo en el navegador), pero se valida antes: tamaño
+//    máximo y duración máxima (se lee la duración real del archivo).
+export const VIDEO_MAX_MB = 25;
+export const VIDEO_MAX_SEG = 30;
+function duracionVideo(file) {
+  return new Promise((ok, mal) => {
+    const v = document.createElement("video");
+    v.preload = "metadata";
+    v.onloadedmetadata = () => { const d = v.duration; URL.revokeObjectURL(v.src); ok(d); };
+    v.onerror = () => { URL.revokeObjectURL(v.src); mal(new Error("No se pudo leer el video.")); };
+    v.src = URL.createObjectURL(file);
+  });
+}
+export async function subirVideo(file) {
+  if (!file) return { url: null, error: null };
+  if (!/^video\//.test(file.type)) return { url: null, error: "Ese archivo no es un video." };
+  if (file.size > VIDEO_MAX_MB * 1024 * 1024) return { url: null, error: `El video pesa demasiado (máximo ${VIDEO_MAX_MB} MB). Grábalo más corto o en menor calidad.` };
+  try {
+    const dur = await duracionVideo(file);
+    if (dur && dur > VIDEO_MAX_SEG) return { url: null, error: `El video dura ${Math.round(dur)} s. El máximo es ${VIDEO_MAX_SEG} s: recórtalo e inténtalo de nuevo.` };
+  } catch { /* si no se puede leer la duración, se sube igual y se confía en el límite de tamaño */ }
+  marcar(1);
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const uid = session ? session.user.id : "anon";
+    const ext = (file.name.split(".").pop() || "mp4").toLowerCase();
+    const ruta = `${uid}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
+    const { error } = await supabase.storage.from(BUCKET).upload(ruta, file, { contentType: file.type, upsert: false });
+    if (error) throw error;
+    return { url: supabase.storage.from(BUCKET).getPublicUrl(ruta).data.publicUrl, error: null };
+  } catch (e) {
+    const msg = textoError(e);
+    aviso(`No se pudo subir el video: ${msg}`);
+    return { url: null, error: msg };
+  } finally { marcar(-1); }
+}
+
 export async function subirVarios(files) {
   const urls = [];
   for (const f of Array.from(files || [])) { const u = await subir(f); if (u) urls.push(u); }

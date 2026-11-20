@@ -13,7 +13,7 @@ export default function Registro({ onLogin, onVolver, terminos, tipo = "agente" 
   const cli = tipo === "cliente";
   const [acepto, setAcepto] = useState(false);
   const [verTerm, setVerTerm] = useState(false);
-  const [f, setF] = useState({ nombre: "", tel: "", email: "", pass: "", pass2: "" });
+  const [f, setF] = useState({ nombre: "", tel: "", email: "", pass: "", pass2: "", agenciaTipo: "Independiente", agenciaNombre: "" });
   const [err, setErr] = useState("");
   const [paso, setPaso] = useState("");
   const s = (k) => (e) => setF({ ...f, [k]: e.target.value });
@@ -23,6 +23,7 @@ export default function Registro({ onLogin, onVolver, terminos, tipo = "agente" 
     const email = f.email.trim().toLowerCase();
     if (f.nombre.trim().split(/\s+/).length < 2) return setErr("Escribe tu nombre y apellido.");
     if (!cli && f.tel.replace(/\D/g, "").length < 8) return setErr("Escribe tu número de WhatsApp.");
+    if (!cli && f.agenciaTipo === "Agencia" && f.agenciaNombre.trim().length < 2) return setErr("Escribe el nombre de tu agencia.");
     if (!/^\S+@\S+\.\S+$/.test(email)) return setErr("Escribe un correo válido.");
     if (f.pass.length < 6) return setErr("La contraseña debe tener al menos 6 caracteres.");
     if (f.pass !== f.pass2) return setErr("Las contraseñas no coinciden.");
@@ -37,7 +38,16 @@ export default function Registro({ onLogin, onVolver, terminos, tipo = "agente" 
       setPaso("Entrando…");
       const { error: e4 } = await supabase.auth.signInWithPassword({ email, password: f.pass });
       if (e4) throw e4;
-      if (!cli) notificar("registro", { nombre: f.nombre.trim() });
+      if (!cli) {
+        notificar("registro", { nombre: f.nombre.trim() });
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          const { data: fila } = await supabase.from("perfiles").select("datos").eq("id", user.id).maybeSingle();
+          const base = (fila && fila.datos) || {};
+          const agencia = { tipo: f.agenciaTipo, nombre: f.agenciaTipo === "Agencia" ? f.agenciaNombre.trim() : "" };
+          await supabase.from("perfiles").update({ datos: { ...base, perfil: { ...(base.perfil || {}), agencia } } }).eq("id", user.id);
+        } catch (e) { console.warn("No se pudo guardar la agencia", e); }
+      }
     } catch (e) {
       setErr(creada ? "Tu cuenta se creó. Inicia sesión con tu correo y contraseña." : limpiarMsg(e.message || String(e)));
       setPaso("");
@@ -54,6 +64,16 @@ export default function Registro({ onLogin, onVolver, terminos, tipo = "agente" 
           <div className="rounded-2xl p-4 space-y-3" style={{ background: C.card, border: `1px solid ${C.line}` }}>
             <Campo l={cli ? "Nombre y apellido" : "Nombre y apellido (así te verán los demás agentes)"}><input value={f.nombre} onChange={s("nombre")} autoComplete="name" className="w-full rounded-xl px-3 py-2.5 text-sm" style={inp} /></Campo>
             <Campo l={cli ? "WhatsApp (opcional)" : "WhatsApp"}><input value={f.tel} onChange={s("tel")} inputMode="tel" placeholder="Ej. 70012345" className="w-full rounded-xl px-3 py-2.5 text-sm" style={inp} /></Campo>
+            {!cli && (
+              <Campo l="¿Cómo trabajas?">
+                <div className="flex gap-2">
+                  {["Independiente", "Agencia"].map((o) => (
+                    <button key={o} type="button" onClick={() => setF({ ...f, agenciaTipo: o })} className="flex-1 py-2 rounded-lg text-sm font-semibold" style={f.agenciaTipo === o ? { background: C.lila, color: "#fff" } : { background: "#fff", color: C.ink, border: `1px solid ${C.line}` }}>{o === "Independiente" ? "Agente independiente" : "Trabajo con una agencia"}</button>
+                  ))}
+                </div>
+                {f.agenciaTipo === "Agencia" && <input value={f.agenciaNombre} onChange={s("agenciaNombre")} placeholder="Nombre de la agencia" className="w-full mt-2 rounded-xl px-3 py-2.5 text-sm" style={inp} />}
+              </Campo>
+            )}
             <Campo l="Correo electrónico"><input type="email" value={f.email} onChange={s("email")} autoComplete="email" className="w-full rounded-xl px-3 py-2.5 text-sm" style={inp} /></Campo>
             <div className="grid grid-cols-2 gap-2">
               <Campo l="Contraseña"><ClaveInput value={f.pass} onChange={s("pass")} autoComplete="new-password" /></Campo>
@@ -71,7 +91,7 @@ export default function Registro({ onLogin, onVolver, terminos, tipo = "agente" 
             )}
             <label className="flex items-start gap-2 text-xs cursor-pointer" style={{ color: C.ink }}><input type="checkbox" checked={acepto} onChange={(e) => setAcepto(e.target.checked)} className="mt-0.5" /><span>Acepto los <button type="button" onClick={() => setVerTerm(true)} className="underline font-semibold" style={{ color: C.lilaDk }}>términos de uso y la política de privacidad</button> de Vortex{!cli ? " y las 3 reglas de la comunidad de agentes" : ""}.</span></label>
             {cli ? <div className="text-xs rounded-lg p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Con tu cuenta puedes ver la ficha completa de cada propiedad, guardar tus favoritas, recibir un aviso si cambian y escribir directo al captador por WhatsApp.</div>
-              : <div className="text-xs rounded-lg p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Tu prueba de 48 h empieza apenas creas tu cuenta. Cuando elijas un plan de pago te pediremos la foto de tu carnet una sola vez.</div>}
+              : <div className="text-xs rounded-lg p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Tu prueba de 48 h empieza apenas creas tu cuenta, con acceso completo (igual que Premium). Lo que subas (captaciones, fotos, datos) nunca se borra: cuando termine la prueba, tu cuenta pasa automáticamente al plan Gratuito y solo se limitan algunas herramientas hasta que elijas un plan de pago. Cuando elijas un plan de pago te pediremos la foto de tu carnet una sola vez.</div>}
             <MsgError t={err} />
             <Boton onClick={registrar} disabled={!!paso}>{paso || "Crear mi cuenta"}</Boton>
             <button onClick={onLogin} className="w-full text-xs underline" style={{ color: C.mute }}>¿Ya tienes cuenta? Inicia sesión</button>

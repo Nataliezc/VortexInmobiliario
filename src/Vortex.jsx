@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useSync, useSyncObj } from "./datos";
-import { subir, subirVarios, borrarFotos, subirPrivado, subirConError } from "./archivos";
+import { subir, subirVarios, borrarFotos, subirPrivado, subirConError, subirVideo, VIDEO_MAX_SEG, VIDEO_MAX_MB } from "./archivos";
 import { ImgSegura, TerminosModal, AdminCiudades, AdminVerificar, AdminMetricas, AdminBorrarTodo, AdminAgenda, Plantillas, RespuestasRapidas, PLANTILLAS_BASE, TERMINOS_BASE, TERMINOS_BASE_CLIENTE } from "./Extras";
 import { supabase } from "./supabase";
 import { useAtras } from "./atras";
@@ -153,6 +153,7 @@ function DetalleInner({ p, acceso, onBack, onVisit, onReport, ant, rate, onProfi
     <div className="p-4 pb-8 space-y-3">
       <button onClick={onBack} className="text-sm" style={{ color: C.brandDk }}>‹ Volver a resultados</button>
       {p.fotos && p.fotos.length ? <Galeria fotos={p.fotos} titulo={locked ? tBasico(p) : p.t} texto={textoGrupo(p, propia ? miTel() : "")} soloVer={sinContacto} /> : <Photo hue={p.hue} h={190} src={null} label="Sin fotos" />}
+      {p.video && !sinContacto && <video src={p.video} controls className="w-full rounded-2xl" style={{ maxHeight: 260, background: "#000" }} />}
       <div className="flex items-center justify-between"><span className="text-sm" style={{ color: C.mute }}>{p.op} · {p.tipo}</span><span className="flex gap-1 items-center"><EstBadge est={p.est || "Disponible"} /><Badge v={v} /></span></div>
       <h2 className="font-semibold text-xl leading-snug" style={{ color: C.ink }}>{locked ? tBasico(p) : p.t}</h2>
       <div style={{ ...serif, fontSize: 28, fontWeight: 700, color: C.ink }}>{money(p)}</div>
@@ -196,7 +197,7 @@ function DetalleInner({ p, acceso, onBack, onVisit, onReport, ant, rate, onProfi
       ) : propia ? (
         <>
           <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Esta es tu captación.</div>
-          {p.exclusiva && p.ubic && <a href={linkUbic(p.ubic)} target="_blank" rel="noreferrer" className="block text-center text-xs underline" style={{ color: C.lilaDk }}>📍 Ver ubicación exacta en el mapa</a>}
+          {p.exclusiva && p.ubic ? <a href={linkUbic(p.ubic)} target="_blank" rel="noreferrer" className="block text-center text-xs underline" style={{ color: C.lilaDk }}>📍 Ver ubicación exacta en el mapa</a> : !p.exclusiva && p.ubicRef ? <div className="text-xs text-center" style={{ color: C.mute }}>📍 Zona referencial: {p.ubicRef}</div> : null}
           {(p.est || "Disponible") === "Disponible" && <button onClick={() => compartirGrupo(p, miTel(), flash)} className="block text-center w-full py-3 rounded-xl text-sm font-semibold text-white" style={{ background: "#25D366" }}>📢 Compartir en grupos de WhatsApp</button>}
           <button onClick={async () => { const ok = await copiarTexto(textoCopy(p, miTel())); flash && flash(ok ? "Copy copiado." : "No se pudo copiar automáticamente."); }} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.lilaSoft, color: C.lilaDk }}>📋 Copiar copy</button>
           {perm.auto && onRespuestas && <button onClick={() => onRespuestas({ propiedad: p.t, agente: ME })} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.brandSoft, color: C.brandDk }}>💬 Respuestas rápidas</button>}
@@ -209,7 +210,7 @@ function DetalleInner({ p, acceso, onBack, onVisit, onReport, ant, rate, onProfi
             <button onClick={() => onProfile(p.cap.n)} className="text-xs px-2 py-1 rounded-md" style={{ background: C.lilaSoft, color: C.lilaDk }}>Ver perfil</button>
           </div>
           <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Colaboración 50/50: si cierras con tu cliente, la comisión se divide en partes iguales con el captador.</div>
-          {p.exclusiva && p.ubic && <a href={linkUbic(p.ubic)} target="_blank" rel="noreferrer" className="block text-center text-xs underline" style={{ color: C.lilaDk }}>📍 Ver ubicación exacta en el mapa</a>}
+          {p.exclusiva && p.ubic ? <a href={linkUbic(p.ubic)} target="_blank" rel="noreferrer" className="block text-center text-xs underline" style={{ color: C.lilaDk }}>📍 Ver ubicación exacta en el mapa</a> : !p.exclusiva && p.ubicRef ? <div className="text-xs text-center" style={{ color: C.mute }}>📍 Zona referencial: {p.ubicRef}</div> : null}
           {perm.auto && onRespuestas && <button onClick={() => onRespuestas({ propiedad: p.t, agente: ME })} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.brandSoft, color: C.brandDk }}>💬 Respuestas rápidas</button>}
           <button onClick={async () => { const ok = await copiarTexto(textoCopy(p, miTel())); flash && flash(ok ? (waNum(miTel()).length < 8 ? "Copy copiado. Tip: agrega tu WhatsApp en Mis datos para incluir tu enlace." : "Copy copiado con tu WhatsApp. Pégalo en el chat de tu cliente.") : "No se pudo copiar automáticamente."); }} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.lilaSoft, color: C.lilaDk }}>📋 Copiar copy para enviar a un cliente</button>
           <div className={`grid ${perm.share ? "grid-cols-2" : "grid-cols-1"} gap-2`}>
@@ -280,7 +281,7 @@ function Clientes({ acceso, open, props, clientes, setClientes, favs, toggleFav,
   useAtras(menuAb, () => setMenuAb(false));
   useAtras(vistaReq === "red", () => setVistaReq("mios"));
   const [err, setErr] = useState("");
-  const vacioF = { n: "", op: "Alquiler", tipo: "Indiferente", ciudad: Object.keys(ZONAS)[0] || "La Paz", zona: "", max: "", mon: MONEDA, dorm: "2", garaje: "Indiferente", mascotas: "Indiferente", amoblado: "Indiferente", obs: "", compartir: true };
+  const vacioF = { n: "", op: "Alquiler", tipo: "Indiferente", ciudad: Object.keys(ZONAS)[0] || "La Paz", zona: "", max: "", mon: MONEDA, dorm: "2", garaje: "Indiferente", mascotas: "Indiferente", amoblado: "Indiferente", obs: "", compartir: true, vig: "" };
   const [f, setF] = useState(vacioF);
   const s = (k) => (v) => setF({ ...f, [k]: v });
   const num = (k) => (e) => s(k)(e.target.value.replace(/\D/g, ""));
@@ -288,10 +289,10 @@ function Clientes({ acceso, open, props, clientes, setClientes, favs, toggleFav,
   const editando = typeof nuevo === "object" ? nuevo : null;
   const sinDorm = ["Terreno", "Oficina", "Comercial"].includes(f.tipo);
   const abrirNuevo = () => { setF(vacioF); setNuevo(true); setMenuAb(false); };
-  const abrirEditar = (c) => { setF({ n: c.n, op: c.op, tipo: c.tipo || "Indiferente", ciudad: c.ciudad, zona: c.zona || "", max: String(c.max), mon: c.mon, dorm: String(c.dorm || 0), garaje: c.garaje, mascotas: c.mascotas, amoblado: c.amoblado, obs: c.obs || "", compartir: !c.priv }); setNuevo(c); };
+  const abrirEditar = (c) => { setF({ n: c.n, op: c.op, tipo: c.tipo || "Indiferente", ciudad: c.ciudad, zona: c.zona || "", max: String(c.max), mon: c.mon, dorm: String(c.dorm || 0), garaje: c.garaje, mascotas: c.mascotas, amoblado: c.amoblado, obs: c.obs || "", compartir: !c.priv, vig: c.vig || "" }); setNuevo(c); };
   const save = () => {
     if (!f.n || !f.max) { setErr("Indica el nombre del cliente y su presupuesto máximo."); return; }
-    const datos = { n: f.n, op: f.op, tipo: f.tipo, ciudad: f.ciudad, zona: f.zona, max: +f.max, mon: f.mon, dorm: sinDorm ? 0 : +f.dorm || 0, garaje: f.garaje, mascotas: f.mascotas, amoblado: f.amoblado, obs: f.obs.trim(), priv: !f.compartir };
+    const datos = { n: f.n, op: f.op, tipo: f.tipo, ciudad: f.ciudad, zona: f.zona, max: +f.max, mon: f.mon, dorm: sinDorm ? 0 : +f.dorm || 0, garaje: f.garaje, mascotas: f.mascotas, amoblado: f.amoblado, obs: f.obs.trim(), priv: !f.compartir, vig: f.vig || null };
     if (editando) { setClientes(clientes.map((c) => (c.id === editando.id ? { ...c, ...datos } : c))); setSel(editando.id); flash("Requerimiento actualizado."); }
     else { const c = { id: Date.now(), ...datos, etapa: "Nuevo", mov: isoOf(HOY), notas: [], prox: null }; setClientes([...clientes, c]); setSel(c.id); setSubReq("detalle"); }
     setNuevo(false); setErr("");
@@ -314,6 +315,10 @@ function Clientes({ acceso, open, props, clientes, setClientes, favs, toggleFav,
       <Fld l="Mascotas"><Seg o={["Sí", "No", "Indiferente"]} v={f.mascotas} set={s("mascotas")} /></Fld>
       <Fld l="Amoblado"><Seg o={tri} v={f.amoblado} set={s("amoblado")} /></Fld>
       <Fld l="Observaciones"><textarea rows={3} value={f.obs} onChange={(e) => s("obs")(e.target.value)} placeholder="Ej. Solo puede visitar los fines de semana, prefiere edificios con ascensor…" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
+      <Fld l="¿Hasta cuándo tendrá vigencia? (opcional)">
+        <input type="date" value={f.vig} onChange={(e) => s("vig")(e.target.value)} min={isoOf(HOY)} className="w-full rounded-xl px-3 py-2 text-sm" style={inp} />
+        <div className="text-xs mt-1" style={{ color: C.mute }}>Al llegar esa fecha te preguntaremos si el requerimiento sigue vigente, y recién con tu respuesta se elimina o se mantiene.</div>
+      </Fld>
       <label className="flex gap-2 items-start text-sm rounded-xl p-3 cursor-pointer" style={{ background: C.lilaSoft, color: C.lilaDk }}><input type="checkbox" checked={f.compartir} onChange={(e) => s("compartir")(e.target.checked)} className="mt-1" /><span>🌐 Compartir con otros agentes<span className="block text-xs" style={{ color: C.mute }}>Verán lo que busca tu cliente (sin su nombre) y podrán ofrecerte propiedades.</span></span></label>
       {err && <div className="text-sm" style={{ color: C.red }}>{err}</div>}
       <button onClick={save} className="w-full py-3 rounded-xl font-semibold text-white" style={{ background: C.grad }}>{editando ? "Guardar cambios" : "Guardar requerimiento"}</button>
@@ -354,12 +359,23 @@ function Clientes({ acceso, open, props, clientes, setClientes, favs, toggleFav,
           ))}
         </div>
       </div>}
+      {clientes.filter((c) => c.vig && isoOf(HOY) >= c.vig).map((c) => (
+        <div key={c.id} className="rounded-xl p-3 space-y-2" style={{ background: C.amberSoft }}>
+          <div className="text-sm font-semibold" style={{ color: C.amber }}>⏱ ¿El requerimiento de {c.n} sigue vigente?</div>
+          <div className="text-xs" style={{ color: C.ink }}>Pusiste como vigencia el {fechaL(isoD(c.vig))}. Antes de eliminarlo, confirma:</div>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => { upd(c.id, { vig: null }); flash("Requerimiento confirmado como vigente."); }} className="py-2 rounded-lg text-xs font-semibold text-white" style={{ background: C.ok }}>Sí, sigue vigente</button>
+            <button onClick={() => { delCliente(c.id); flash("Requerimiento eliminado."); }} className="py-2 rounded-lg text-xs font-semibold text-white" style={{ background: C.red }}>No, eliminar</button>
+          </div>
+        </div>
+      ))}
       {vistaReq === "red" ? <ReqRed props={props} perm={perm} flash={flash} /> : !r ? (
         <div className="text-center py-10 text-sm" style={{ color: C.mute }}>Aún no tienes requerimientos. Toca «+ Nuevo» para registrar lo que busca tu primer cliente.</div>
       ) : <>
         <div className="rounded-xl p-3 text-sm" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.ink }}>
           <b>{r.op}</b>{r.tipo && r.tipo !== "Indiferente" ? ` · ${r.tipo}` : ""} en {r.ciudad}{r.zona ? `, zona ${r.zona}` : ""} · hasta {r.mon} {r.max.toLocaleString("es-BO")}{r.dorm ? ` · ${r.dorm}+ dorm` : ""}<br />
           <span style={{ color: C.mute }}>Garaje: {r.garaje} · Mascotas: {r.mascotas} · Amoblado: {r.amoblado}</span>
+          <div className="text-xs mt-1" style={{ color: C.mute }}>Creado el {fechaL(new Date(r.id))}{r.vig ? ` · Vigencia hasta el ${fechaL(isoD(r.vig))}` : ""}</div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5">
             <button onClick={() => abrirEditar(r)} className="text-xs underline font-semibold" style={{ color: C.lilaDk }}>✏️ Editar requerimiento</button>
             <button onClick={() => upd(r.id, { priv: !r.priv })} className="text-xs underline" style={{ color: C.lilaDk }}>{r.priv ? "🔒 Solo tú lo ves · Compartir con la red" : "🌐 Visible para la red · Hacer privado"}</button>
@@ -677,7 +693,7 @@ function Extra({ onRepublicar, nivelReal, sub, ops, setOps, props, setProps, rep
   const [o, setO] = useState({ pid: "", monto: "", com: "", colab: "" });
   const [caidoDe, setCaidoDe] = useState(null); // id del cierre que se está editando como caído
   const [caidoF, setCaidoF] = useState({ comDevuelta: true, motivo: "" });
-  const [d, setD] = useState(() => ({ tel: "", bio: "", ciu: [], foto: null, ...(PERFIL.datos || {}) }));
+  const [d, setD] = useState(() => ({ tel: "", bio: "", ciu: [], foto: null, agencia: { tipo: "Independiente", nombre: "" }, ...(PERFIL.datos || {}) }));
   const [fotoSt, setFotoSt] = useState(""); // mensaje debajo del botón de foto de perfil
   const [subiendoFoto, setSubiendoFoto] = useState(false);
   const [sg, setSg] = useState({ cat: "", txt: "" });
@@ -710,6 +726,14 @@ function Extra({ onRepublicar, nivelReal, sub, ops, setOps, props, setProps, rep
       <Fld l="Nombre"><input value={ME} readOnly className="w-full rounded-xl px-3 py-2 text-sm" style={{ ...inp, background: C.lilaSoft }} /></Fld>
       <Fld l="WhatsApp de contacto"><input value={d.tel} onChange={(e) => setD({ ...d, tel: e.target.value })} className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
       <Fld l="Ciudades donde trabajas"><div className="flex flex-wrap gap-2">{Object.keys(ZONAS).map((c) => <Chip key={c} on={d.ciu.includes(c)} onClick={() => setD({ ...d, ciu: d.ciu.includes(c) ? d.ciu.filter((x) => x !== c) : [...d.ciu, c] })}>{c}</Chip>)}</div></Fld>
+      <Fld l="¿Cómo trabajas?">
+        <div className="flex gap-2">
+          {["Independiente", "Agencia"].map((o) => (
+            <button key={o} type="button" onClick={() => setD({ ...d, agencia: { ...(d.agencia || {}), tipo: o } })} className="flex-1 py-2 rounded-lg text-sm font-semibold" style={(d.agencia && d.agencia.tipo) === o || (!d.agencia && o === "Independiente") ? { background: C.lila, color: "#fff" } : { background: "#fff", color: C.ink, border: `1px solid ${C.line}` }}>{o === "Independiente" ? "Agente independiente" : "Trabajo con una agencia"}</button>
+          ))}
+        </div>
+        {d.agencia && d.agencia.tipo === "Agencia" && <input value={d.agencia.nombre || ""} onChange={(e) => setD({ ...d, agencia: { ...d.agencia, nombre: e.target.value } })} placeholder="Nombre de la agencia" className="w-full mt-2 rounded-xl px-3 py-2 text-sm" style={inp} />}
+      </Fld>
       <Fld l="Presentación profesional"><textarea rows={3} value={d.bio} onChange={(e) => setD({ ...d, bio: e.target.value })} className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
       <div className="flex items-center gap-3">
         {d.foto ? <img src={d.foto} alt="Tu foto" className="rounded-full object-cover shrink-0" style={{ width: 56, height: 56 }} /> : <div className="rounded-full flex items-center justify-center shrink-0 text-white font-semibold" style={{ width: 56, height: 56, background: C.lila }}>{ME.split(" ").filter(Boolean).slice(0, 2).map((x) => x[0].toUpperCase()).join("") || "?"}</div>}
@@ -908,10 +932,10 @@ function BuscarPropiedad({ abiertas, pid, onSel }) {
 const Seg = ({ o, v, set }) => <div className="flex flex-wrap gap-2">{o.map((x) => <Chip key={x} on={v === x} onClick={() => set(x)}>{x}</Chip>)}</div>;
 const Fld = ({ l, children, x }) => <div className="space-y-1.5" style={x ? { background: C.amberSoft, borderRadius: 12, padding: 8, outline: `1.5px solid ${C.amber}` } : undefined}><div className="text-xs font-medium" style={{ color: x ? C.amber : C.mute }}>{l}</div>{children}</div>;
 
-const TIPOS_INM = ["Casa", "Departamento", "Monoambiente", "Terreno", "Oficina", "Comercial"];
-const toF = (p) => ({ tcModo: p.tcModo || "dia", tc: p.tc ? String(p.tc) : "", op: p.op, tipo: TIPOS_INM.includes(p.tipo) ? p.tipo : "Otro", tipoOtro: TIPOS_INM.includes(p.tipo) || p.tipo === "Otro" ? "" : p.tipo, ciudad: p.ciudad, zona: p.zona, t: p.t, precio: String(p.precio), mon: p.mon, dorm: String(p.dorm), ban: String(p.ban), m2: String(p.m2), garaje: p.garaje ? "Sí" : "No", gTipo: p.gTipo || "Independiente", gAparte: p.gAparte ? "Sí" : "No", gPrecio: p.gPrecio || "", mascotas: p.mascotas, mascCond: p.mascCond || "", amoblado: p.amoblado, com: p.com, condComp: p.condComp || "", desc: p.desc || "", fotos: p.fotos || [], exclusiva: !!p.exclusiva, ubic: p.ubic || null });
+const TIPOS_INM = ["Casa", "Departamento", "Monoambiente", "Habitación/Cuarto", "Galpón", "Depósito", "Edificio", "Terreno", "Oficina", "Comercial"];
+const toF = (p) => ({ tcModo: p.tcModo || "dia", tc: p.tc ? String(p.tc) : "", op: p.op, tipo: TIPOS_INM.includes(p.tipo) ? p.tipo : "Otro", tipoOtro: TIPOS_INM.includes(p.tipo) || p.tipo === "Otro" ? "" : p.tipo, ciudad: p.ciudad, zona: p.zona, t: p.t, precio: String(p.precio), mon: p.mon, dorm: String(p.dorm), ban: String(p.ban), m2: String(p.m2), garaje: p.garaje ? "Sí" : "No", gTipo: p.gTipo || "Independiente", gAparte: p.gAparte ? "Sí" : "No", gPrecio: p.gPrecio || "", mascotas: p.mascotas, mascCond: p.mascCond || "", amoblado: p.amoblado, com: p.com, condComp: p.condComp || "", desc: p.desc || "", fotos: p.fotos || [], video: p.video || null, exclusiva: !!p.exclusiva, ubic: p.ubic || null, ubicRef: p.ubicRef || "", vig: p.vig || "" });
 
-function Form({ onSave, init, maxFotos = 3, autoCopy = false }) {
+function Form({ onSave, init, maxFotos = 3, autoCopy = false, perm = {} }) {
   const [copyTxt, setCopyTxt] = useState("");
   const [marcar, setMarcar] = useState(false);
   const [info, setInfo] = useState("");
@@ -928,10 +952,12 @@ function Form({ onSave, init, maxFotos = 3, autoCopy = false }) {
     const fal = camposFaltantes(nuevo);
     setInfo(fal.length ? `✨ Listo: llenamos los datos que encontramos en tu copy. Completa ${fal.length === 1 ? "el campo marcado" : `los ${fal.length} campos marcados`} en amarillo: ${fal.map((k) => NOMBRES_CAMPOS[k]).join(", ")}.` : "✨ ¡Encontramos todos los datos! Revísalos antes de publicar.");
   };
-  const [f, setF] = useState(init ? toF(init) : { op: "Alquiler", tipo: "Departamento", tipoOtro: "", tcModo: "dia", tc: "", ciudad: "La Paz", zona: "", t: "", precio: "", mon: MONEDA, dorm: "2", ban: "1", m2: "", garaje: "No", gTipo: "Independiente", gAparte: "No", gPrecio: "", mascotas: "No", mascCond: "", amoblado: "Vacío", com: "", condComp: "", desc: "", fotos: [], exclusiva: false, ubic: null });
+  const [f, setF] = useState(init ? toF(init) : { op: "Alquiler", tipo: "Departamento", tipoOtro: "", tcModo: "dia", tc: "", ciudad: "La Paz", zona: "", t: "", precio: "", mon: MONEDA, dorm: "2", ban: "1", m2: "", garaje: "No", gTipo: "Independiente", gAparte: "No", gPrecio: "", mascotas: "No", mascCond: "", amoblado: "Vacío", com: "", condComp: "", desc: "", fotos: [], video: null, exclusiva: false, ubic: null, ubicRef: "", vig: "" });
   const [err, setErr] = useState("");
   const [ubicErr, setUbicErr] = useState("");
   const [ubicManual, setUbicManual] = useState("");
+  const [subiendoVideo, setSubiendoVideo] = useState(false);
+  const [videoErr, setVideoErr] = useState("");
   const guardarUbicManual = () => {
     const t = ubicManual.trim();
     if (!t) return;
@@ -955,7 +981,7 @@ function Form({ onSave, init, maxFotos = 3, autoCopy = false }) {
     if (fal.length) { setMarcar(true); setErr(`Para publicar falta completar: ${fal.map((k) => NOMBRES_CAMPOS[k]).join(", ")}. Están marcados en amarillo.`); return; }
     const tipoFinal = f.tipo === "Otro" ? f.tipoOtro.trim().charAt(0).toUpperCase() + f.tipoOtro.trim().slice(1) : f.tipo;
     f.desc = limpiarContacto(f.desc || "");
-    const b = ({ id: Date.now(), ...(f.mon === "USD" ? { tcModo: f.tcModo || "dia", tc: f.tcModo === "fijo" ? +f.tc : null } : { tcModo: null, tc: null }), op: f.op, tipo: tipoFinal, t: limpiarGlifosRaros(f.t), ciudad: f.ciudad, zona: f.zona, precio: +f.precio, mon: f.mon, dorm: vivienda ? +f.dorm : 0, ban: vivienda ? +f.ban : 0, m2: +f.m2, garaje: f.garaje === "Sí", gTipo: f.garaje === "Sí" ? f.gTipo : "", gAparte: f.gAparte === "Sí", gPrecio: f.gAparte === "Sí" ? f.gPrecio : "", mascotas: f.mascotas, mascCond: f.mascotas === "Condicionado" ? limpiarGlifosRaros(f.mascCond) : "", condComp: limpiarGlifosRaros(f.condComp), desc: f.desc, amoblado: f.amoblado, dias: 0, est: "Disponible", cap: { n: ME, tel: miTel(), ciu: f.ciudad }, com: f.com || "A definir con el captador", hue: Math.floor(Math.random() * 360), fotos: f.fotos, exclusiva: f.exclusiva, ubic: f.exclusiva ? f.ubic : null });
+    const b = ({ id: Date.now(), ...(f.mon === "USD" ? { tcModo: f.tcModo || "dia", tc: f.tcModo === "fijo" ? +f.tc : null } : { tcModo: null, tc: null }), op: f.op, tipo: tipoFinal, t: limpiarGlifosRaros(f.t), ciudad: f.ciudad, zona: f.zona, precio: +f.precio, mon: f.mon, dorm: vivienda ? +f.dorm : 0, ban: vivienda ? +f.ban : 0, m2: +f.m2, garaje: f.garaje === "Sí", gTipo: f.garaje === "Sí" ? f.gTipo : "", gAparte: f.gAparte === "Sí", gPrecio: f.gAparte === "Sí" ? f.gPrecio : "", mascotas: f.mascotas, mascCond: f.mascotas === "Condicionado" ? limpiarGlifosRaros(f.mascCond) : "", condComp: limpiarGlifosRaros(f.condComp), desc: f.desc, amoblado: f.amoblado, dias: 0, est: "Disponible", cap: { n: ME, tel: miTel(), ciu: f.ciudad }, com: f.com || "A definir con el captador", hue: Math.floor(Math.random() * 360), fotos: f.fotos, video: perm.video ? f.video : null, exclusiva: f.exclusiva, ubic: f.exclusiva ? f.ubic : null, ubicRef: !f.exclusiva ? limpiarGlifosRaros(f.ubicRef) : "", vig: f.vig || null });
     onSave(init ? { ...init, ...b, id: init.id, dias: init.dias, est: init.est, hue: init.hue, cap: init.cap } : b);
   };
   return (
@@ -998,6 +1024,13 @@ function Form({ onSave, init, maxFotos = 3, autoCopy = false }) {
             )}
           </div>
         )}
+        {!f.exclusiva && (
+          <div className="space-y-1.5 pt-1">
+            <div className="text-xs font-medium" style={{ color: C.ink }}>Ubicación referencial (opcional)</div>
+            <div className="text-xs" style={{ color: C.mute }}>Sin exclusiva no se recomienda dar la ubicación exacta, pero puedes dejar una referencia general (zona, cerca de qué) para orientar a quien la comparta.</div>
+            <input value={f.ubicRef} onChange={(e) => s("ubicRef")(e.target.value)} placeholder="Ej. Cerca de la Plaza del Estudiante, zona Sopocachi" className="w-full rounded-lg px-3 py-1.5 text-xs" style={inp} />
+          </div>
+        )}
       </div>
       <div className="grid grid-cols-2 gap-3">
         <Fld l={lb("precio", "Precio")} x={falta("precio")}><input value={f.precio} onChange={num("precio")} inputMode="numeric" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
@@ -1038,6 +1071,34 @@ function Form({ onSave, init, maxFotos = 3, autoCopy = false }) {
           </div>
         ))}</div>
       </>}</div>
+      {perm.video ? (
+        <div className="space-y-1.5">
+          {f.video ? (
+            <div className="relative">
+              <video src={f.video} controls className="w-full rounded-xl" style={{ maxHeight: 220, background: "#000" }} />
+              <button type="button" onClick={() => s("video")(null)} className="absolute top-2 right-2 text-xs px-2 py-1 rounded-lg" style={{ background: C.ink, color: "#fff" }}>Quitar</button>
+            </div>
+          ) : (
+            <label className="block w-full py-3 rounded-xl text-sm text-center cursor-pointer" style={{ border: `1px dashed ${C.mute}`, color: subiendoVideo ? C.lilaDk : C.mute }}>
+              {subiendoVideo ? "Subiendo video…" : `🎥 Agregar video corto (opcional, máx. ${VIDEO_MAX_SEG} s, ${VIDEO_MAX_MB} MB) · plan Premium`}
+              <input type="file" accept="video/*" className="hidden" disabled={subiendoVideo} onChange={async (e) => {
+                const file = e.target.files && e.target.files[0]; e.target.value = ""; if (!file) return;
+                setSubiendoVideo(true); setVideoErr("");
+                const { url, error } = await subirVideo(file);
+                setSubiendoVideo(false);
+                if (url) s("video")(url); else setVideoErr(error || "No se pudo subir el video.");
+              }} />
+            </label>
+          )}
+          {videoErr && <div className="text-xs" style={{ color: C.red }}>{videoErr}</div>}
+        </div>
+      ) : (
+        <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>🎥 Los videos cortos de la propiedad son una herramienta del plan Premium.</div>
+      )}
+      <Fld l="¿Hasta cuándo tendrá vigencia esta captación? (opcional)">
+        <input type="date" value={f.vig} onChange={(e) => s("vig")(e.target.value)} min={isoOf(HOY)} className="w-full rounded-xl px-3 py-2 text-sm" style={inp} />
+        <div className="text-xs mt-1" style={{ color: C.mute }}>Un día antes de esa fecha te preguntaremos si sigue vigente. Según tu respuesta, se elimina automáticamente o se queda publicada.</div>
+      </Fld>
       {err && <div className="text-sm" style={{ color: C.red }}>{err}</div>}
       <button onClick={save} className="w-full py-3 rounded-xl font-semibold text-white" style={{ background: C.grad }}>{init ? "Guardar cambios" : "Publicar captación"}</button>
     </div>
@@ -1075,7 +1136,7 @@ function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, s
       <button onClick={() => setNueva(false)} className="text-sm" style={{ color: C.brandDk }}>‹ Volver a mi perfil</button>
       <h2 className="font-semibold text-lg" style={{ color: C.ink }}>{nueva === true ? "Nueva captación" : nueva._repub ? "Volver a publicar captación" : "Editar captación"}</h2>
       {nueva !== true && nueva._repub && <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Revisa y actualiza los datos. Al guardar, la captación vuelve a estar Disponible en el buscador.</div>}
-      <Form autoCopy={!!perm.match} maxFotos={perm.maxFotos || 3} init={nueva === true ? null : nueva} onSave={(p) => { if (nueva === true) { if (bloq) { flash("Alcanzaste el límite de captaciones de tu plan."); return; } const np = { ...p, creada: Date.now() }; setProps([np, ...props]); onPublicada(np); flash("Captación publicada. Confírmala cada cierto tiempo para mantenerla visible."); } else if (nueva._repub) { if (bloq) { flash("Alcanzaste el límite de captaciones activas de tu plan."); return; } const { _repub, ...limpio } = p; setProps(props.map((x) => (x.id === p.id ? { ...limpio, est: "Disponible", opPend: false, dias: 0, creada: Date.now(), cerradaF: null, motivoRet: null } : x))); flash("Captación publicada de nuevo. Ya aparece en el buscador."); setSub("capt"); } else { setProps(props.map((x) => (x.id === p.id ? p : x))); flash("Cambios guardados."); } setNueva(false); }} />
+      <Form perm={perm} autoCopy={!!perm.match} maxFotos={perm.maxFotos || 3} init={nueva === true ? null : nueva} onSave={(p) => { if (nueva === true) { if (bloq) { flash("Alcanzaste el límite de captaciones de tu plan."); return; } const np = { ...p, creada: Date.now() }; setProps([np, ...props]); onPublicada(np); flash("Captación publicada. Confírmala cada cierto tiempo para mantenerla visible."); } else if (nueva._repub) { if (bloq) { flash("Alcanzaste el límite de captaciones activas de tu plan."); return; } const { _repub, ...limpio } = p; setProps(props.map((x) => (x.id === p.id ? { ...limpio, est: "Disponible", opPend: false, dias: 0, creada: Date.now(), cerradaF: null, motivoRet: null } : x))); flash("Captación publicada de nuevo. Ya aparece en el buscador."); setSub("capt"); } else { setProps(props.map((x) => (x.id === p.id ? p : x))); flash("Cambios guardados."); } setNueva(false); }} />
     </div>
   );
   if (cerrando) return <Cierre p={cerrando} props={props} setProps={setProps} ops={ops} setOps={setOps} reviews={reviews} setReviews={setReviews} flash={flash} onDone={(hecho) => { setCerrando(null); if (hecho === true) setSub("ops"); }} />;
@@ -1099,7 +1160,7 @@ function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, s
               <div className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-semibold shrink-0" style={{ background: "rgba(255,255,255,.25)" }}>{PERFIL.datos && PERFIL.datos.foto ? <img src={PERFIL.datos.foto} alt="" className="w-12 h-12 rounded-full object-cover" /> : (ME.split(" ").filter(Boolean).slice(0, 2).map((x) => x[0].toUpperCase()).join("") || "?")}</div>
               <div className="min-w-0">
                 <div className="font-bold leading-tight truncate">{ME}</div>
-                <div className="text-xs opacity-80 truncate">Agente independiente{PERFIL.datos && PERFIL.datos.ciu && PERFIL.datos.ciu.length ? " · " + PERFIL.datos.ciu.join(", ") : ""}</div>
+                <div className="text-xs opacity-80 truncate">{PERFIL.datos && PERFIL.datos.agencia && PERFIL.datos.agencia.tipo === "Agencia" && PERFIL.datos.agencia.nombre ? `Agencia ${PERFIL.datos.agencia.nombre}` : "Agente independiente"}{PERFIL.datos && PERFIL.datos.ciu && PERFIL.datos.ciu.length ? " · " + PERFIL.datos.ciu.join(", ") : ""}</div>
                 <span className="inline-block mt-1 text-xs px-2 py-0.5 rounded-md font-medium" style={{ background: "rgba(255,255,255,.9)", color: estado[2] }}>{estado[0]}</span>
               </div>
             </div>
@@ -1126,6 +1187,16 @@ function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, s
       {sub === "plant" && (perm.auto ? <Plantillas plantillas={plantillas} setPlantillas={setPlantillas} agente={ME} flash={flash} /> : <Lock t="Plantillas de respuestas rápidas" plan="Premium" go={goSub} />)}
       {sub !== "capt" && sub !== "sus" && sub !== "plant" && <Extra onRepublicar={(p) => setNueva({ ...p, _repub: true })} sub={sub} ops={ops} setOps={setOps} props={props} setProps={setProps} reports={reports} flash={flash} reviews={reviews} setReviews={setReviews} onReport={onReport} pre={pre} clearPre={() => setPre(null)} sugs={sugs} setSugs={setSugs} perm={perm} goSub={goSub} nivel={nivel} setReports={setReports} cfg={cfg} clientes={clientes} visitas={visitas} favs={favs} autos={autos} setAutos={setAutos} pagos={pagos} users={users} />}
       {sub === "capt" && <>
+      {props.filter((p) => p.cap.n === ME && p.vig && isoOf(HOY) >= isoOf(new Date(isoD(p.vig).getTime() - 864e5))).map((p) => (
+        <div key={p.id} className="rounded-xl p-3 space-y-2" style={{ background: C.amberSoft }}>
+          <div className="text-sm font-semibold" style={{ color: C.amber }}>⏱ ¿«{p.t}» sigue vigente?</div>
+          <div className="text-xs" style={{ color: C.ink }}>Pusiste como vigencia el {fechaL(isoD(p.vig))}. Antes de eliminarla, confirma:</div>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => { upd(p.id, { vig: null }); flash("Captación confirmada como vigente."); }} className="py-2 rounded-lg text-xs font-semibold text-white" style={{ background: C.ok }}>Sí, sigue vigente</button>
+            <button onClick={() => { upd(p.id, { est: "Caído", vig: null, motivoRet: "Vigencia vencida (confirmado por el agente)" }); flash("Captación retirada."); }} className="py-2 rounded-lg text-xs font-semibold text-white" style={{ background: C.red }}>No, eliminar</button>
+          </div>
+        </div>
+      ))}
       <div className="flex items-center justify-between pt-1">
         <h2 className="font-semibold" style={{ color: C.ink }}>Mis captaciones</h2>
         <button disabled={bloq} onClick={() => setNueva(true)} className="text-sm px-3 py-1.5 rounded-full text-white" style={{ background: bloq ? C.mute : C.grad }}>+ Nueva captación</button>
@@ -1141,7 +1212,7 @@ function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, s
               {p.fotos && p.fotos[0] ? <img src={miniatura(p.fotos[0])} alt={p.t} loading="lazy" onError={(e) => { if (e.currentTarget.src !== p.fotos[0]) e.currentTarget.src = p.fotos[0]; }} className="rounded-xl object-cover shrink-0" style={{ width: 76, height: 76 }} /> : <div className="shrink-0 rounded-xl flex items-center justify-center text-xs text-center" style={{ width: 76, height: 76, background: `hsl(${p.hue || 260} 45% 90%)`, color: C.mute }}>Sin foto</div>}
               <div className="flex-1 min-w-0 space-y-1">
                 <div className="flex justify-between gap-2"><div className="font-semibold text-sm" style={{ color: C.ink }}>{p.t} <button disabled={vencido} onClick={() => setNueva(p)} className="text-xs underline" style={{ color: C.brandDk }}>Editar</button></div><span style={{ ...serif, color: C.ink, fontWeight: 700 }}>{money(p)}</span></div>
-                <div className="text-xs" style={{ color: C.mute }}>{p.op} · {p.tipo} · {p.zona}, {p.ciudad}{p.fotos && p.fotos.length > 1 ? ` · 📷 ${p.fotos.length}` : ""}</div>
+                <div className="text-xs" style={{ color: C.mute }}>{p.op} · {p.tipo} · {p.zona}, {p.ciudad}{p.fotos && p.fotos.length > 1 ? ` · 📷 ${p.fotos.length}` : ""}{p.video ? " · 🎥" : ""}{p.vig ? ` · vigencia hasta ${fechaL(isoD(p.vig))}` : ""}</div>
                 <div className="flex items-center gap-2 flex-wrap"><Badge v={v} />{v.n > 0 && !vencido && <button onClick={() => { upd(p.id, { dias: 0 }); flash("Disponibilidad confirmada."); }} className="text-xs underline font-semibold" style={{ color: C.lilaDk }}>✓ Confirmar que sigue disponible</button>}</div>
               </div>
             </div>
@@ -1542,7 +1613,7 @@ function Ficha({ n, props, users, reviews = [], onClose }) {
   return (
     <div className="absolute inset-0 z-10 flex items-end" style={{ background: "rgba(30,27,58,.55)" }}>
       <div className="w-full rounded-t-3xl p-4 space-y-3 overflow-y-auto" style={{ background: C.card, maxHeight: "90%" }}>
-        <div className="flex justify-between"><div className="flex items-center gap-3"><div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold" style={{ background: C.lila }}>{n[0]}</div><div><div className="font-semibold" style={{ color: C.ink }}>{n}</div><div className="text-xs" style={{ color: C.mute }}>Agente inmobiliario independiente</div></div></div><button onClick={onClose} style={{ color: C.mute }}>Cerrar</button></div>
+        <div className="flex justify-between"><div className="flex items-center gap-3"><div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold" style={{ background: C.lila }}>{n[0]}</div><div><div className="font-semibold" style={{ color: C.ink }}>{n}</div><div className="text-xs" style={{ color: C.mute }}>{u.perfil && u.perfil.agencia && u.perfil.agencia.tipo === "Agencia" && u.perfil.agencia.nombre ? `Agente inmobiliario · Agencia ${u.perfil.agencia.nombre}` : "Agente inmobiliario independiente"}</div></div></div><button onClick={onClose} style={{ color: C.mute }}>Cerrar</button></div>
         <div className="grid grid-cols-3 gap-2 text-center">
           {[["Puntuación", avgTotal ? `⭐ ${avgTotal.toFixed(1)}` : "—"], ["Reseñas", propias.length], ["Captaciones", act]].map(([a, b]) => <div key={a} className="rounded-xl py-2" style={{ background: C.lilaSoft }}><div className="font-semibold" style={{ ...serif, color: C.lilaDk, fontSize: 18 }}>{b}</div><div className="text-xs" style={{ color: C.mute }}>{a}</div></div>)}
         </div>
@@ -1649,7 +1720,7 @@ const proximoCorte = (dia) => { let d = new Date(HOY.getFullYear(), HOY.getMonth
 const prorrateo = (precio, dia) => { const fin = proximoCorte(dia); const ini = new Date(fin.getFullYear(), fin.getMonth() - 1, dia); const ciclo = Math.round((fin - ini) / 864e5), resta = Math.round((fin - HOY) / 864e5); return { fin, resta, ciclo, monto: Math.round((precio * resta) / ciclo) }; };
 const PRECIOS = { Inicial: 49, Profesional: 99, Premium: 169 };
 const ORD = { gratuito: 0, Inicial: 1, Profesional: 2, Premium: 3, prueba: 3, admin: 3 };
-const permisos = (n) => { const r = ORD[n] ?? 0; return { nivel: n, ficha: r >= 1, maxCapt: { Inicial: 5, Profesional: 20, Premium: 40 }[n] || null, maxFotos: { Inicial: 3, Profesional: 5 }[n] || (r >= 3 ? 8 : 3), req: r >= 1, fav: r >= 2, vis: r >= 1, share: r >= 2, report: r >= 1, cierre: r >= 1, filtros: r >= 1, match: r >= 2, matchAv: r >= 2, inversa: r >= 2, cliente: r >= 2, busq: r >= 2, vigDet: r >= 2, hist: r >= 2, seg: r >= 2, recordatorios: r >= 2, stats: r >= 3, informes: r >= 3, auto: r >= 3, soporte: r >= 3 }; };
+const permisos = (n) => { const r = ORD[n] ?? 0; return { nivel: n, ficha: r >= 1, maxCapt: { Inicial: 5, Profesional: 20, Premium: 40 }[n] || null, maxFotos: { Inicial: 3, Profesional: 5 }[n] || (r >= 3 ? 8 : 3), req: r >= 1, fav: r >= 2, vis: r >= 1, share: r >= 2, report: r >= 1, cierre: r >= 1, filtros: r >= 1, match: r >= 2, matchAv: r >= 2, inversa: r >= 2, cliente: r >= 2, busq: r >= 2, vigDet: r >= 2, hist: r >= 2, seg: r >= 2, recordatorios: r >= 2, stats: r >= 3, informes: r >= 3, auto: r >= 3, soporte: r >= 3, video: r >= 3 }; };
 // Meses que se guardan las captaciones cerradas (fotos y datos). Después se eliminan y queda solo el registro del cierre.
 const RETENCION = { Inicial: 3, Profesional: 7, Premium: 12 };
 const retencion = (nivel) => RETENCION[nivel] || (nivel === "admin" ? 12 : 3);
@@ -1658,11 +1729,11 @@ const CUENTAS = [["admin", "SuperAdmin"], ["cliente", "Cliente"], ["prueba", "Pr
 const RESUMEN = {
   admin: "Panel de administración: aprobar pagos, configurar cobros y planes, crear y gestionar usuarios, revisar reportes, sugerencias y auditoría.",
   cliente: "Vista del público registrado como cliente (no es agente): buscador con ficha completa de las propiedades, solo el botón de contactar al captador por WhatsApp, favoritos («Guardados») con aviso si cambian, búsquedas guardadas, comparador y calificar al captador tras un cierre. No tiene captaciones, requerimientos, visitas ni herramientas de agente.",
-  prueba: "48 horas con acceso completo (igual que Premium). Al terminar, la cuenta pasa automáticamente a Gratuito hasta que pague un plan.",
+  prueba: "48 horas con acceso completo (igual que Premium). Al terminar, la cuenta pasa automáticamente a Gratuito hasta que pague un plan. Tus captaciones, requerimientos y demás datos NO se borran: solo se limitan algunas herramientas hasta que elijas un plan.",
   gratuito: "Solo puede buscar y ver datos básicos de las propiedades. Bloqueado: ficha completa, contacto con captadores, requerimientos, visitas, captaciones, reportes y todo lo de los planes.",
   Inicial: "Hasta 5 captaciones · 3 fotos por captación · cerradas guardadas 3 meses · ficha completa y WhatsApp con captadores · requerimientos de clientes · agenda de visitas · reportes. Sin favoritos, coincidencias avanzadas ni estadísticas.",
   Profesional: "Hasta 20 captaciones · 5 fotos por captación · cerradas guardadas 7 meses · todo lo de Inicial · coincidencias ponderadas e inversas · favoritos · compartir por WhatsApp · búsquedas guardadas · seguimiento · recordatorios. Sin estadísticas, informes ni automatizaciones.",
-  Premium: "Hasta 40 captaciones · 8 fotos por captación · cerradas guardadas 12 meses · confirmaciones de visita programadas por WhatsApp · todo lo de Profesional · estadísticas · informes con exportación CSV · automatizaciones · soporte prioritario.",
+  Premium: `Hasta 40 captaciones · 8 fotos por captación · 1 video corto (máx. ${VIDEO_MAX_SEG} s) por captación · cerradas guardadas 12 meses · confirmaciones de visita programadas por WhatsApp · todo lo de Profesional · estadísticas · informes con exportación CSV · automatizaciones · soporte prioritario.`,
 };
 const PLAN_BEN = {
   Inicial: ["Hasta 5 captaciones activas", "Hasta 3 fotos por captación", "Captaciones cerradas guardadas 3 meses", "Ficha completa y contacto por WhatsApp con captadores", "Registro de requerimientos de clientes", "Agenda de visitas", "Reportes y consultas"],
@@ -1786,7 +1857,7 @@ const textoCopy = (p, tel) => {
   const gar = `🚗 Garaje: ${p.garaje ? `Sí${p.gTipo ? ` (${p.gTipo.toLowerCase()})` : ""}` : "No"}${p.gAparte ? ` · garaje aparte en el edificio${p.gPrecio ? `: ${p.mon === "USD" ? "USD" : "Bs"} ${p.gPrecio}/mes` : ""}` : ""}`;
   const masc = `🐾 Mascotas: ${p.mascotas === "Condicionado" ? "Sí, con condiciones" : p.mascotas}${p.mascCond ? ` (${p.mascCond})` : ""}`;
   const dormTxt = p.dorm ? `🛏 ${p.dorm} dormitorio${p.dorm > 1 ? "s" : ""}` : "", banTxt = p.ban ? `🚿 ${p.ban} baño${p.ban > 1 ? "s" : ""}` : "", m2Txt = p.m2 ? `📐 ${p.m2} m²` : "";
-  const ubic = p.exclusiva && p.ubic ? `📍 Ubicación exacta: ${linkUbic(p.ubic)}` : "";
+  const ubic = p.exclusiva && p.ubic ? `📍 Ubicación exacta: ${linkUbic(p.ubic)}` : !p.exclusiva && p.ubicRef ? `📍 Zona referencial: ${p.ubicRef}` : "";
   if (desc.length >= 40) {
     const d = leerCopy(desc, ZONAS); // lo que el copy ya dice
     const extra = [
@@ -1880,6 +1951,7 @@ async function compartirGrupo(p, tel, flash) {
   const texto = textoGrupo(p, tel);
   const foto = p.fotos && p.fotos[0];
   if (foto && typeof navigator !== "undefined" && navigator.share) {
+    // Celular: "Compartir" nativo adjunta la foto y el copy juntos.
     try {
       const b = await bajarBlob(foto);
       const file = new File([b], `${nombreArchivo(p.t)}.jpg`, { type: b.type || "image/jpeg" });
@@ -1887,8 +1959,16 @@ async function compartirGrupo(p, tel, flash) {
     } catch (e) {
       if (e && e.name === "AbortError") return; // el agente cerró el cuadro de compartir
       flash && flash("No se pudo adjuntar la foto (revisa tu conexión). Se abrió WhatsApp con el copy en texto.");
+      const w = window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, "_blank");
+      if (!w) flash && flash("El navegador bloqueó la ventana. Permite las ventanas emergentes para compartir en grupos.");
+      return;
     }
   }
+  // Computadora (no existe "Compartir" con archivos): bajamos la foto de portada
+  // y copiamos el copy, para que solo haya que arrastrar la foto y pegar el texto.
+  if (foto) { try { await descargarFotos([foto], nombreArchivo(p.t)); } catch {} }
+  const ok = await copiarTexto(texto);
+  flash && flash(foto ? (ok ? "📥 Foto descargada y copy copiado. En WhatsApp Web, pega el texto y arrastra la foto descargada al chat." : "📥 Foto descargada. Se abrió WhatsApp con el copy en texto.") : (ok ? "Copy copiado." : "Se abrió WhatsApp con el copy en texto."));
   const w = window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, "_blank");
   if (!w) flash && flash("El navegador bloqueó la ventana. Permite las ventanas emergentes para compartir en grupos.");
 }
@@ -2371,6 +2451,7 @@ function DetalleCliente({ p, onBack, isFav, toggleFav, rate, users, onProfile, o
     <div className="p-4 pb-8 space-y-3">
       <button onClick={onBack} className="text-sm" style={{ color: C.brandDk }}>‹ Volver a resultados</button>
       {p.fotos && p.fotos.length ? <Galeria fotos={p.fotos} titulo={p.t} texto={textoGrupo(p)} soloVer /> : <Photo hue={p.hue} h={190} src={null} label="Sin fotos" />}
+      {p.video && <video src={p.video} controls className="w-full rounded-2xl" style={{ maxHeight: 260, background: "#000" }} />}
       <div className="flex items-center justify-between"><span className="text-sm" style={{ color: C.mute }}>{p.op} · {p.tipo}</span><span className="flex gap-1 items-center"><EstBadge est={p.est || "Disponible"} /><Badge v={v} /></span></div>
       <h2 className="font-semibold text-xl leading-snug" style={{ color: C.ink }}>{p.t}</h2>
       <div style={{ ...serif, fontSize: 28, fontWeight: 700, color: C.ink }}>{money(p)}</div>
@@ -2386,7 +2467,7 @@ function DetalleCliente({ p, onBack, isFav, toggleFav, rate, users, onProfile, o
       </div>
       <div className="rounded-xl p-3 text-sm space-y-1" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.ink }}>
         <div>📍 {p.zona}, {p.ciudad}</div>
-        {p.exclusiva && p.ubic && <div><a href={linkUbic(p.ubic)} target="_blank" rel="noreferrer" className="underline" style={{ color: C.lilaDk }}>📍 Ver ubicación exacta en el mapa</a></div>}
+        {p.exclusiva && p.ubic ? <div><a href={linkUbic(p.ubic)} target="_blank" rel="noreferrer" className="underline" style={{ color: C.lilaDk }}>📍 Ver ubicación exacta en el mapa</a></div> : !p.exclusiva && p.ubicRef ? <div style={{ color: C.mute }}>📍 Zona referencial: {p.ubicRef}</div> : null}
         <div>🚗 Garaje: {p.garaje ? `Sí${p.gTipo ? ` (${p.gTipo.toLowerCase()})` : ""}` : "No"}{p.gAparte ? ` · se alquila aparte en el edificio${p.gPrecio ? `: ${p.mon === "USD" ? "USD" : "Bs"} ${p.gPrecio}/mes` : ""}` : ""}</div>
         <div>🐾 Mascotas: {p.mascotas}{p.mascCond ? `: ${p.mascCond}` : ""}</div>
         <div>🛋 {p.amoblado}</div>
