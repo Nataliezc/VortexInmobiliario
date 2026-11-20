@@ -149,11 +149,10 @@ function DetalleInner({ p, acceso, onBack, onVisit, onReport, ant, rate, onProfi
   const sinContacto = acceso === "vencido";
   const propia = p.cap.n === ME;
   const isFav = (cid) => favs.some((f) => f.pid === p.id && f.cid === cid);
-  const msg = `🏠 ${p.op} · ${p.tipo}\n${p.t}\n📍 ${p.zona}, ${p.ciudad}\n💰 ${money(p)}\n${p.dorm ? `🛏 ${p.dorm} dorm · 🚿 ${p.ban} baños · ` : ""}${p.m2} m²\nVer ficha: vortex.app/p/${p.id}`;
   return (
     <div className="p-4 pb-8 space-y-3">
       <button onClick={onBack} className="text-sm" style={{ color: C.brandDk }}>‹ Volver a resultados</button>
-      {p.fotos && p.fotos.length ? <Galeria fotos={p.fotos} titulo={locked ? tBasico(p) : p.t} texto={`${p.t} · ${moneyOrig(p)} · ${p.zona}, ${p.ciudad}`} soloVer={sinContacto} /> : <Photo hue={p.hue} h={190} src={null} label="Sin fotos" />}
+      {p.fotos && p.fotos.length ? <Galeria fotos={p.fotos} titulo={locked ? tBasico(p) : p.t} texto={textoGrupo(p)} soloVer={sinContacto} /> : <Photo hue={p.hue} h={190} src={null} label="Sin fotos" />}
       <div className="flex items-center justify-between"><span className="text-sm" style={{ color: C.mute }}>{p.op} · {p.tipo}</span><span className="flex gap-1 items-center"><EstBadge est={p.est || "Disponible"} /><Badge v={v} /></span></div>
       <h2 className="font-semibold text-xl leading-snug" style={{ color: C.ink }}>{locked ? tBasico(p) : p.t}</h2>
       <div style={{ ...serif, fontSize: 28, fontWeight: 700, color: C.ink }}>{money(p)}</div>
@@ -2254,7 +2253,7 @@ function DetalleCliente({ p, onBack, isFav, toggleFav, rate, users, onProfile, o
   return (
     <div className="p-4 pb-8 space-y-3">
       <button onClick={onBack} className="text-sm" style={{ color: C.brandDk }}>‹ Volver a resultados</button>
-      {p.fotos && p.fotos.length ? <Galeria fotos={p.fotos} titulo={p.t} texto={`${p.t} · ${moneyOrig(p)} · ${p.zona}, ${p.ciudad}`} soloVer /> : <Photo hue={p.hue} h={190} src={null} label="Sin fotos" />}
+      {p.fotos && p.fotos.length ? <Galeria fotos={p.fotos} titulo={p.t} texto={textoGrupo(p)} soloVer /> : <Photo hue={p.hue} h={190} src={null} label="Sin fotos" />}
       <div className="flex items-center justify-between"><span className="text-sm" style={{ color: C.mute }}>{p.op} · {p.tipo}</span><span className="flex gap-1 items-center"><EstBadge est={p.est || "Disponible"} /><Badge v={v} /></span></div>
       <h2 className="font-semibold text-xl leading-snug" style={{ color: C.ink }}>{p.t}</h2>
       <div style={{ ...serif, fontSize: 28, fontWeight: 700, color: C.ink }}>{money(p)}</div>
