@@ -4,11 +4,20 @@
 const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const num = (n) => Number(n || 0).toLocaleString("es-BO");
 
+// Los "bots" que generan la vista previa (WhatsApp, Facebook, Telegram, etc.) a veces
+// SÍ siguen un <meta http-equiv="refresh"> o ejecutan el <script> de redirección, y
+// terminan leyendo la página genérica de la app (sin foto ni datos de la propiedad)
+// en vez de esta. Por eso a ellos NO se les manda ninguna redirección: solo ven las
+// etiquetas og: con la foto de portada. A una persona real (que sí navega con el
+// enlace) se le sigue redirigiendo de inmediato a la propiedad dentro de la app.
+const esBot = (ua) => /whatsapp|facebookexternalhit|facebookcatalog|twitterbot|telegrambot|slackbot|linkedinbot|discordbot|pinterest|skypeuripreview|vkshare|redditbot|embedly|outbrain|quora|w3c_validator|bot|crawler|spider|preview/i.test(ua || "");
+
 export default async (req) => {
   const url = new URL(req.url);
   const id = (url.searchParams.get("id") || url.pathname.split("/").filter(Boolean).pop() || "").replace(/[^\w-]/g, "");
   const base = `${url.protocol}//${url.host}`;
   const destino = id ? `${base}/?p=${encodeURIComponent(id)}` : base;
+  const bot = esBot(req.headers.get("user-agent"));
   let p = null;
   try {
     const r = await fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/rpc/propiedad_publica`, {
@@ -37,10 +46,10 @@ export default async (req) => {
 <meta property="og:image" content="${esc(img)}">
 <meta property="og:url" content="${esc(`${base}/p/${id}`)}">
 <meta name="twitter:card" content="summary_large_image">
-<meta http-equiv="refresh" content="0;url=${esc(destino)}">
+${bot ? "" : `<meta http-equiv="refresh" content="0;url=${esc(destino)}">`}
 </head><body style="font-family:sans-serif;padding:24px">
 <p>Abriendo la propiedad en Vortex… <a href="${esc(destino)}">Toca aquí si no se abre</a>.</p>
-<script>location.replace(${JSON.stringify(destino)});</script>
+${bot ? "" : `<script>location.replace(${JSON.stringify(destino)});</script>`}
 </body></html>`;
   return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" } });
 };

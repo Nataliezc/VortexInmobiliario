@@ -955,7 +955,7 @@ function Form({ onSave, init, maxFotos = 3, autoCopy = false }) {
     if (fal.length) { setMarcar(true); setErr(`Para publicar falta completar: ${fal.map((k) => NOMBRES_CAMPOS[k]).join(", ")}. Están marcados en amarillo.`); return; }
     const tipoFinal = f.tipo === "Otro" ? f.tipoOtro.trim().charAt(0).toUpperCase() + f.tipoOtro.trim().slice(1) : f.tipo;
     f.desc = limpiarContacto(f.desc || "");
-    const b = ({ id: Date.now(), ...(f.mon === "USD" ? { tcModo: f.tcModo || "dia", tc: f.tcModo === "fijo" ? +f.tc : null } : { tcModo: null, tc: null }), op: f.op, tipo: tipoFinal, t: f.t, ciudad: f.ciudad, zona: f.zona, precio: +f.precio, mon: f.mon, dorm: vivienda ? +f.dorm : 0, ban: vivienda ? +f.ban : 0, m2: +f.m2, garaje: f.garaje === "Sí", gTipo: f.garaje === "Sí" ? f.gTipo : "", gAparte: f.gAparte === "Sí", gPrecio: f.gAparte === "Sí" ? f.gPrecio : "", mascotas: f.mascotas, mascCond: f.mascotas === "Condicionado" ? f.mascCond : "", condComp: f.condComp, desc: f.desc, amoblado: f.amoblado, dias: 0, est: "Disponible", cap: { n: ME, tel: miTel(), ciu: f.ciudad }, com: f.com || "A definir con el captador", hue: Math.floor(Math.random() * 360), fotos: f.fotos, exclusiva: f.exclusiva, ubic: f.exclusiva ? f.ubic : null });
+    const b = ({ id: Date.now(), ...(f.mon === "USD" ? { tcModo: f.tcModo || "dia", tc: f.tcModo === "fijo" ? +f.tc : null } : { tcModo: null, tc: null }), op: f.op, tipo: tipoFinal, t: limpiarGlifosRaros(f.t), ciudad: f.ciudad, zona: f.zona, precio: +f.precio, mon: f.mon, dorm: vivienda ? +f.dorm : 0, ban: vivienda ? +f.ban : 0, m2: +f.m2, garaje: f.garaje === "Sí", gTipo: f.garaje === "Sí" ? f.gTipo : "", gAparte: f.gAparte === "Sí", gPrecio: f.gAparte === "Sí" ? f.gPrecio : "", mascotas: f.mascotas, mascCond: f.mascotas === "Condicionado" ? limpiarGlifosRaros(f.mascCond) : "", condComp: limpiarGlifosRaros(f.condComp), desc: f.desc, amoblado: f.amoblado, dias: 0, est: "Disponible", cap: { n: ME, tel: miTel(), ciu: f.ciudad }, com: f.com || "A definir con el captador", hue: Math.floor(Math.random() * 360), fotos: f.fotos, exclusiva: f.exclusiva, ubic: f.exclusiva ? f.ubic : null });
     onSave(init ? { ...init, ...b, id: init.id, dias: init.dias, est: init.est, hue: init.hue, cap: init.cap } : b);
   };
   return (
@@ -1763,9 +1763,18 @@ const pendWa = (visitas) => {
   });
   return out;
 };
+// Algunos teclados de celulares antiguos (sobre todo Samsung/Android viejos) usan
+// códigos de la "zona de uso privado" de Unicode para sus propios emojis: se ven
+// bien en ese mismo celular, pero en cualquier otro —incluido WhatsApp de quien
+// recibe el mensaje— salen como un cuadrito "no reconocido". Los quitamos del
+// texto para que no se vea roto para nadie (los emojis normales no se tocan).
+const limpiarGlifosRaros = (txt) => String(txt || "")
+  .replace(/[-]/g, "")
+  .replace(/[\u{F0000}-\u{FFFFD}]/gu, "")
+  .replace(/[\u{100000}-\u{10FFFD}]/gu, "");
 // ── Copy completo de una propiedad, con el WhatsApp de quien lo envía ──
 // Quita del copy los datos de contacto del captador (teléfonos, enlaces de WhatsApp)
-const limpiarContacto = (txt) => String(txt || "").split("\n")
+const limpiarContacto = (txt) => limpiarGlifosRaros(txt).split("\n")
   .filter((l) => !/wa\.me|whatsapp|wsp|wpp|whats|contacto|contactar|llamar|ll[aá]manos|escr[ií]beme|escr[ií]benos|cel\b|cel\.|celular|tel[eé]fono|tel\.|📞|📱|☎/i.test(l))
   .map((l) => l.replace(/(\+?591[\s-]?)?\b[67]\d{2}[\s-]?\d{2}[\s-]?\d{3}\b/g, "").replace(/\s{2,}/g, " ").trimEnd())
   .join("\n").replace(/\n{3,}/g, "\n\n").trim();
