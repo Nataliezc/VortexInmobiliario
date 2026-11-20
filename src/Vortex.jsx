@@ -122,7 +122,7 @@ function Card({ p, onOpen, locked, rate, perm }) {
     <button onClick={() => onOpen(p)} className="text-left w-full rounded-2xl p-3 flex gap-3" style={{ background: C.card, border: `1px solid ${C.line}`, opacity: v.n === 2 || est === "En pausa" || est === "Caído" ? 0.7 : 1 }}>
       <div style={{ width: 92, flexShrink: 0 }}><Photo hue={p.hue} h={92} src={p.fotos?.[0]} /></div>
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 text-xs" style={{ color: C.mute }}><span>{p.op}</span><span>{p.tipo}</span></div>
+        <div className="flex items-center gap-2 text-xs" style={{ color: C.mute }}><span>{p.op}</span><span>{p.tipo}</span>{p.exclusiva && <span className="font-semibold" style={{ color: C.lilaDk }}>⭐ Exclusiva</span>}</div>
         <div className="font-semibold leading-snug" style={{ color: C.ink, fontSize: 15 }}>{locked && ES_VISITANTE ? tBasico(p) : p.t}</div>
         <div className="text-xs mt-0.5" style={{ color: C.mute }}>{p.zona}, {p.ciudad}{p.dorm ? ` · ${p.dorm} dorm · ${p.ban} baños` : ""} · {p.m2} m²</div>
         <div className="flex items-center justify-between mt-1.5">
@@ -152,7 +152,7 @@ function DetalleInner({ p, acceso, onBack, onVisit, onReport, ant, rate, onProfi
   return (
     <div className="p-4 pb-8 space-y-3">
       <button onClick={onBack} className="text-sm" style={{ color: C.brandDk }}>‹ Volver a resultados</button>
-      {p.fotos && p.fotos.length ? <Galeria fotos={p.fotos} titulo={locked ? tBasico(p) : p.t} texto={textoGrupo(p)} soloVer={sinContacto} /> : <Photo hue={p.hue} h={190} src={null} label="Sin fotos" />}
+      {p.fotos && p.fotos.length ? <Galeria fotos={p.fotos} titulo={locked ? tBasico(p) : p.t} texto={textoGrupo(p, propia ? miTel() : "")} soloVer={sinContacto} /> : <Photo hue={p.hue} h={190} src={null} label="Sin fotos" />}
       <div className="flex items-center justify-between"><span className="text-sm" style={{ color: C.mute }}>{p.op} · {p.tipo}</span><span className="flex gap-1 items-center"><EstBadge est={p.est || "Disponible"} /><Badge v={v} /></span></div>
       <h2 className="font-semibold text-xl leading-snug" style={{ color: C.ink }}>{locked ? tBasico(p) : p.t}</h2>
       <div style={{ ...serif, fontSize: 28, fontWeight: 700, color: C.ink }}>{money(p)}</div>
@@ -196,7 +196,8 @@ function DetalleInner({ p, acceso, onBack, onVisit, onReport, ant, rate, onProfi
       ) : propia ? (
         <>
           <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Esta es tu captación.</div>
-          {(p.est || "Disponible") === "Disponible" && <a href={`https://wa.me/?text=${encodeURIComponent(textoGrupo(p))}`} target="_blank" rel="noreferrer" className="block text-center w-full py-3 rounded-xl text-sm font-semibold text-white" style={{ background: "#25D366" }}>📢 Compartir en grupos de WhatsApp</a>}
+          {p.exclusiva && p.ubic && <a href={`https://www.google.com/maps?q=${p.ubic.lat},${p.ubic.lng}`} target="_blank" rel="noreferrer" className="block text-center text-xs underline" style={{ color: C.lilaDk }}>📍 Ver ubicación exacta en el mapa</a>}
+          {(p.est || "Disponible") === "Disponible" && <a href={`https://wa.me/?text=${encodeURIComponent(textoGrupo(p, miTel()))}`} target="_blank" rel="noreferrer" className="block text-center w-full py-3 rounded-xl text-sm font-semibold text-white" style={{ background: "#25D366" }}>📢 Compartir en grupos de WhatsApp</a>}
           <button onClick={async () => { const ok = await copiarTexto(textoCopy(p, miTel())); flash && flash(ok ? "Copy copiado." : "No se pudo copiar automáticamente."); }} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.lilaSoft, color: C.lilaDk }}>📋 Copiar copy</button>
           {perm.auto && onRespuestas && <button onClick={() => onRespuestas({ propiedad: p.t, agente: ME })} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.brandSoft, color: C.brandDk }}>💬 Respuestas rápidas</button>}
         </>
@@ -208,6 +209,7 @@ function DetalleInner({ p, acceso, onBack, onVisit, onReport, ant, rate, onProfi
             <button onClick={() => onProfile(p.cap.n)} className="text-xs px-2 py-1 rounded-md" style={{ background: C.lilaSoft, color: C.lilaDk }}>Ver perfil</button>
           </div>
           <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Colaboración 50/50: si cierras con tu cliente, la comisión se divide en partes iguales con el captador.</div>
+          {p.exclusiva && p.ubic && <a href={`https://www.google.com/maps?q=${p.ubic.lat},${p.ubic.lng}`} target="_blank" rel="noreferrer" className="block text-center text-xs underline" style={{ color: C.lilaDk }}>📍 Ver ubicación exacta en el mapa</a>}
           {perm.auto && onRespuestas && <button onClick={() => onRespuestas({ propiedad: p.t, agente: ME })} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.brandSoft, color: C.brandDk }}>💬 Respuestas rápidas</button>}
           <button onClick={async () => { const ok = await copiarTexto(textoCopy(p, miTel())); flash && flash(ok ? (waNum(miTel()).length < 8 ? "Copy copiado. Tip: agrega tu WhatsApp en Mis datos para incluir tu enlace." : "Copy copiado con tu WhatsApp. Pégalo en el chat de tu cliente.") : "No se pudo copiar automáticamente."); }} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.lilaSoft, color: C.lilaDk }}>📋 Copiar copy para enviar a un cliente</button>
           <div className={`grid ${perm.share ? "grid-cols-2" : "grid-cols-1"} gap-2`}>
@@ -891,7 +893,7 @@ const Seg = ({ o, v, set }) => <div className="flex flex-wrap gap-2">{o.map((x) 
 const Fld = ({ l, children, x }) => <div className="space-y-1.5" style={x ? { background: C.amberSoft, borderRadius: 12, padding: 8, outline: `1.5px solid ${C.amber}` } : undefined}><div className="text-xs font-medium" style={{ color: x ? C.amber : C.mute }}>{l}</div>{children}</div>;
 
 const TIPOS_INM = ["Casa", "Departamento", "Monoambiente", "Terreno", "Oficina", "Comercial"];
-const toF = (p) => ({ tcModo: p.tcModo || "dia", tc: p.tc ? String(p.tc) : "", op: p.op, tipo: TIPOS_INM.includes(p.tipo) ? p.tipo : "Otro", tipoOtro: TIPOS_INM.includes(p.tipo) || p.tipo === "Otro" ? "" : p.tipo, ciudad: p.ciudad, zona: p.zona, t: p.t, precio: String(p.precio), mon: p.mon, dorm: String(p.dorm), ban: String(p.ban), m2: String(p.m2), garaje: p.garaje ? "Sí" : "No", gTipo: p.gTipo || "Independiente", gAparte: p.gAparte ? "Sí" : "No", gPrecio: p.gPrecio || "", mascotas: p.mascotas, mascCond: p.mascCond || "", amoblado: p.amoblado, com: p.com, condComp: p.condComp || "", desc: p.desc || "", fotos: p.fotos || [] });
+const toF = (p) => ({ tcModo: p.tcModo || "dia", tc: p.tc ? String(p.tc) : "", op: p.op, tipo: TIPOS_INM.includes(p.tipo) ? p.tipo : "Otro", tipoOtro: TIPOS_INM.includes(p.tipo) || p.tipo === "Otro" ? "" : p.tipo, ciudad: p.ciudad, zona: p.zona, t: p.t, precio: String(p.precio), mon: p.mon, dorm: String(p.dorm), ban: String(p.ban), m2: String(p.m2), garaje: p.garaje ? "Sí" : "No", gTipo: p.gTipo || "Independiente", gAparte: p.gAparte ? "Sí" : "No", gPrecio: p.gPrecio || "", mascotas: p.mascotas, mascCond: p.mascCond || "", amoblado: p.amoblado, com: p.com, condComp: p.condComp || "", desc: p.desc || "", fotos: p.fotos || [], exclusiva: !!p.exclusiva, ubic: p.ubic || null });
 
 function Form({ onSave, init, maxFotos = 3, autoCopy = false }) {
   const [copyTxt, setCopyTxt] = useState("");
@@ -910,8 +912,18 @@ function Form({ onSave, init, maxFotos = 3, autoCopy = false }) {
     const fal = camposFaltantes(nuevo);
     setInfo(fal.length ? `✨ Listo: llenamos los datos que encontramos en tu copy. Completa ${fal.length === 1 ? "el campo marcado" : `los ${fal.length} campos marcados`} en amarillo: ${fal.map((k) => NOMBRES_CAMPOS[k]).join(", ")}.` : "✨ ¡Encontramos todos los datos! Revísalos antes de publicar.");
   };
-  const [f, setF] = useState(init ? toF(init) : { op: "Alquiler", tipo: "Departamento", tipoOtro: "", tcModo: "dia", tc: "", ciudad: "La Paz", zona: "", t: "", precio: "", mon: MONEDA, dorm: "2", ban: "1", m2: "", garaje: "No", gTipo: "Independiente", gAparte: "No", gPrecio: "", mascotas: "No", mascCond: "", amoblado: "Vacío", com: "", condComp: "", desc: "", fotos: [] });
+  const [f, setF] = useState(init ? toF(init) : { op: "Alquiler", tipo: "Departamento", tipoOtro: "", tcModo: "dia", tc: "", ciudad: "La Paz", zona: "", t: "", precio: "", mon: MONEDA, dorm: "2", ban: "1", m2: "", garaje: "No", gTipo: "Independiente", gAparte: "No", gPrecio: "", mascotas: "No", mascCond: "", amoblado: "Vacío", com: "", condComp: "", desc: "", fotos: [], exclusiva: false, ubic: null });
   const [err, setErr] = useState("");
+  const [ubicErr, setUbicErr] = useState("");
+  const capturarUbic = () => {
+    if (!navigator.geolocation) { setUbicErr("Tu navegador no permite obtener la ubicación."); return; }
+    setUbicErr("Obteniendo ubicación…");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { setF((x) => ({ ...x, ubic: { lat: pos.coords.latitude, lng: pos.coords.longitude } })); setUbicErr(""); },
+      () => setUbicErr("No se pudo obtener tu ubicación. Revisa que el navegador tenga permiso de ubicación."),
+      { enableHighAccuracy: true, timeout: 12000 }
+    );
+  };
   const s = (k) => (v) => setF({ ...f, [k]: v });
   const num = (k) => (e) => s(k)(e.target.value.replace(/\D/g, ""));
   const vivienda = ["Casa", "Departamento"].includes(f.tipo);
@@ -920,7 +932,7 @@ function Form({ onSave, init, maxFotos = 3, autoCopy = false }) {
     if (fal.length) { setMarcar(true); setErr(`Para publicar falta completar: ${fal.map((k) => NOMBRES_CAMPOS[k]).join(", ")}. Están marcados en amarillo.`); return; }
     const tipoFinal = f.tipo === "Otro" ? f.tipoOtro.trim().charAt(0).toUpperCase() + f.tipoOtro.trim().slice(1) : f.tipo;
     f.desc = limpiarContacto(f.desc || "");
-    const b = ({ id: Date.now(), ...(f.mon === "USD" ? { tcModo: f.tcModo || "dia", tc: f.tcModo === "fijo" ? +f.tc : null } : { tcModo: null, tc: null }), op: f.op, tipo: tipoFinal, t: f.t, ciudad: f.ciudad, zona: f.zona, precio: +f.precio, mon: f.mon, dorm: vivienda ? +f.dorm : 0, ban: vivienda ? +f.ban : 0, m2: +f.m2, garaje: f.garaje === "Sí", gTipo: f.garaje === "Sí" ? f.gTipo : "", gAparte: f.gAparte === "Sí", gPrecio: f.gAparte === "Sí" ? f.gPrecio : "", mascotas: f.mascotas, mascCond: f.mascotas === "Condicionado" ? f.mascCond : "", condComp: f.condComp, desc: f.desc, amoblado: f.amoblado, dias: 0, est: "Disponible", cap: { n: ME, tel: miTel(), ciu: f.ciudad }, com: f.com || "A definir con el captador", hue: Math.floor(Math.random() * 360), fotos: f.fotos });
+    const b = ({ id: Date.now(), ...(f.mon === "USD" ? { tcModo: f.tcModo || "dia", tc: f.tcModo === "fijo" ? +f.tc : null } : { tcModo: null, tc: null }), op: f.op, tipo: tipoFinal, t: f.t, ciudad: f.ciudad, zona: f.zona, precio: +f.precio, mon: f.mon, dorm: vivienda ? +f.dorm : 0, ban: vivienda ? +f.ban : 0, m2: +f.m2, garaje: f.garaje === "Sí", gTipo: f.garaje === "Sí" ? f.gTipo : "", gAparte: f.gAparte === "Sí", gPrecio: f.gAparte === "Sí" ? f.gPrecio : "", mascotas: f.mascotas, mascCond: f.mascotas === "Condicionado" ? f.mascCond : "", condComp: f.condComp, desc: f.desc, amoblado: f.amoblado, dias: 0, est: "Disponible", cap: { n: ME, tel: miTel(), ciu: f.ciudad }, com: f.com || "A definir con el captador", hue: Math.floor(Math.random() * 360), fotos: f.fotos, exclusiva: f.exclusiva, ubic: f.exclusiva ? f.ubic : null });
     onSave(init ? { ...init, ...b, id: init.id, dias: init.dias, est: init.est, hue: init.hue, cap: init.cap } : b);
   };
   return (
@@ -938,6 +950,23 @@ function Form({ onSave, init, maxFotos = 3, autoCopy = false }) {
       {f.tipo === "Otro" && <Fld l={lb("tipoOtro", "¿Qué tipo de inmueble es?")} x={falta("tipoOtro")}><input value={f.tipoOtro} onChange={(e) => s("tipoOtro")(e.target.value)} maxLength={30} placeholder="Ej. Galpón, Quinta, Habitación, Edificio" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} autoFocus /></Fld>}
       <Fld l={lb("ciudad", "Ciudad")} x={falta("ciudad")}><Seg o={Object.keys(ZONAS)} v={f.ciudad} set={(v) => setF({ ...f, ciudad: v, zona: "" })} /></Fld>
       <Fld l={lb("zona", "Zona o barrio")} x={falta("zona")}><input list="zonas" value={f.zona} onChange={(e) => s("zona")(e.target.value)} placeholder="Escribe la zona exacta" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /><datalist id="zonas">{(ZONAS[f.ciudad] || []).map((z) => <option key={z} value={z} />)}</datalist></Fld>
+      <div className="rounded-xl p-3 space-y-2" style={{ background: f.exclusiva ? C.lilaSoft : C.card, border: `1px solid ${f.exclusiva ? C.lila : C.line}` }}>
+        <button type="button" onClick={() => setF({ ...f, exclusiva: !f.exclusiva, ubic: !f.exclusiva ? f.ubic : null })} className="px-3 py-1.5 rounded-full text-sm font-semibold" style={{ background: f.exclusiva ? C.lila : "#fff", color: f.exclusiva ? "#fff" : C.lilaDk, border: `1px solid ${C.lila}` }}>{f.exclusiva ? "⭐ Exclusiva" : "☆ Marcar como exclusiva"}</button>
+        <div className="text-xs" style={{ color: C.mute }}>La ubicación exacta es opcional y solo tiene sentido si tienes la exclusiva de esta propiedad (para no desviarla a otra zona general).</div>
+        {f.exclusiva && (
+          <div className="space-y-1.5 pt-1">
+            <div className="text-xs font-medium" style={{ color: C.lilaDk }}>Ubicación exacta (opcional)</div>
+            <button type="button" onClick={capturarUbic} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white" style={{ background: C.lila }}>📍 Usar mi ubicación actual</button>
+            {f.ubic ? (
+              <div className="text-xs flex items-center gap-2 flex-wrap" style={{ color: C.lilaDk }}>
+                <span>✓ Ubicación guardada</span>
+                <a href={`https://www.google.com/maps?q=${f.ubic.lat},${f.ubic.lng}`} target="_blank" rel="noreferrer" className="underline">Ver en el mapa</a>
+                <button type="button" onClick={() => s("ubic")(null)} className="underline" style={{ color: C.mute }}>Quitar</button>
+              </div>
+            ) : ubicErr ? <div className="text-xs" style={{ color: ubicErr.startsWith("Obteniendo") ? C.mute : C.red }}>{ubicErr}</div> : null}
+          </div>
+        )}
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <Fld l={lb("precio", "Precio")} x={falta("precio")}><input value={f.precio} onChange={num("precio")} inputMode="numeric" className="w-full rounded-xl px-3 py-2 text-sm" style={inp} /></Fld>
         <Fld l={lb("mon", "Moneda")} x={falta("mon")}><Seg o={["Bs", "USD"]} v={f.mon === "BOB" ? "Bs" : f.mon} set={(x) => s("mon")(x === "Bs" ? "BOB" : "USD")} /></Fld>
@@ -1110,7 +1139,7 @@ function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, s
                 else if (nv === "En pausa") { setPausaF(""); setPausando(p.id); }
               }} className="flex-1 rounded-lg px-2 py-1.5 text-sm" style={inp}>{ESTADOS.filter((e) => e !== "Cerrado" || est === "Cerrado").map((e) => <option key={e} value={e}>{EMO[e]} {e}</option>)}</select>
               <button onClick={async () => { const ok = await copiarTexto(textoCopy(p, miTel())); flash(ok ? (waNum(miTel()).length < 8 ? "Copy copiado. Tip: agrega tu WhatsApp en Mis datos para incluir tu enlace." : "Copy copiado con tu enlace de WhatsApp. Pégalo en el chat de tu cliente.") : "No se pudo copiar automáticamente."); }} className="px-3 py-1.5 rounded-lg text-sm font-semibold text-white" style={{ background: C.lila }}>📋 Copiar copy</button>
-              {(p.est || "Disponible") === "Disponible" && <a href={`https://wa.me/?text=${encodeURIComponent(textoGrupo(p))}`} target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-lg text-sm font-semibold text-white" style={{ background: "#25D366" }}>📢 Compartir en grupos</a>}
+              {(p.est || "Disponible") === "Disponible" && <a href={`https://wa.me/?text=${encodeURIComponent(textoGrupo(p, miTel()))}`} target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-lg text-sm font-semibold text-white" style={{ background: "#25D366" }}>📢 Compartir en grupos</a>}
             </div>
             {retirando === p.id && <div className="rounded-xl p-3 space-y-2" style={{ background: C.redSoft }}>
               <div className="text-sm font-semibold" style={{ color: C.red }}>Marcar como caída</div>
@@ -1691,6 +1720,7 @@ const textoCopy = (p, tel) => {
   const gar = `🚗 Garaje: ${p.garaje ? `Sí${p.gTipo ? ` (${p.gTipo.toLowerCase()})` : ""}` : "No"}${p.gAparte ? ` · garaje aparte en el edificio${p.gPrecio ? `: ${p.mon === "USD" ? "USD" : "Bs"} ${p.gPrecio}/mes` : ""}` : ""}`;
   const masc = `🐾 Mascotas: ${p.mascotas === "Condicionado" ? "Sí, con condiciones" : p.mascotas}${p.mascCond ? ` (${p.mascCond})` : ""}`;
   const dormTxt = p.dorm ? `🛏 ${p.dorm} dormitorio${p.dorm > 1 ? "s" : ""}` : "", banTxt = p.ban ? `🚿 ${p.ban} baño${p.ban > 1 ? "s" : ""}` : "", m2Txt = p.m2 ? `📐 ${p.m2} m²` : "";
+  const ubic = p.exclusiva && p.ubic ? `📍 Ubicación exacta: https://www.google.com/maps?q=${p.ubic.lat},${p.ubic.lng}` : "";
   if (desc.length >= 40) {
     const d = leerCopy(desc, ZONAS); // lo que el copy ya dice
     const extra = [
@@ -1702,6 +1732,7 @@ const textoCopy = (p, tel) => {
       !d.mascotas && p.mascotas ? masc : "",
       !d.amoblado && p.amoblado ? `🛋 ${p.amoblado}` : "",
       !d.condComp && p.condComp ? `📄 ${p.condComp}` : "",
+      ubic,
     ].filter(Boolean);
     return [desc, extra.length ? "\n" + extra.join("\n") : "", enlace ? "\n" + enlace : ""].filter(Boolean).join("\n");
   }
@@ -1714,6 +1745,7 @@ const textoCopy = (p, tel) => {
     gar, masc,
     p.amoblado ? `🛋 ${p.amoblado}` : "",
     p.condComp ? `📄 ${p.condComp}` : "",
+    ubic,
     desc ? `\n${desc}` : "",
     enlace ? `\n${enlace}` : "",
   ].filter(Boolean).join("\n");
@@ -1723,18 +1755,15 @@ async function copiarTexto(t) {
     try { const a = document.createElement("textarea"); a.value = t; a.style.position = "fixed"; a.style.opacity = "0"; document.body.appendChild(a); a.select(); const ok = document.execCommand("copy"); a.remove(); return ok; } catch { return false; }
   }
 }
-// ── Mensaje corto para grupos de WhatsApp, con enlace a la ficha en Vortex ──
+// ── Mensaje completo para grupos de WhatsApp: toda la info que puso el
+//    agente (igual que "Copiar copy") + el enlace a la ficha en Vortex, para
+//    que WhatsApp muestre una foto de vista previa y quien toque el enlace
+//    vea el resto de las fotos y quede dentro de la app ──
 const enlaceFicha = (p) => `${window.location.origin}/p/${p.id}`;
-const textoGrupo = (p) => [
-  `🏠 *${p.t}*`,
-  `📍 ${p.zona}, ${p.ciudad} · ${p.op}`,
-  `💰 ${precioCopy(p)}`,
-  [p.dorm ? `🛏 ${p.dorm} dorm.` : "", p.ban ? `🚿 ${p.ban} baño${p.ban > 1 ? "s" : ""}` : "", p.m2 ? `📐 ${p.m2} m²` : ""].filter(Boolean).join(" · "),
-  `🚗 Garaje: ${p.garaje ? "Sí" : "No"} · 🐾 Mascotas: ${p.mascotas === "Condicionado" ? "con condiciones" : p.mascotas || "consultar"}`,
-  ``,
-  `👉 Mira las fotos y más propiedades en Vortex:`,
-  enlaceFicha(p),
-].filter((x) => x !== undefined && x !== null && x !== false).join("\n").replace(/\n{3,}/g, "\n\n");
+const textoGrupo = (p, tel) => [
+  textoCopy(p, tel),
+  `👉 Mira el resto de las fotos y más propiedades en Vortex:\n${enlaceFicha(p)}`,
+].filter(Boolean).join("\n\n");
 // ── Fotos: descargar o enviar ──
 const nombreArchivo = (t) => (t || "foto").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 40).toLowerCase() || "foto";
 function VisorImagen({ src, titulo, onClose }) {
@@ -2269,6 +2298,7 @@ function DetalleCliente({ p, onBack, isFav, toggleFav, rate, users, onProfile, o
       </div>
       <div className="rounded-xl p-3 text-sm space-y-1" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.ink }}>
         <div>📍 {p.zona}, {p.ciudad}</div>
+        {p.exclusiva && p.ubic && <div><a href={`https://www.google.com/maps?q=${p.ubic.lat},${p.ubic.lng}`} target="_blank" rel="noreferrer" className="underline" style={{ color: C.lilaDk }}>📍 Ver ubicación exacta en el mapa</a></div>}
         <div>🚗 Garaje: {p.garaje ? `Sí${p.gTipo ? ` (${p.gTipo.toLowerCase()})` : ""}` : "No"}{p.gAparte ? ` · se alquila aparte en el edificio${p.gPrecio ? `: ${p.mon === "USD" ? "USD" : "Bs"} ${p.gPrecio}/mes` : ""}` : ""}</div>
         <div>🐾 Mascotas: {p.mascotas}{p.mascCond ? `: ${p.mascCond}` : ""}</div>
         <div>🛋 {p.amoblado}</div>
@@ -2605,6 +2635,14 @@ export function VisitanteCliente({ inicial, onIngresar, onRegistro, onIngresarAg
   const toggleComparar = (pid) => setComparar((c) => { if (c.includes(pid)) return c.filter((x) => x !== pid); if (c.length >= 3) return c; return [...c, pid]; });
   const open = (p) => setSel(p);
   const pedirCuenta = () => setAviso(true);
+  // Abrir directamente una propiedad si llegan por un enlace compartido (?p=ID)
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("p");
+    if (!q) return;
+    const p = props.find((x) => String(x.id) === q);
+    if (p) setSel(p);
+    window.history.replaceState(null, "", window.location.pathname);
+  }, []);
   return (
     <div className="vx-shell" style={{ fontFamily: "'Montserrat', 'Avenir Next', 'Segoe UI', system-ui, sans-serif" }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap');`}</style>

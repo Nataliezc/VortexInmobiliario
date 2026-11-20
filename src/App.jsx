@@ -42,7 +42,9 @@ export default function App() {
   const [sim, setSim] = useState("admin");       // "Ver la app como" (solo administradores)
   const [finPrueba, setFinPrueba] = useState(0);
   const [modo, setModo] = useState(null);
-  const [modoVisitante, setModoVisitante] = useState(null); // "cliente" | "agente" | null = sin elegir aún
+  // Si llegan por un enlace de una propiedad compartida (?p=ID), nos saltamos la
+  // pregunta "agente o cliente" y los mandamos directo al buscador de cliente
+  const [modoVisitante, setModoVisitante] = useState(() => (new URLSearchParams(window.location.search).get("p") ? "cliente" : null));
   const [recuperar, setRecuperar] = useState(false);
   useTrampaAtras();
   const [verTerminos, setVerTerminos] = useState(false); // null = visitante | "login" | "registro"

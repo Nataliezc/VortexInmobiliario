@@ -108,6 +108,7 @@ language sql stable security definer set search_path = public as $$
     'garaje', p.datos->'garaje', 'gTipo', p.datos->'gTipo', 'gAparte', p.datos->'gAparte', 'gPrecio', p.datos->'gPrecio',
     'mascotas', p.datos->'mascotas', 'mascCond', p.datos->'mascCond', 'amoblado', p.datos->'amoblado',
     'condComp', p.datos->'condComp', 'desc', p.datos->'desc',
+    'exclusiva', p.datos->'exclusiva', 'ubic', p.datos->'ubic',
     'est', p.datos->'est', 'dias', p.datos->'dias', '_conf', p.datos->'_conf', 'hue', p.datos->'hue',
     'cap', jsonb_build_object('n', p.datos->'cap'->'n', 'tel', p.datos->'cap'->'tel', 'ciu', p.datos->'ciudad'),
     'fotos', coalesce(p.datos->'fotos', '[]'::jsonb))
