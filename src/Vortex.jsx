@@ -671,7 +671,7 @@ function Reportar({ p, onClose, onSend }) {
   );
 }
 
-function Extra({ onRepublicar, nivelReal, sub, ops, setOps, props, setProps, reports, flash, reviews, setReviews, onReport, pre, clearPre, sugs, setSugs, perm, goSub, nivel, setReports, cfg, clientes, visitas, favs, autos, setAutos, pagos }) {
+function Extra({ onRepublicar, nivelReal, sub, ops, setOps, props, setProps, reports, flash, reviews, setReviews, onReport, pre, clearPre, sugs, setSugs, perm, goSub, nivel, setReports, cfg, clientes, visitas, favs, autos, setAutos, pagos, users = [] }) {
   const [borrarId, setBorrarId] = useState(null);
   const [nuevo, setNuevo] = useState(false);
   const [o, setO] = useState({ pid: "", monto: "", com: "", colab: "" });
@@ -740,6 +740,22 @@ function Extra({ onRepublicar, nivelReal, sub, ops, setOps, props, setProps, rep
       {!reports.some((r) => r.de === ME) && <div className="text-center py-8 text-sm" style={{ color: C.mute }}>No has enviado reportes. Puedes reportar a un agente desde la ficha de una de sus propiedades.</div>}
     </div>
   );
+  if (sub === "excl") {
+    const excluidos = users.filter((u) => u.est === "Bloqueado");
+    return (
+      <div className="space-y-3">
+        <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Agentes excluidos de Vortex por incumplir las reglas de la comunidad: la comisión 50/50 entre agentes, tener foto y nombre reales, o el respeto y buen trato entre agentes. Esta lista la ve toda la red de agentes.</div>
+        {excluidos.map((u) => (
+          <div key={u.n} className="rounded-2xl p-3 space-y-1" style={{ background: C.card, border: `1px solid ${C.red}` }}>
+            <div className="font-semibold text-sm" style={{ color: C.ink }}>🚫 {u.n}</div>
+            {u.excluido && u.excluido.f && <div className="text-xs" style={{ color: C.mute }}>Excluido el {fechaL(isoD(u.excluido.f))}</div>}
+            <div className="text-sm" style={{ color: C.red }}>{(u.excluido && u.excluido.motivo) || "Motivo no especificado por la administración."}</div>
+          </div>
+        ))}
+        {!excluidos.length && <div className="text-center py-8 text-sm" style={{ color: C.mute }}>No hay agentes excluidos actualmente.</div>}
+      </div>
+    );
+  }
   if (!perm.cierre) return <Lock t="Cierres y operaciones" plan="Inicial" go={goSub} />;
   const abiertas = props.filter((p) => !INACTIVAS.includes(p.est || "Disponible") || p.opPend);
   const pend = props.filter((p) => p.cap.n === ME && p.est === "Cerrado" && p.opPend);
@@ -1067,7 +1083,7 @@ function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, s
   const SECC_P = [
     ["Mi actividad", [["capt", "🏠", "Captaciones"], ["ops", "🔴", "Cierres"], ["sus", "💳", "Suscripción"]]],
     ["Herramientas", [["dash", "📊", "Dashboard"], ["inf", "📋", "Informes"], ["auto", "⚡", "Automatiz."], ["plant", "💬", "Plantillas"]]],
-    ["Cuenta", [["rep", "🚩", "Reportes"], ["sug", "💡", "Sugerencias"], ["datos", "🧑‍💼", "Mis datos"]]],
+    ["Cuenta", [["rep", "🚩", "Reportes"], ["excl", "🚫", "Excluidos"], ["sug", "💡", "Sugerencias"], ["datos", "🧑‍💼", "Mis datos"]]],
   ];
   const actualP = SECC_P.flatMap((g) => g[1]).find((x) => x[0] === sub) || SECC_P[0][1][0];
   return (
@@ -1108,7 +1124,7 @@ function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, s
       </div>}
       {sub === "sus" && <Sus acceso={acceso} users={users} setUsers={setUsers} pagos={pagos} setPagos={setPagos} cfg={cfg} flash={flash} nivel={nivel} trial={trial} />}
       {sub === "plant" && (perm.auto ? <Plantillas plantillas={plantillas} setPlantillas={setPlantillas} agente={ME} flash={flash} /> : <Lock t="Plantillas de respuestas rápidas" plan="Premium" go={goSub} />)}
-      {sub !== "capt" && sub !== "sus" && sub !== "plant" && <Extra onRepublicar={(p) => setNueva({ ...p, _repub: true })} sub={sub} ops={ops} setOps={setOps} props={props} setProps={setProps} reports={reports} flash={flash} reviews={reviews} setReviews={setReviews} onReport={onReport} pre={pre} clearPre={() => setPre(null)} sugs={sugs} setSugs={setSugs} perm={perm} goSub={goSub} nivel={nivel} setReports={setReports} cfg={cfg} clientes={clientes} visitas={visitas} favs={favs} autos={autos} setAutos={setAutos} pagos={pagos} />}
+      {sub !== "capt" && sub !== "sus" && sub !== "plant" && <Extra onRepublicar={(p) => setNueva({ ...p, _repub: true })} sub={sub} ops={ops} setOps={setOps} props={props} setProps={setProps} reports={reports} flash={flash} reviews={reviews} setReviews={setReviews} onReport={onReport} pre={pre} clearPre={() => setPre(null)} sugs={sugs} setSugs={setSugs} perm={perm} goSub={goSub} nivel={nivel} setReports={setReports} cfg={cfg} clientes={clientes} visitas={visitas} favs={favs} autos={autos} setAutos={setAutos} pagos={pagos} users={users} />}
       {sub === "capt" && <>
       <div className="flex items-center justify-between pt-1">
         <h2 className="font-semibold" style={{ color: C.ink }}>Mis captaciones</h2>
@@ -1212,6 +1228,8 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
   useAtras(s !== "pag" && !menuAb, () => setS("pag"));
   const [rej, setRej] = useState(null);
   const [mot, setMot] = useState("");
+  const [exclDe, setExclDe] = useState(null);
+  const [exclTxt, setExclTxt] = useState("");
   const [filtro, setFiltro] = useState("Todos");
   const [verPago, setVerPago] = useState(null);
   const [buscaPago, setBuscaPago] = useState("");
@@ -1457,6 +1475,21 @@ function Admin({ reports, setReports, users, setUsers, audit, setAudit, props, o
             <select value={u.plan} onChange={(e) => setU(u.n, { plan: e.target.value }, `plan cambiado a ${e.target.value}`)} className="rounded-lg px-2 py-1.5 text-sm" style={inp}>{["Prueba", "Gratuito", ...cfg.planes.map((q) => q.nombre)].map((x) => <option key={x}>{x}</option>)}</select>
           </div>
           {u.est === "Activo" && (!u.venc || u.venc < isoOf(HOY)) && <button onClick={() => setU(u.n, { venc: isoOf(proximoCorte(cfg.dia)) }, `acceso habilitado hasta ${fechaL(proximoCorte(cfg.dia))}`)} className="w-full py-2 rounded-lg text-xs font-semibold" style={{ background: C.okSoft, color: C.ok }}>Habilitar acceso hasta el próximo corte ({fechaL(proximoCorte(cfg.dia))})</button>}
+          {u.est === "Bloqueado" && (exclDe === u.n ? (
+            <div className="rounded-xl p-3 space-y-2" style={{ background: "#fff", border: `1.5px solid ${C.red}` }}>
+              <div className="text-xs font-semibold" style={{ color: C.red }}>🚫 Motivo visible para toda la red de agentes (en "Excluidos")</div>
+              <textarea rows={2} value={exclTxt} onChange={(e) => setExclTxt(e.target.value)} placeholder="Ej. No respetó la comisión 50/50 con otro agente (reporte confirmado)" className="w-full rounded-lg px-2 py-1.5 text-xs" style={inp} />
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => { setU(u.n, { excluido: { motivo: exclTxt.trim(), f: (u.excluido && u.excluido.f) || isoOf(HOY) } }, "motivo de exclusión actualizado"); setExclDe(null); flash("Motivo guardado. Ya es visible para toda la red de agentes."); }} className="py-2 rounded-lg text-xs font-semibold text-white" style={{ background: C.red }}>Guardar</button>
+                <button onClick={() => setExclDe(null)} className="py-2 rounded-lg text-xs" style={{ border: `1px solid ${C.line}`, color: C.mute }}>Cancelar</button>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl p-2.5 flex items-center justify-between gap-2" style={{ background: C.redSoft }}>
+              <div className="text-xs flex-1" style={{ color: C.red }}>{u.excluido && u.excluido.motivo ? `🚫 ${u.excluido.motivo}` : "🚫 Excluido · todavía sin motivo público registrado"}</div>
+              <button onClick={() => { setExclDe(u.n); setExclTxt((u.excluido && u.excluido.motivo) || ""); }} className="text-xs underline shrink-0" style={{ color: C.red }}>{u.excluido && u.excluido.motivo ? "Editar" : "Agregar motivo"}</button>
+            </div>
+          ))}
           {u._rol !== "admin" && (u.pref ? <div className="rounded-xl p-2.5 space-y-1.5 text-xs" style={{ background: C.amberSoft, color: C.ink }}>
             <div className="font-semibold" style={{ color: C.amber }}>⭐ Usuario preferente · plan {u.pref.plan} gratis, sin vencimiento</div>
             <div>Desde el {fechaL(isoD(u.pref.desde))} · {nCapt(u.n)} captación{nCapt(u.n) !== 1 ? "es" : ""} disponible{nCapt(u.n) !== 1 ? "s" : ""} ahora</div>
@@ -1829,20 +1862,17 @@ async function compartirFotos(urls, base, texto) {
   } catch (e) { if (e && e.name === "AbortError") return true; }
   return false;
 }
-// ── Compartir en grupos: intenta adjuntar solo la foto de portada (fotos[0])
-//    junto con el copy completo; si el celular no admite adjuntar fotos así,
-//    abre WhatsApp con el texto (que ya trae el enlace con la vista previa) ──
-async function compartirGrupo(p, tel, flash) {
+// ── Compartir en grupos: SIEMPRE manda el copy completo con el enlace a la
+//    ficha. No se adjunta la foto como archivo: varios celulares (sobre todo
+//    Android) ignoran el texto cuando se comparte un archivo junto con él y
+//    WhatsApp termina mandando solo la foto sin el copy. La foto de portada
+//    se ve igual, automáticamente, en la vista previa del enlace una vez
+//    enviado el mensaje (eso ya lo genera propiedad_publica() del lado del
+//    servidor), así que el texto es el único camino: es el que nunca falla ──
+function compartirGrupo(p, tel, flash) {
   const texto = textoGrupo(p, tel);
-  if (p.fotos && p.fotos.length && typeof navigator !== "undefined" && navigator.share) {
-    try {
-      const b = await bajarBlob(p.fotos[0]);
-      const file = new File([b], `${nombreArchivo(p.t)}.jpg`, { type: b.type || "image/jpeg" });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], text: texto }); return; }
-    } catch (e) { if (e && e.name === "AbortError") return; }
-  }
-  window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, "_blank");
-  flash && flash("Se abrió WhatsApp con el copy. La foto de portada se ve en la vista previa del enlace.");
+  const w = window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, "_blank");
+  if (!w) flash && flash("El navegador bloqueó la ventana. Permite las ventanas emergentes para compartir en grupos.");
 }
 function Galeria({ fotos, titulo, texto, soloVer = false }) {
   const [i, setI] = useState(0);
