@@ -196,8 +196,8 @@ function DetalleInner({ p, acceso, onBack, onVisit, onReport, ant, rate, onProfi
       ) : propia ? (
         <>
           <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Esta es tu captación.</div>
-          {p.exclusiva && p.ubic && <a href={`https://www.google.com/maps?q=${p.ubic.lat},${p.ubic.lng}`} target="_blank" rel="noreferrer" className="block text-center text-xs underline" style={{ color: C.lilaDk }}>📍 Ver ubicación exacta en el mapa</a>}
-          {(p.est || "Disponible") === "Disponible" && <a href={`https://wa.me/?text=${encodeURIComponent(textoGrupo(p, miTel()))}`} target="_blank" rel="noreferrer" className="block text-center w-full py-3 rounded-xl text-sm font-semibold text-white" style={{ background: "#25D366" }}>📢 Compartir en grupos de WhatsApp</a>}
+          {p.exclusiva && p.ubic && <a href={linkUbic(p.ubic)} target="_blank" rel="noreferrer" className="block text-center text-xs underline" style={{ color: C.lilaDk }}>📍 Ver ubicación exacta en el mapa</a>}
+          {(p.est || "Disponible") === "Disponible" && <button onClick={() => compartirGrupo(p, miTel(), flash)} className="block text-center w-full py-3 rounded-xl text-sm font-semibold text-white" style={{ background: "#25D366" }}>📢 Compartir en grupos de WhatsApp</button>}
           <button onClick={async () => { const ok = await copiarTexto(textoCopy(p, miTel())); flash && flash(ok ? "Copy copiado." : "No se pudo copiar automáticamente."); }} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.lilaSoft, color: C.lilaDk }}>📋 Copiar copy</button>
           {perm.auto && onRespuestas && <button onClick={() => onRespuestas({ propiedad: p.t, agente: ME })} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.brandSoft, color: C.brandDk }}>💬 Respuestas rápidas</button>}
         </>
@@ -209,7 +209,7 @@ function DetalleInner({ p, acceso, onBack, onVisit, onReport, ant, rate, onProfi
             <button onClick={() => onProfile(p.cap.n)} className="text-xs px-2 py-1 rounded-md" style={{ background: C.lilaSoft, color: C.lilaDk }}>Ver perfil</button>
           </div>
           <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Colaboración 50/50: si cierras con tu cliente, la comisión se divide en partes iguales con el captador.</div>
-          {p.exclusiva && p.ubic && <a href={`https://www.google.com/maps?q=${p.ubic.lat},${p.ubic.lng}`} target="_blank" rel="noreferrer" className="block text-center text-xs underline" style={{ color: C.lilaDk }}>📍 Ver ubicación exacta en el mapa</a>}
+          {p.exclusiva && p.ubic && <a href={linkUbic(p.ubic)} target="_blank" rel="noreferrer" className="block text-center text-xs underline" style={{ color: C.lilaDk }}>📍 Ver ubicación exacta en el mapa</a>}
           {perm.auto && onRespuestas && <button onClick={() => onRespuestas({ propiedad: p.t, agente: ME })} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.brandSoft, color: C.brandDk }}>💬 Respuestas rápidas</button>}
           <button onClick={async () => { const ok = await copiarTexto(textoCopy(p, miTel())); flash && flash(ok ? (waNum(miTel()).length < 8 ? "Copy copiado. Tip: agrega tu WhatsApp en Mis datos para incluir tu enlace." : "Copy copiado con tu WhatsApp. Pégalo en el chat de tu cliente.") : "No se pudo copiar automáticamente."); }} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.lilaSoft, color: C.lilaDk }}>📋 Copiar copy para enviar a un cliente</button>
           <div className={`grid ${perm.share ? "grid-cols-2" : "grid-cols-1"} gap-2`}>
@@ -915,6 +915,13 @@ function Form({ onSave, init, maxFotos = 3, autoCopy = false }) {
   const [f, setF] = useState(init ? toF(init) : { op: "Alquiler", tipo: "Departamento", tipoOtro: "", tcModo: "dia", tc: "", ciudad: "La Paz", zona: "", t: "", precio: "", mon: MONEDA, dorm: "2", ban: "1", m2: "", garaje: "No", gTipo: "Independiente", gAparte: "No", gPrecio: "", mascotas: "No", mascCond: "", amoblado: "Vacío", com: "", condComp: "", desc: "", fotos: [], exclusiva: false, ubic: null });
   const [err, setErr] = useState("");
   const [ubicErr, setUbicErr] = useState("");
+  const [ubicManual, setUbicManual] = useState("");
+  const guardarUbicManual = () => {
+    const t = ubicManual.trim();
+    if (!t) return;
+    setF((x) => ({ ...x, ubic: { texto: t } }));
+    setUbicErr(""); setUbicManual("");
+  };
   const capturarUbic = () => {
     if (!navigator.geolocation) { setUbicErr("Tu navegador no permite obtener la ubicación."); return; }
     setUbicErr("Obteniendo ubicación…");
@@ -956,14 +963,23 @@ function Form({ onSave, init, maxFotos = 3, autoCopy = false }) {
         {f.exclusiva && (
           <div className="space-y-1.5 pt-1">
             <div className="text-xs font-medium" style={{ color: C.lilaDk }}>Ubicación exacta (opcional)</div>
-            <button type="button" onClick={capturarUbic} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white" style={{ background: C.lila }}>📍 Usar mi ubicación actual</button>
             {f.ubic ? (
               <div className="text-xs flex items-center gap-2 flex-wrap" style={{ color: C.lilaDk }}>
-                <span>✓ Ubicación guardada</span>
-                <a href={`https://www.google.com/maps?q=${f.ubic.lat},${f.ubic.lng}`} target="_blank" rel="noreferrer" className="underline">Ver en el mapa</a>
+                <span>✓ Ubicación guardada{f.ubic.texto ? `: ${f.ubic.texto}` : ""}</span>
+                <a href={linkUbic(f.ubic)} target="_blank" rel="noreferrer" className="underline">Ver en el mapa</a>
                 <button type="button" onClick={() => s("ubic")(null)} className="underline" style={{ color: C.mute }}>Quitar</button>
               </div>
-            ) : ubicErr ? <div className="text-xs" style={{ color: ubicErr.startsWith("Obteniendo") ? C.mute : C.red }}>{ubicErr}</div> : null}
+            ) : (
+              <>
+                <button type="button" onClick={capturarUbic} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white" style={{ background: C.lila }}>📍 Usar mi ubicación actual</button>
+                {ubicErr && <div className="text-xs" style={{ color: ubicErr.startsWith("Obteniendo") ? C.mute : C.red }}>{ubicErr}</div>}
+                <div className="text-xs" style={{ color: C.mute }}>o escribe la ubicación a mano (dirección, referencia o enlace de Google Maps):</div>
+                <div className="flex gap-2">
+                  <input value={ubicManual} onChange={(e) => setUbicManual(e.target.value)} placeholder="Ej. Av. Busch casi esq. Arce, edificio Torres del Poeta" className="flex-1 rounded-lg px-3 py-1.5 text-xs" style={inp} />
+                  <button type="button" onClick={guardarUbicManual} disabled={!ubicManual.trim()} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white shrink-0" style={{ background: ubicManual.trim() ? C.lila : C.line }}>Guardar</button>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -1139,7 +1155,7 @@ function Perfil({ plantillas = [], setPlantillas, onRespuestas, acceso, props, s
                 else if (nv === "En pausa") { setPausaF(""); setPausando(p.id); }
               }} className="flex-1 rounded-lg px-2 py-1.5 text-sm" style={inp}>{ESTADOS.filter((e) => e !== "Cerrado" || est === "Cerrado").map((e) => <option key={e} value={e}>{EMO[e]} {e}</option>)}</select>
               <button onClick={async () => { const ok = await copiarTexto(textoCopy(p, miTel())); flash(ok ? (waNum(miTel()).length < 8 ? "Copy copiado. Tip: agrega tu WhatsApp en Mis datos para incluir tu enlace." : "Copy copiado con tu enlace de WhatsApp. Pégalo en el chat de tu cliente.") : "No se pudo copiar automáticamente."); }} className="px-3 py-1.5 rounded-lg text-sm font-semibold text-white" style={{ background: C.lila }}>📋 Copiar copy</button>
-              {(p.est || "Disponible") === "Disponible" && <a href={`https://wa.me/?text=${encodeURIComponent(textoGrupo(p, miTel()))}`} target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-lg text-sm font-semibold text-white" style={{ background: "#25D366" }}>📢 Compartir en grupos</a>}
+              {(p.est || "Disponible") === "Disponible" && <button onClick={() => compartirGrupo(p, miTel(), flash)} className="px-3 py-1.5 rounded-lg text-sm font-semibold text-white" style={{ background: "#25D366" }}>📢 Compartir en grupos</button>}
             </div>
             {retirando === p.id && <div className="rounded-xl p-3 space-y-2" style={{ background: C.redSoft }}>
               <div className="text-sm font-semibold" style={{ color: C.red }}>Marcar como caída</div>
@@ -1685,6 +1701,14 @@ const descargarCsv = (nombre, filas) => { const csv = filas.map((r) => r.map((x)
 // ── WhatsApp ──
 const waNum = (t) => { let d = String(t || "").replace(/\D/g, ""); if (d.length === 8) d = "591" + d; return d; };
 const waLink = (tel, txt) => `https://wa.me/${waNum(tel)}?text=${encodeURIComponent(txt || "")}`;
+// ── Ubicación exacta de una exclusiva: por GPS ({lat,lng}) o escrita a mano
+//    ({texto}: dirección, referencia o un enlace de Google Maps ya pegado) ──
+const linkUbic = (u) => !u ? "" : (u.lat != null && u.lng != null) ? `https://www.google.com/maps?q=${u.lat},${u.lng}` : u.texto ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(u.texto)}` : "";
+const parseUbicTexto = (t) => {
+  t = String(t || "").trim();
+  const m = t.match(/(-?\d{1,3}\.\d+)[,\s]+(-?\d{1,3}\.\d+)/); // saca lat,lng si pegaron coordenadas o un enlace de Maps
+  return m ? { lat: +m[1], lng: +m[2] } : { texto: t };
+};
 const MOMENTOS_WA = [[0, "Al agendar"], [1440, "1 día antes"], [120, "2 horas antes"], [30, "30 min antes"]];
 const plantillaWa = (k, d) => k === "cli"
   ? `Hola ${d.cl} 👋, te confirmo la visita a *${d.pt}*${d.zona ? ` (${d.zona})` : ""} el ${d.fecha} a las ${d.h}. ${d.ag === d.yo ? "Te atenderé personalmente." : `Te atenderá ${d.ag}.`} ¿Me confirmas tu asistencia? — ${d.yo}, Vortex`
@@ -1720,7 +1744,7 @@ const textoCopy = (p, tel) => {
   const gar = `🚗 Garaje: ${p.garaje ? `Sí${p.gTipo ? ` (${p.gTipo.toLowerCase()})` : ""}` : "No"}${p.gAparte ? ` · garaje aparte en el edificio${p.gPrecio ? `: ${p.mon === "USD" ? "USD" : "Bs"} ${p.gPrecio}/mes` : ""}` : ""}`;
   const masc = `🐾 Mascotas: ${p.mascotas === "Condicionado" ? "Sí, con condiciones" : p.mascotas}${p.mascCond ? ` (${p.mascCond})` : ""}`;
   const dormTxt = p.dorm ? `🛏 ${p.dorm} dormitorio${p.dorm > 1 ? "s" : ""}` : "", banTxt = p.ban ? `🚿 ${p.ban} baño${p.ban > 1 ? "s" : ""}` : "", m2Txt = p.m2 ? `📐 ${p.m2} m²` : "";
-  const ubic = p.exclusiva && p.ubic ? `📍 Ubicación exacta: https://www.google.com/maps?q=${p.ubic.lat},${p.ubic.lng}` : "";
+  const ubic = p.exclusiva && p.ubic ? `📍 Ubicación exacta: ${linkUbic(p.ubic)}` : "";
   if (desc.length >= 40) {
     const d = leerCopy(desc, ZONAS); // lo que el copy ya dice
     const extra = [
@@ -1804,6 +1828,21 @@ async function compartirFotos(urls, base, texto) {
     if (navigator.canShare && navigator.canShare({ files })) { await navigator.share({ files, text: texto }); return true; }
   } catch (e) { if (e && e.name === "AbortError") return true; }
   return false;
+}
+// ── Compartir en grupos: intenta adjuntar solo la foto de portada (fotos[0])
+//    junto con el copy completo; si el celular no admite adjuntar fotos así,
+//    abre WhatsApp con el texto (que ya trae el enlace con la vista previa) ──
+async function compartirGrupo(p, tel, flash) {
+  const texto = textoGrupo(p, tel);
+  if (p.fotos && p.fotos.length && typeof navigator !== "undefined" && navigator.share) {
+    try {
+      const b = await bajarBlob(p.fotos[0]);
+      const file = new File([b], `${nombreArchivo(p.t)}.jpg`, { type: b.type || "image/jpeg" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], text: texto }); return; }
+    } catch (e) { if (e && e.name === "AbortError") return; }
+  }
+  window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, "_blank");
+  flash && flash("Se abrió WhatsApp con el copy. La foto de portada se ve en la vista previa del enlace.");
 }
 function Galeria({ fotos, titulo, texto, soloVer = false }) {
   const [i, setI] = useState(0);
@@ -2298,7 +2337,7 @@ function DetalleCliente({ p, onBack, isFav, toggleFav, rate, users, onProfile, o
       </div>
       <div className="rounded-xl p-3 text-sm space-y-1" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.ink }}>
         <div>📍 {p.zona}, {p.ciudad}</div>
-        {p.exclusiva && p.ubic && <div><a href={`https://www.google.com/maps?q=${p.ubic.lat},${p.ubic.lng}`} target="_blank" rel="noreferrer" className="underline" style={{ color: C.lilaDk }}>📍 Ver ubicación exacta en el mapa</a></div>}
+        {p.exclusiva && p.ubic && <div><a href={linkUbic(p.ubic)} target="_blank" rel="noreferrer" className="underline" style={{ color: C.lilaDk }}>📍 Ver ubicación exacta en el mapa</a></div>}
         <div>🚗 Garaje: {p.garaje ? `Sí${p.gTipo ? ` (${p.gTipo.toLowerCase()})` : ""}` : "No"}{p.gAparte ? ` · se alquila aparte en el edificio${p.gPrecio ? `: ${p.mon === "USD" ? "USD" : "Bs"} ${p.gPrecio}/mes` : ""}` : ""}</div>
         <div>🐾 Mascotas: {p.mascotas}{p.mascCond ? `: ${p.mascCond}` : ""}</div>
         <div>🛋 {p.amoblado}</div>
