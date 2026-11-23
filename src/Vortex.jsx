@@ -1863,7 +1863,7 @@ function MapaCaptaciones({ props, onOpen }) {
     puntos.forEach((p) => {
       const icono = L.divIcon({
         className: "",
-        html: `<div style="background:${C.lila};color:#fff;font-weight:700;font-size:11px;padding:3px 8px;border-radius:999px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35);white-space:nowrap;transform:translate(-50%,-100%);cursor:pointer">${money(p)}</div>`,
+        html: `<div style="background:#fff;color:${C.ink};font-weight:700;font-size:11px;padding:3px 8px;border-radius:8px;border:2px solid ${C.lila};box-shadow:0 2px 6px rgba(0,0,0,.3);white-space:nowrap;transform:translate(-50%,-100%);cursor:pointer">${money(p)}</div>`,
         iconSize: [0, 0], iconAnchor: [0, 0],
       });
       L.marker([p.ubic.lat, p.ubic.lng], { icon: icono }).addTo(capaRef.current).on("click", () => onOpen(p));
@@ -1874,7 +1874,7 @@ function MapaCaptaciones({ props, onOpen }) {
   if (!listo) return <div className="rounded-xl p-6 text-center text-sm" style={{ background: C.lilaSoft, color: C.lilaDk }}>Cargando mapa…</div>;
   return (
     <div>
-      <div ref={divRef} style={{ height: 420, borderRadius: 16, overflow: "hidden", border: `1px solid ${C.line}` }} />
+      <div ref={divRef} style={{ height: 280, borderRadius: 16, overflow: "hidden", border: `1px solid ${C.line}` }} />
       {!puntos.length && <div className="text-center py-4 text-xs" style={{ color: C.mute }}>Ninguna de estas propiedades tiene ubicación exacta guardada todavía.</div>}
     </div>
   );
