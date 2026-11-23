@@ -338,9 +338,10 @@ function Clientes({ acceso, open, props, clientes, setClientes, favs, toggleFav,
   );
   const r = clientes.find((c) => c.id === sel) || clientes[0];
   const upd = (id, patch) => setClientes(clientes.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  // El cupo de coincidencias es POR requerimiento (cada requerimiento tiene su propio cupo).
   const matchAll = r ? props.filter((p) => ["Disponible", "Reservado"].includes(p.est || "Disponible")).map((p) => ({ p, m: match(r, p) })).filter((x) => x.m).sort((a, b) => b.m.pct - a.m.pct) : [];
-  const matchLim = perm.matchLim ?? 1;
-  const res = matchAll.slice(0, matchLim);
+  const matchLim = perm.matchLim ?? 0;
+  const res = matchAll.slice(0, matchLim === Infinity ? matchAll.length : matchLim);
   const matchExtra = Math.max(0, matchAll.length - res.length);
   const guardadas = r ? favs.filter((x) => x.cid === r.id).map((x) => props.find((p) => p.id === x.pid)).filter(Boolean) : [];
   const SECC_R = [
@@ -406,7 +407,7 @@ function Clientes({ acceso, open, props, clientes, setClientes, favs, toggleFav,
               <span className="font-bold text-sm">🎯 ¡Tenemos coincidencias para {r.n.split(" ")[0]}!</span>
               <span className="font-bold text-lg" style={serif}>{matchAll[0].m.pct}%</span>
             </div>
-            <div className="text-xs opacity-90">{matchAll.length === 1 ? "1 propiedad de la red calza con lo que busca." : `${matchAll.length} propiedades de la red calzan con lo que busca.`} Toca para verlas →</div>
+            <div className="text-xs opacity-90">{matchAll.length === 1 ? "1 propiedad de la red calza con lo que busca." : `${matchAll.length} propiedades de la red calzan con lo que busca.`} {matchLim === 0 ? "Sube de plan para verlas →" : "Toca para verlas →"}</div>
           </button>
         )}
         {subReq === "detalle" && <>
@@ -427,7 +428,8 @@ function Clientes({ acceso, open, props, clientes, setClientes, favs, toggleFav,
         )}
         {subReq === "coincidencias" && (
           !matchAll.length ? <div className="text-center py-8 text-sm" style={{ color: C.mute }}>Todavía no hay propiedades compatibles con este requerimiento. Apenas se publique una que calce, va a aparecer aquí.</div> : <>
-            <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>🎯 Estas son las captaciones de toda la red que más se parecen a lo que busca <b>{r.n.split(" ")[0]}</b>. El porcentaje dice cuánto calzan; los ✅ son lo que sí cumple y los ⚠️ lo que no calza del todo.</div>
+            <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>🎯 Estas son las captaciones de toda la red que más se parecen a lo que busca <b>{r.n.split(" ")[0]}</b>. El porcentaje dice cuánto calzan; los ✅ son lo que sí cumple y los ⚠️ lo que no calza del todo.{matchLim !== Infinity && <> Tu plan te deja ver hasta <b>{matchLim}</b> coincidencia{matchLim === 1 ? "" : "s"} por requerimiento.</>}</div>
+            {!res.length && <div className="text-center py-6 text-sm" style={{ color: C.mute }}>Tu plan actual no incluye ver coincidencias todavía.</div>}
             {res.map(({ p, m }) => (
               <button key={p.id} onClick={() => open(p)} className="w-full text-left rounded-2xl p-3 space-y-2" style={{ background: C.card, border: `1px solid ${C.line}` }}>
                 <div className="flex items-center justify-between"><span className="font-semibold text-sm" style={{ color: C.ink }}>{p.t}</span><span className="font-bold" style={{ ...serif, color: m.pct >= 95 ? C.ok : C.amber, fontSize: 20 }}>{m.pct}%</span></div>
@@ -439,8 +441,8 @@ function Clientes({ acceso, open, props, clientes, setClientes, favs, toggleFav,
             ))}
             {matchExtra > 0 && (
               <div className="rounded-2xl p-3.5 text-center space-y-1.5" style={{ background: C.grad, color: "#fff" }}>
-                <div className="font-bold text-sm">🔒 Hay {matchExtra} coincidencia{matchExtra > 1 ? "s" : ""} más esperando</div>
-                <div className="text-xs opacity-90">Tu plan muestra hasta {matchLim === Infinity ? "todas" : matchLim} por requerimiento. Sube de plan para verlas todas.</div>
+                <div className="font-bold text-sm">🔒 Hay {matchExtra} coincidencia{matchExtra > 1 ? "s" : ""} más de este requerimiento que tu plan no te deja ver</div>
+                <div className="text-xs opacity-90">{matchLim === 0 ? "Tu plan Gratuito no incluye ver coincidencias." : `Tu plan muestra hasta ${matchLim} coincidencia${matchLim === 1 ? "" : "s"} por requerimiento.`} Sube de plan para ver más.</div>
                 <button onClick={goSub} className="px-4 py-1.5 rounded-xl text-xs font-semibold" style={{ background: "#fff", color: C.lilaDk }}>Ver planes</button>
               </div>
             )}
@@ -1755,11 +1757,13 @@ const proximoCorte = (dia) => { let d = new Date(HOY.getFullYear(), HOY.getMonth
 const prorrateo = (precio, dia) => { const fin = proximoCorte(dia); const ini = new Date(fin.getFullYear(), fin.getMonth() - 1, dia); const ciclo = Math.round((fin - ini) / 864e5), resta = Math.round((fin - HOY) / 864e5); return { fin, resta, ciclo, monto: Math.round((precio * resta) / ciclo) }; };
 const PRECIOS = { Inicial: 49, Profesional: 99, Premium: 169 };
 const ORD = { gratuito: 0, Inicial: 1, Profesional: 2, Premium: 3, prueba: 3, admin: 3 };
-// Cuántas coincidencias (match) puede VER cada plan por requerimiento. El plan
-// Gratuito ya ve 1 (para que note lo útil que es la función y se anime a subir
-// de plan); de ahí para arriba el límite sube hasta ser ilimitado en Premium.
-const MATCH_LIM = { gratuito: 1, Inicial: 5, Profesional: 15, Premium: Infinity, prueba: Infinity, admin: Infinity };
-const permisos = (n) => { const r = ORD[n] ?? 0; return { nivel: n, ficha: r >= 1, maxCapt: { Inicial: 5, Profesional: 20, Premium: 40 }[n] || null, maxFotos: { Inicial: 3, Profesional: 5 }[n] || (r >= 3 ? 8 : 3), req: true, fav: r >= 2, vis: r >= 1, share: r >= 2, report: r >= 1, cierre: r >= 1, filtros: r >= 1, match: r >= 2, matchAv: r >= 2, matchLim: MATCH_LIM[n] ?? 1, inversa: r >= 2, cliente: r >= 2, busq: r >= 2, vigDet: r >= 2, hist: r >= 2, seg: r >= 2, recordatorios: r >= 2, stats: r >= 3, informes: r >= 3, auto: r >= 3, soporte: r >= 3, video: r >= 3 }; };
+// Cuántas coincidencias (match) puede VER cada plan EN TOTAL por mes, sumando
+// cada requerimiento por separado (si un agente tiene 3 requerimientos, cada
+// uno puede mostrar hasta ese número de coincidencias). El plan Gratuito puede
+// registrar requerimientos pero no ve ninguna coincidencia (es el gancho para
+// subir de plan); de ahí para arriba sube hasta ser ilimitado en Premium.
+const MATCH_LIM = { gratuito: 0, Inicial: 1, Profesional: 3, Premium: Infinity, prueba: Infinity, admin: Infinity };
+const permisos = (n) => { const r = ORD[n] ?? 0; return { nivel: n, ficha: r >= 1, maxCapt: { Inicial: 5, Profesional: 20, Premium: 40 }[n] || null, maxFotos: { Inicial: 3, Profesional: 5 }[n] || (r >= 3 ? 8 : 3), req: true, fav: r >= 2, vis: r >= 1, share: r >= 2, report: r >= 1, cierre: r >= 1, filtros: r >= 1, match: r >= 2, matchAv: r >= 2, matchLim: MATCH_LIM[n] ?? 0, inversa: r >= 2, cliente: r >= 2, busq: r >= 2, vigDet: r >= 2, hist: r >= 2, seg: r >= 2, recordatorios: r >= 2, stats: r >= 3, informes: r >= 3, auto: r >= 3, soporte: r >= 3, video: r >= 3 }; };
 // Meses que se guardan las captaciones cerradas (fotos y datos). Después se eliminan y queda solo el registro del cierre.
 const RETENCION = { Inicial: 3, Profesional: 7, Premium: 12 };
 const retencion = (nivel) => RETENCION[nivel] || (nivel === "admin" ? 12 : 3);
@@ -1769,15 +1773,15 @@ const RESUMEN = {
   admin: "Panel de administración: aprobar pagos, configurar cobros y planes, crear y gestionar usuarios, revisar reportes, sugerencias y auditoría.",
   cliente: "Vista del público registrado como cliente (no es agente): buscador con ficha completa de las propiedades, solo el botón de contactar al captador por WhatsApp, favoritos («Guardados») con aviso si cambian, búsquedas guardadas, comparador y calificar al captador tras un cierre. No tiene captaciones, requerimientos, visitas ni herramientas de agente.",
   prueba: "48 horas con acceso completo (igual que Premium). Al terminar, la cuenta pasa automáticamente a Gratuito hasta que pague un plan. Tus captaciones, requerimientos y demás datos NO se borran: solo se limitan algunas herramientas hasta que elijas un plan.",
-  gratuito: "Puede buscar y ver datos básicos de las propiedades, y registrar requerimientos de clientes con 1 coincidencia automática por requerimiento (🎯 te mostramos qué tan compatible es, para que veas lo útil que es la función). Bloqueado: ficha completa, contacto con captadores, visitas, captaciones, favoritos y el resto de las herramientas de los planes pagos.",
-  Inicial: "Hasta 5 captaciones · 3 fotos por captación · cerradas guardadas 3 meses · ficha completa y WhatsApp con captadores · requerimientos de clientes con hasta 5 coincidencias por requerimiento · agenda de visitas · reportes. Sin favoritos ni estadísticas.",
-  Profesional: "Hasta 20 captaciones · 5 fotos por captación · cerradas guardadas 7 meses · todo lo de Inicial · hasta 15 coincidencias por requerimiento, ponderadas con explicación y coincidencia inversa · favoritos · compartir por WhatsApp · búsquedas guardadas · seguimiento · recordatorios. Sin estadísticas, informes ni automatizaciones.",
-  Premium: `Hasta 40 captaciones · 8 fotos por captación · 1 video corto (máx. ${VIDEO_MAX_SEG} s) por captación · cerradas guardadas 12 meses · coincidencias ILIMITADAS por requerimiento · confirmaciones de visita programadas por WhatsApp · todo lo de Profesional · estadísticas · informes con exportación CSV · automatizaciones · soporte prioritario.`,
+  gratuito: "Puede buscar y ver datos básicos de las propiedades, y registrar requerimientos de clientes, pero no ve coincidencias (sube de plan para verlas). Bloqueado: ficha completa, contacto con captadores, visitas, captaciones, favoritos y el resto de las herramientas de los planes pagos.",
+  Inicial: "Hasta 5 captaciones · 3 fotos por captación · cerradas guardadas 3 meses · ficha completa y WhatsApp con captadores · requerimientos de clientes con 1 coincidencia por requerimiento · agenda de visitas · reportes. Sin favoritos ni estadísticas.",
+  Profesional: "Hasta 20 captaciones · 5 fotos por captación · cerradas guardadas 7 meses · todo lo de Inicial · hasta 3 coincidencias por requerimiento, ponderadas con explicación y coincidencia inversa · favoritos · compartir por WhatsApp · búsquedas guardadas · seguimiento · recordatorios. Sin estadísticas, informes ni automatizaciones.",
+  Premium: `Hasta 40 captaciones · 8 fotos por captación · 1 video corto (máx. ${VIDEO_MAX_SEG} s) por captación · cerradas guardadas 12 meses · TODAS las coincidencias de cada requerimiento · confirmaciones de visita programadas por WhatsApp · todo lo de Profesional · estadísticas · informes con exportación CSV · automatizaciones · soporte prioritario.`,
 };
 const PLAN_BEN = {
-  Inicial: ["Hasta 5 captaciones activas", "Hasta 3 fotos por captación", "Captaciones cerradas guardadas 3 meses", "Ficha completa y contacto por WhatsApp con captadores", "Registro de requerimientos de clientes", "🎯 Hasta 5 coincidencias por requerimiento", "Agenda de visitas", "Reportes y consultas"],
-  Profesional: ["Hasta 20 captaciones activas", "Hasta 5 fotos por captación", "Captaciones cerradas guardadas 7 meses", "Todo lo de Inicial", "🎯 Hasta 15 coincidencias por requerimiento, ponderadas con explicación, más coincidencia inversa", "Favoritos y guardar para clientes", "Compartir propiedades por WhatsApp", "Búsquedas guardadas", "Seguimiento de oportunidades", "Recordatorios de agenda", "Historial de cierres y vigencia detallada"],
-  Premium: ["Hasta 40 captaciones activas", "Hasta 8 fotos por captación", "Captaciones cerradas guardadas 12 meses", "🎯 Coincidencias ILIMITADAS por requerimiento", "Confirmaciones de visita programadas por WhatsApp", "Todo lo de Profesional", "Estadísticas de captaciones y cierres", "Informes avanzados con exportación CSV", "Automatizaciones configurables", "Soporte prioritario"],
+  Inicial: ["Hasta 5 captaciones activas", "Hasta 3 fotos por captación", "Captaciones cerradas guardadas 3 meses", "Ficha completa y contacto por WhatsApp con captadores", "Registro de requerimientos de clientes", "🎯 1 coincidencia por requerimiento", "Agenda de visitas", "Reportes y consultas"],
+  Profesional: ["Hasta 20 captaciones activas", "Hasta 5 fotos por captación", "Captaciones cerradas guardadas 7 meses", "Todo lo de Inicial", "🎯 Hasta 3 coincidencias por requerimiento, ponderadas con explicación, más coincidencia inversa", "Favoritos y guardar para clientes", "Compartir propiedades por WhatsApp", "Búsquedas guardadas", "Seguimiento de oportunidades", "Recordatorios de agenda", "Historial de cierres y vigencia detallada"],
+  Premium: ["Hasta 40 captaciones activas", "Hasta 8 fotos por captación", "Captaciones cerradas guardadas 12 meses", "🎯 TODAS las coincidencias de cada requerimiento", "Confirmaciones de visita programadas por WhatsApp", "Todo lo de Profesional", "Estadísticas de captaciones y cierres", "Informes avanzados con exportación CSV", "Automatizaciones configurables", "Soporte prioritario"],
 };
 // Pago por varios meses: 6 meses pagas 5 (1 gratis) · 12 meses pagas 10 (2 gratis)
 const PERIODOS = [[1, "1 mes", 1], [6, "6 meses", 5], [12, "12 meses", 10]];
