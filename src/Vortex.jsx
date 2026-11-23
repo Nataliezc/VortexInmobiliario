@@ -246,6 +246,7 @@ function Buscar({ acceso, open, props, rate, favs, perm, goSub, busq, setBusq, m
   const [fv, setFv] = useState(false);
   const [dorm, setDorm] = useState("Todos");
   const [masc, setMasc] = useState(false);
+  const [verMapa, setVerMapa] = useState(false);
   const list = useMemo(() => props.filter((p) => (p.est || "Disponible") === "Disponible" && (dorm === "Todos" || (dorm === "4+" ? p.dorm >= 4 : p.dorm === Number(dorm))) && (!masc || p.mascotas !== "No") && (!fv || favs.some((f) => f.pid === p.id)) && (op === "Todas" || p.op === op) && (ciu === "Todas" || p.ciudad === ciu) && (!gar || p.garaje) && (!max || enMoneda(p) <= Number(max))).sort((a, b) => RK[a.est || "Disponible"] - RK[b.est || "Disponible"] || vigencia(a).n - vigencia(b).n || a.dias - b.dias), [op, ciu, max, gar, fv, dorm, masc, favs, props]);
   return (
     <div className="p-4 space-y-3">
@@ -262,9 +263,16 @@ function Buscar({ acceso, open, props, rate, favs, perm, goSub, busq, setBusq, m
       {!perm.ficha && <div className="rounded-xl p-2.5 text-xs flex items-center justify-between gap-2" style={{ background: C.lilaSoft, color: C.lilaDk }}><span>{ES_VISITANTE ? "Estás como visitante. Regístrate gratis y prueba 48 h con acceso completo: fichas, contacto con captadores y más." : "Plan Gratuito: ves las propiedades completas. Elige un plan para contactar a los captadores y usar todas las herramientas."}</span><button onClick={goSub} className="underline font-semibold shrink-0">Ver planes</button></div>}
       {perm.busq && <div className="flex gap-2 overflow-x-auto items-center"><button onClick={() => setBusq([...busq, { id: Date.now(), n: [op, ciu, dorm !== "Todos" ? dorm + " dorm" : "", max ? "≤" + max : "", gar ? "garaje" : "", masc ? "mascotas" : ""].filter((x) => x && x !== "Todas").join(" · ") || "Todas", op, ciu, max, gar, dorm, masc }])} className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px dashed ${C.lila}`, color: C.lilaDk }}>💾 Guardar búsqueda</button>{busq.map((b) => <span key={b.id} className="flex items-center rounded-full text-xs whitespace-nowrap" style={{ background: C.lilaSoft, color: C.lilaDk }}><button onClick={() => { setOp(b.op); setCiu(b.ciu); setMax(b.max); setGar(b.gar); setDorm(b.dorm); setMasc(b.masc); }} className="pl-3 pr-1 py-1.5">{b.n}</button><button onClick={() => setBusq(busq.filter((x) => x.id !== b.id))} className="pr-2">✕</button></span>)}</div>}
       <div className="flex gap-2 overflow-x-auto items-center" style={{ opacity: perm.filtros ? 1 : 0.4, pointerEvents: perm.filtros ? "auto" : "none" }}><span className="text-xs" style={{ color: C.mute }}>Dormitorios</span>{["Todos", "1", "2", "3", "4+"].map((x) => <Chip key={x} on={dorm === x} onClick={() => setDorm(x)}>{x}</Chip>)}<Chip on={masc} onClick={() => setMasc(!masc)}>🐾 Mascotas</Chip></div>
-      <div className="text-xs" style={{ color: C.mute }}>{list.length} propiedades · primero las disponibles y confirmadas</div>
-      <div className="vx-grid-pc">{list.map((p) => <Card key={p.id} p={p} onOpen={open} locked={acceso === "vencido"} rate={rate} perm={perm} />)}</div>
-      {!list.length && <div className="text-center py-10 text-sm" style={{ color: C.mute }}>Sin resultados. Prueba quitando algún filtro o crea un requerimiento en la pestaña "Requerimientos".</div>}
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-xs" style={{ color: C.mute }}>{list.length} propiedades · primero las disponibles y confirmadas</div>
+        <button onClick={() => setVerMapa(!verMapa)} className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap shrink-0" style={{ background: verMapa ? C.lila : C.lilaSoft, color: verMapa ? "#fff" : C.lilaDk }}>{verMapa ? "📋 Ver lista" : "🗺️ Ver en el mapa"}</button>
+      </div>
+      {verMapa
+        ? <MapaCaptaciones props={list} onOpen={open} />
+        : <>
+            <div className="vx-grid-pc">{list.map((p) => <Card key={p.id} p={p} onOpen={open} locked={acceso === "vencido"} rate={rate} perm={perm} />)}</div>
+            {!list.length && <div className="text-center py-10 text-sm" style={{ color: C.mute }}>Sin resultados. Prueba quitando algún filtro o crea un requerimiento en la pestaña "Requerimientos".</div>}
+          </>}
     </div>
   );
 }
@@ -1813,6 +1821,64 @@ const parseUbicTexto = (t) => {
   const m = t.match(/(-?\d{1,3}\.\d+)[,\s]+(-?\d{1,3}\.\d+)/); // saca lat,lng si pegaron coordenadas o un enlace de Maps
   return m ? { lat: +m[1], lng: +m[2] } : { texto: t };
 };
+// ── Mapa de captaciones con ubicación exacta (lat/lng): un marcador por
+//    propiedad con el precio como etiqueta; clic en el marcador abre su ficha.
+//    Usa Leaflet + OpenStreetMap (cargado desde index.html, sin necesitar clave).
+function esperarLeaflet(ms = 6000) {
+  return new Promise((ok) => {
+    const fin = Date.now() + ms;
+    const chk = () => { if (window.L) ok(window.L); else if (Date.now() > fin) ok(null); else setTimeout(chk, 120); };
+    chk();
+  });
+}
+function MapaCaptaciones({ props, onOpen }) {
+  const divRef = useRef(null);
+  const mapRef = useRef(null);
+  const capaRef = useRef(null);
+  const [listo, setListo] = useState(!!window.L);
+  const puntos = useMemo(() => (props || []).filter((p) => p.ubic && p.ubic.lat != null && p.ubic.lng != null), [props]);
+
+  useEffect(() => {
+    let activo = true;
+    if (!window.L) esperarLeaflet().then((L) => { if (activo && L) setListo(true); });
+    return () => { activo = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!listo || !divRef.current || mapRef.current) return;
+    const L = window.L;
+    const mapa = L.map(divRef.current, { zoomControl: true }).setView([-17.78, -63.18], 12); // Santa Cruz por defecto, se ajusta abajo
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(mapa);
+    capaRef.current = L.layerGroup().addTo(mapa);
+    mapRef.current = mapa;
+    setTimeout(() => mapa.invalidateSize(), 150);
+    return () => { mapa.remove(); mapRef.current = null; capaRef.current = null; };
+  }, [listo]);
+
+  useEffect(() => {
+    if (!mapRef.current || !capaRef.current) return;
+    const L = window.L;
+    capaRef.current.clearLayers();
+    if (!puntos.length) return;
+    puntos.forEach((p) => {
+      const icono = L.divIcon({
+        className: "",
+        html: `<div style="background:${C.lila};color:#fff;font-weight:700;font-size:11px;padding:3px 8px;border-radius:999px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35);white-space:nowrap;transform:translate(-50%,-100%);cursor:pointer">${money(p)}</div>`,
+        iconSize: [0, 0], iconAnchor: [0, 0],
+      });
+      L.marker([p.ubic.lat, p.ubic.lng], { icon: icono }).addTo(capaRef.current).on("click", () => onOpen(p));
+    });
+    try { mapRef.current.fitBounds(L.featureGroup(capaRef.current.getLayers()).getBounds().pad(0.25), { maxZoom: 15 }); } catch {}
+  }, [puntos]);
+
+  if (!listo) return <div className="rounded-xl p-6 text-center text-sm" style={{ background: C.lilaSoft, color: C.lilaDk }}>Cargando mapa…</div>;
+  return (
+    <div>
+      <div ref={divRef} style={{ height: 420, borderRadius: 16, overflow: "hidden", border: `1px solid ${C.line}` }} />
+      {!puntos.length && <div className="text-center py-4 text-xs" style={{ color: C.mute }}>Ninguna de estas propiedades tiene ubicación exacta guardada todavía.</div>}
+    </div>
+  );
+}
 const MOMENTOS_WA = [[0, "Al agendar"], [1440, "1 día antes"], [120, "2 horas antes"], [30, "30 min antes"]];
 const plantillaWa = (k, d) => k === "cli"
   ? `Hola ${d.cl} 👋, te confirmo la visita a *${d.pt}*${d.zona ? ` (${d.zona})` : ""} el ${d.fecha} a las ${d.h}. ${d.ag === d.yo ? "Te atenderé personalmente." : `Te atenderá ${d.ag}.`} ¿Me confirmas tu asistencia? — ${d.yo}, Vortex`
@@ -2500,6 +2566,7 @@ function BuscarCliente({ props, favs, rate, open, moneda, setMoneda, busq, setBu
   const [ciu, setCiu] = useState("Todas");
   const [dorm, setDorm] = useState("Todos");
   const [fv, setFv] = useState(false);
+  const [verMapa, setVerMapa] = useState(false);
   const list = useMemo(() => props.filter((p) => (p.est || "Disponible") === "Disponible" && (dorm === "Todos" || (dorm === "4+" ? p.dorm >= 4 : p.dorm === Number(dorm))) && (!fv || favs.some((f) => f.pid === p.id && f.cid == null)) && (op === "Todas" || p.op === op) && (ciu === "Todas" || p.ciudad === ciu)).sort((a, b) => RK[a.est || "Disponible"] - RK[b.est || "Disponible"] || vigencia(a).n - vigencia(b).n || a.dias - b.dias), [op, ciu, dorm, fv, favs, props]);
   return (
     <div className="p-4 space-y-3">
@@ -2516,14 +2583,21 @@ function BuscarCliente({ props, favs, rate, open, moneda, setMoneda, busq, setBu
         <button onClick={() => setBusq([...busq, { id: Date.now(), n: [op, ciu, dorm !== "Todos" ? dorm + " dorm" : ""].filter((x) => x && x !== "Todas").join(" · ") || "Todas", op, ciu, dorm }])} className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px dashed ${C.lila}`, color: C.lilaDk }}>🔔 Avisarme de esta búsqueda</button>
         {busq.map((b) => <span key={b.id} className="flex items-center rounded-full text-xs whitespace-nowrap" style={{ background: C.lilaSoft, color: C.lilaDk }}><button onClick={() => { setOp(b.op); setCiu(b.ciu); setDorm(b.dorm); }} className="pl-3 pr-1 py-1.5">{b.n}</button><button onClick={() => setBusq(busq.filter((x) => x.id !== b.id))} className="pr-2">✕</button></span>)}
       </div>
-      <div className="text-xs" style={{ color: C.mute }}>{list.length} propiedades disponibles · primero las confirmadas</div>
-      <div className="vx-grid-pc">{list.map((p) => (
-        <div key={p.id} className="flex items-start gap-2">
-          <button onClick={() => toggleComparar(p.id)} title="Agregar a comparar" className="mt-3 shrink-0 w-6 h-6 rounded-md text-xs flex items-center justify-center" style={{ background: comparar.includes(p.id) ? C.lila : C.card, color: comparar.includes(p.id) ? "#fff" : C.mute, border: `1px solid ${comparar.includes(p.id) ? C.lila : C.line}` }}>{comparar.includes(p.id) ? "✓" : "+"}</button>
-          <div className="flex-1"><Card p={p} onOpen={open} locked={false} rate={rate} perm={{ vigDet: true }} /></div>
-        </div>
-      ))}</div>
-      {!list.length && <div className="text-center py-10 text-sm" style={{ color: C.mute }}>Sin resultados. Prueba quitando algún filtro.</div>}
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-xs" style={{ color: C.mute }}>{list.length} propiedades disponibles · primero las confirmadas</div>
+        <button onClick={() => setVerMapa(!verMapa)} className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap shrink-0" style={{ background: verMapa ? C.lila : C.lilaSoft, color: verMapa ? "#fff" : C.lilaDk }}>{verMapa ? "📋 Ver lista" : "🗺️ Ver en el mapa"}</button>
+      </div>
+      {verMapa
+        ? <MapaCaptaciones props={list} onOpen={open} />
+        : <>
+            <div className="vx-grid-pc">{list.map((p) => (
+              <div key={p.id} className="flex items-start gap-2">
+                <button onClick={() => toggleComparar(p.id)} title="Agregar a comparar" className="mt-3 shrink-0 w-6 h-6 rounded-md text-xs flex items-center justify-center" style={{ background: comparar.includes(p.id) ? C.lila : C.card, color: comparar.includes(p.id) ? "#fff" : C.mute, border: `1px solid ${comparar.includes(p.id) ? C.lila : C.line}` }}>{comparar.includes(p.id) ? "✓" : "+"}</button>
+                <div className="flex-1"><Card p={p} onOpen={open} locked={false} rate={rate} perm={{ vigDet: true }} /></div>
+              </div>
+            ))}</div>
+            {!list.length && <div className="text-center py-10 text-sm" style={{ color: C.mute }}>Sin resultados. Prueba quitando algún filtro.</div>}
+          </>}
     </div>
   );
 }
