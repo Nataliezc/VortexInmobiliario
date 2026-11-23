@@ -246,7 +246,7 @@ function Buscar({ acceso, open, props, rate, favs, perm, goSub, busq, setBusq, m
   const [fv, setFv] = useState(false);
   const [dorm, setDorm] = useState("Todos");
   const [masc, setMasc] = useState(false);
-  const [verMapa, setVerMapa] = useState(false);
+  const [verMapa, setVerMapa] = useState(true);
   const list = useMemo(() => props.filter((p) => (p.est || "Disponible") === "Disponible" && (dorm === "Todos" || (dorm === "4+" ? p.dorm >= 4 : p.dorm === Number(dorm))) && (!masc || p.mascotas !== "No") && (!fv || favs.some((f) => f.pid === p.id)) && (op === "Todas" || p.op === op) && (ciu === "Todas" || p.ciudad === ciu) && (!gar || p.garaje) && (!max || enMoneda(p) <= Number(max))).sort((a, b) => RK[a.est || "Disponible"] - RK[b.est || "Disponible"] || vigencia(a).n - vigencia(b).n || a.dias - b.dias), [op, ciu, max, gar, fv, dorm, masc, favs, props]);
   return (
     <div className="p-4 space-y-3">
@@ -1847,7 +1847,7 @@ function MapaCaptaciones({ props, onOpen }) {
   useEffect(() => {
     if (!listo || !divRef.current || mapRef.current) return;
     const L = window.L;
-    const mapa = L.map(divRef.current, { zoomControl: true }).setView([-17.78, -63.18], 12); // Santa Cruz por defecto, se ajusta abajo
+    const mapa = L.map(divRef.current, { zoomControl: true }).setView([-16.7, -64.6], 6); // Bolivia completa por defecto; se ajusta a los puntos abajo
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(mapa);
     capaRef.current = L.layerGroup().addTo(mapa);
     mapRef.current = mapa;
@@ -2566,7 +2566,7 @@ function BuscarCliente({ props, favs, rate, open, moneda, setMoneda, busq, setBu
   const [ciu, setCiu] = useState("Todas");
   const [dorm, setDorm] = useState("Todos");
   const [fv, setFv] = useState(false);
-  const [verMapa, setVerMapa] = useState(false);
+  const [verMapa, setVerMapa] = useState(true);
   const list = useMemo(() => props.filter((p) => (p.est || "Disponible") === "Disponible" && (dorm === "Todos" || (dorm === "4+" ? p.dorm >= 4 : p.dorm === Number(dorm))) && (!fv || favs.some((f) => f.pid === p.id && f.cid == null)) && (op === "Todas" || p.op === op) && (ciu === "Todas" || p.ciudad === ciu)).sort((a, b) => RK[a.est || "Disponible"] - RK[b.est || "Disponible"] || vigencia(a).n - vigencia(b).n || a.dias - b.dias), [op, ciu, dorm, fv, favs, props]);
   return (
     <div className="p-4 space-y-3">
