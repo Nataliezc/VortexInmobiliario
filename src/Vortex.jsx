@@ -1863,7 +1863,10 @@ function MapaCaptaciones({ props, onOpen }) {
     puntos.forEach((p) => {
       const icono = L.divIcon({
         className: "",
-        html: `<div style="background:#fff;color:${C.ink};font-weight:700;font-size:11px;padding:3px 8px;border-radius:8px;border:2px solid ${C.lila};box-shadow:0 2px 6px rgba(0,0,0,.3);white-space:nowrap;transform:translate(-50%,-100%);cursor:pointer">${money(p)}</div>`,
+        html: `<div style="position:relative;transform:translate(-50%,-100%);cursor:pointer;display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 3px 5px rgba(0,0,0,.35))">
+          <div style="background:${C.grad};color:#fff;font-weight:800;font-size:12px;padding:5px 10px;border-radius:10px;border:2px solid #fff;white-space:nowrap">${money(p)}</div>
+          <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:7px solid ${C.lilaDk};margin-top:-2px"></div>
+        </div>`,
         iconSize: [0, 0], iconAnchor: [0, 0],
       });
       L.marker([p.ubic.lat, p.ubic.lng], { icon: icono }).addTo(capaRef.current).on("click", () => onOpen(p));
