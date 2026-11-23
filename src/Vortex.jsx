@@ -263,7 +263,7 @@ function Buscar({ acceso, open, props, rate, favs, perm, goSub, busq, setBusq, m
       {perm.busq && <div className="flex gap-2 overflow-x-auto items-center"><button onClick={() => setBusq([...busq, { id: Date.now(), n: [op, ciu, dorm !== "Todos" ? dorm + " dorm" : "", max ? "≤" + max : "", gar ? "garaje" : "", masc ? "mascotas" : ""].filter((x) => x && x !== "Todas").join(" · ") || "Todas", op, ciu, max, gar, dorm, masc }])} className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap" style={{ border: `1px dashed ${C.lila}`, color: C.lilaDk }}>💾 Guardar búsqueda</button>{busq.map((b) => <span key={b.id} className="flex items-center rounded-full text-xs whitespace-nowrap" style={{ background: C.lilaSoft, color: C.lilaDk }}><button onClick={() => { setOp(b.op); setCiu(b.ciu); setMax(b.max); setGar(b.gar); setDorm(b.dorm); setMasc(b.masc); }} className="pl-3 pr-1 py-1.5">{b.n}</button><button onClick={() => setBusq(busq.filter((x) => x.id !== b.id))} className="pr-2">✕</button></span>)}</div>}
       <div className="flex gap-2 overflow-x-auto items-center" style={{ opacity: perm.filtros ? 1 : 0.4, pointerEvents: perm.filtros ? "auto" : "none" }}><span className="text-xs" style={{ color: C.mute }}>Dormitorios</span>{["Todos", "1", "2", "3", "4+"].map((x) => <Chip key={x} on={dorm === x} onClick={() => setDorm(x)}>{x}</Chip>)}<Chip on={masc} onClick={() => setMasc(!masc)}>🐾 Mascotas</Chip></div>
       <div className="text-xs" style={{ color: C.mute }}>{list.length} propiedades · primero las disponibles y confirmadas</div>
-      {list.map((p) => <Card key={p.id} p={p} onOpen={open} locked={acceso === "vencido"} rate={rate} perm={perm} />)}
+      <div className="vx-grid-pc">{list.map((p) => <Card key={p.id} p={p} onOpen={open} locked={acceso === "vencido"} rate={rate} perm={perm} />)}</div>
       {!list.length && <div className="text-center py-10 text-sm" style={{ color: C.mute }}>Sin resultados. Prueba quitando algún filtro o crea un requerimiento en la pestaña "Requerimientos".</div>}
     </div>
   );
@@ -2517,12 +2517,12 @@ function BuscarCliente({ props, favs, rate, open, moneda, setMoneda, busq, setBu
         {busq.map((b) => <span key={b.id} className="flex items-center rounded-full text-xs whitespace-nowrap" style={{ background: C.lilaSoft, color: C.lilaDk }}><button onClick={() => { setOp(b.op); setCiu(b.ciu); setDorm(b.dorm); }} className="pl-3 pr-1 py-1.5">{b.n}</button><button onClick={() => setBusq(busq.filter((x) => x.id !== b.id))} className="pr-2">✕</button></span>)}
       </div>
       <div className="text-xs" style={{ color: C.mute }}>{list.length} propiedades disponibles · primero las confirmadas</div>
-      {list.map((p) => (
+      <div className="vx-grid-pc">{list.map((p) => (
         <div key={p.id} className="flex items-start gap-2">
           <button onClick={() => toggleComparar(p.id)} title="Agregar a comparar" className="mt-3 shrink-0 w-6 h-6 rounded-md text-xs flex items-center justify-center" style={{ background: comparar.includes(p.id) ? C.lila : C.card, color: comparar.includes(p.id) ? "#fff" : C.mute, border: `1px solid ${comparar.includes(p.id) ? C.lila : C.line}` }}>{comparar.includes(p.id) ? "✓" : "+"}</button>
           <div className="flex-1"><Card p={p} onOpen={open} locked={false} rate={rate} perm={{ vigDet: true }} /></div>
         </div>
-      ))}
+      ))}</div>
       {!list.length && <div className="text-center py-10 text-sm" style={{ color: C.mute }}>Sin resultados. Prueba quitando algún filtro.</div>}
     </div>
   );

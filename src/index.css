@@ -12,6 +12,24 @@ body { background: #E3DEF3; -webkit-tap-highlight-color: transparent; }
   .vx-frame { max-width: none; border: 0; border-radius: 0; box-shadow: none; }
   .vx-simbar { padding-top: 8px; margin-bottom: 6px !important; }
 }
+/* En computadora se usa más del ancho de la pantalla, para poder trabajar
+   cómodo (listas en columnas, formularios más anchos) en vez de ver un
+   recuadro angosto de celular en medio de una pantalla grande. */
+@media (min-width: 901px) {
+  .vx-frame { max-width: 900px; }
+}
+@media (min-width: 1280px) {
+  .vx-frame { max-width: 1080px; }
+}
+/* Listas de propiedades: en celular, una columna; en computadora, varias
+   columnas en vez de una sola lista larga angosta. */
+.vx-grid-pc { display: flex; flex-direction: column; gap: 12px; }
+@media (min-width: 901px) {
+  .vx-grid-pc { display: grid; grid-template-columns: repeat(2, 1fr); align-items: start; }
+}
+@media (min-width: 1280px) {
+  .vx-grid-pc { grid-template-columns: repeat(3, 1fr); }
+}
 
 /* Menú lateral deslizable del panel de administración */
 @keyframes vxEntraIzq { from { transform: translateX(-100%); } to { transform: translateX(0); } }
