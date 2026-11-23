@@ -247,7 +247,10 @@ function Buscar({ acceso, open, props, rate, favs, perm, goSub, busq, setBusq, m
   const [dorm, setDorm] = useState("Todos");
   const [masc, setMasc] = useState(false);
   const [verMapa, setVerMapa] = useState(true);
+  const [verN, setVerN] = useState(30);
   const list = useMemo(() => props.filter((p) => (p.est || "Disponible") === "Disponible" && (dorm === "Todos" || (dorm === "4+" ? p.dorm >= 4 : p.dorm === Number(dorm))) && (!masc || p.mascotas !== "No") && (!fv || favs.some((f) => f.pid === p.id)) && (op === "Todas" || p.op === op) && (ciu === "Todas" || p.ciudad === ciu) && (!gar || p.garaje) && (!max || enMoneda(p) <= Number(max))).sort((a, b) => RK[a.est || "Disponible"] - RK[b.est || "Disponible"] || vigencia(a).n - vigencia(b).n || a.dias - b.dias), [op, ciu, max, gar, fv, dorm, masc, favs, props]);
+  useEffect(() => setVerN(30), [op, ciu, max, gar, fv, dorm, masc]);
+  const visibles = list.slice(0, verN);
   return (
     <div className="p-4 space-y-3">
       {setMoneda && <div className="flex items-center justify-end gap-1.5 text-xs" style={{ color: C.mute }}>Ver precios en <span className="inline-flex rounded-full p-0.5" style={{ background: C.lilaSoft }}>{[["BOB", "Bs"], ["USD", "$us"]].map(([k, l]) => <button key={k} onClick={() => setMoneda(k)} className="px-2.5 py-0.5 rounded-full font-semibold" style={{ background: moneda === k ? C.lila : "transparent", color: moneda === k ? "#fff" : C.lilaDk }}>{l}</button>)}</span></div>}
@@ -270,8 +273,9 @@ function Buscar({ acceso, open, props, rate, favs, perm, goSub, busq, setBusq, m
       {verMapa
         ? <MapaCaptaciones props={list} onOpen={open} />
         : <>
-            <div className="vx-grid-pc">{list.map((p) => <Card key={p.id} p={p} onOpen={open} locked={acceso === "vencido"} rate={rate} perm={perm} />)}</div>
+            <div className="vx-grid-pc">{visibles.map((p) => <Card key={p.id} p={p} onOpen={open} locked={acceso === "vencido"} rate={rate} perm={perm} />)}</div>
             {!list.length && <div className="text-center py-10 text-sm" style={{ color: C.mute }}>Sin resultados. Prueba quitando algún filtro o crea un requerimiento en la pestaña "Requerimientos".</div>}
+            {verN < list.length && <button onClick={() => setVerN(verN + 30)} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.lilaSoft, color: C.lilaDk }}>Cargar {Math.min(30, list.length - verN)} más ({list.length - verN} restantes)</button>}
           </>}
     </div>
   );
@@ -334,12 +338,14 @@ function Clientes({ acceso, open, props, clientes, setClientes, favs, toggleFav,
   );
   const r = clientes.find((c) => c.id === sel) || clientes[0];
   const upd = (id, patch) => setClientes(clientes.map((c) => (c.id === id ? { ...c, ...patch } : c)));
-  const res = r && perm.match ? props.filter((p) => ["Disponible", "Reservado"].includes(p.est || "Disponible")).map((p) => ({ p, m: match(r, p) })).filter((x) => x.m).sort((a, b) => b.m.pct - a.m.pct) : [];
+  const matchAll = r ? props.filter((p) => ["Disponible", "Reservado"].includes(p.est || "Disponible")).map((p) => ({ p, m: match(r, p) })).filter((x) => x.m).sort((a, b) => b.m.pct - a.m.pct) : [];
+  const matchLim = perm.matchLim ?? 1;
+  const res = matchAll.slice(0, matchLim);
+  const matchExtra = Math.max(0, matchAll.length - res.length);
   const guardadas = r ? favs.filter((x) => x.cid === r.id).map((x) => props.find((p) => p.id === x.pid)).filter(Boolean) : [];
   const SECC_R = [
-    ["General", [["red", "🌐", "De la red"]]],
     ...(clientes.length ? [["Mis requerimientos", clientes.map((c) => [`c-${c.id}`, "👤", c.n])]] : []),
-    ...(r ? [["Este requerimiento", [["detalle", "📋", "Detalle"], ["guardados", "♥", `Guardados (${guardadas.length})`], ["coincidencias", "🎯", `Coincidencias (${res.length})`]]]] : []),
+    ...(r ? [["Este requerimiento", [["detalle", "📋", "Detalle"], ["guardados", "♥", `Guardados (${guardadas.length})`], ["coincidencias", "🎯", `Coincidencias${matchAll.length ? ` (${res.length}${matchExtra ? `+${matchExtra}` : ""})` : ""}`]]]] : []),
   ];
   const tituloActual = vistaReq === "red" ? "🌐 De la red" : !r ? "Mis requerimientos" : { detalle: `👤 ${r.n}`, guardados: `♥ Guardados de ${r.n.split(" ")[0]}`, coincidencias: `🎯 Coincidencias de ${r.n.split(" ")[0]}` }[subReq];
   return (
@@ -348,6 +354,10 @@ function Clientes({ acceso, open, props, clientes, setClientes, favs, toggleFav,
         <button onClick={() => setMenuAb(true)} aria-label="Abrir menú" className="w-11 h-11 rounded-xl flex flex-col items-center justify-center gap-1 shrink-0" style={{ background: C.grad }}>{[0, 1, 2].map((i) => <i key={i} style={{ width: 18, height: 2, borderRadius: 2, background: "#fff" }} />)}</button>
         <div className="flex-1 min-w-0"><div className="text-xs" style={{ color: C.mute }}>Requerimientos</div><div className="font-bold text-lg truncate" style={{ color: C.ink }}>{tituloActual}</div></div>
         <button onClick={abrirNuevo} className="text-sm px-3 py-1.5 rounded-full text-white shrink-0" style={{ background: C.grad }}>+ Nuevo</button>
+      </div>
+      <div className="flex gap-2">
+        <button onClick={() => setVistaReq("mios")} className="flex-1 py-2 rounded-xl text-sm font-semibold" style={{ background: vistaReq === "mios" ? C.lila : C.lilaSoft, color: vistaReq === "mios" ? "#fff" : C.lilaDk }}>👤 Mis requerimientos</button>
+        <button onClick={() => setVistaReq("red")} className="flex-1 py-2 rounded-xl text-sm font-semibold" style={{ background: vistaReq === "red" ? C.lila : C.lilaSoft, color: vistaReq === "red" ? "#fff" : C.lilaDk }}>🌐 De la red</button>
       </div>
       {menuAb && <div className="absolute inset-0 z-40 flex" style={{ background: "rgba(30,27,58,.45)" }} onClick={() => setMenuAb(false)}>
         <div className="h-full overflow-y-auto vx-menu-izq" style={{ width: "80%", maxWidth: 300, background: C.card, boxShadow: "6px 0 24px rgba(0,0,0,.15)" }} onClick={(e) => e.stopPropagation()}>
@@ -390,6 +400,15 @@ function Clientes({ acceso, open, props, clientes, setClientes, favs, toggleFav,
           </div>
         </div>
         {r.obs && <div className="rounded-xl p-3 text-sm" style={{ background: C.amberSoft, color: C.ink }}><b>📝 Observaciones:</b> {r.obs}</div>}
+        {subReq !== "coincidencias" && matchAll.length > 0 && (
+          <button onClick={() => setSubReq("coincidencias")} className="w-full text-left rounded-2xl p-3.5 space-y-1" style={{ background: C.grad, color: "#fff" }}>
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-sm">🎯 ¡Tenemos coincidencias para {r.n.split(" ")[0]}!</span>
+              <span className="font-bold text-lg" style={serif}>{matchAll[0].m.pct}%</span>
+            </div>
+            <div className="text-xs opacity-90">{matchAll.length === 1 ? "1 propiedad de la red calza con lo que busca." : `${matchAll.length} propiedades de la red calzan con lo que busca.`} Toca para verlas →</div>
+          </button>
+        )}
         {subReq === "detalle" && <>
           {perm.seg && <div className="rounded-2xl p-3 space-y-2" style={{ background: C.card, border: `1px solid ${C.line}` }}>
             <div className="text-sm font-semibold" style={{ color: C.ink }}>Seguimiento de la oportunidad</div>
@@ -407,17 +426,25 @@ function Clientes({ acceso, open, props, clientes, setClientes, favs, toggleFav,
             : <div className="text-center py-8 text-sm" style={{ color: C.mute }}>Aún no guardaste propiedades para {r.n.split(" ")[0]}.</div>
         )}
         {subReq === "coincidencias" && (
-          !perm.match ? <Lock t="Coincidencias con propiedades" plan="Profesional" go={goSub} /> : !res.length ? <div className="text-center py-8 text-sm" style={{ color: C.mute }}>Todavía no hay propiedades compatibles con este requerimiento.</div> : res.map(({ p, m }) => !perm.matchAv ? (
-            <button key={p.id} onClick={() => open(p)} className="w-full text-left rounded-2xl p-3" style={{ background: C.card, border: `1px solid ${C.line}` }}><div className="font-semibold text-sm" style={{ color: C.ink }}>{p.t}</div><div className="text-xs" style={{ color: C.mute }}>{money(p)} · {p.zona}, {p.ciudad} · compatible con este requerimiento</div></button>
-          ) : (
-            <button key={p.id} onClick={() => open(p)} className="w-full text-left rounded-2xl p-3 space-y-2" style={{ background: C.card, border: `1px solid ${C.line}` }}>
-              <div className="flex items-center justify-between"><span className="font-semibold text-sm" style={{ color: C.ink }}>{p.t}</span><span className="font-bold" style={{ ...serif, color: m.pct >= 95 ? C.ok : C.amber, fontSize: 20 }}>{m.pct}%</span></div>
-              <div className="text-xs" style={{ color: C.mute }}>{m.tag} · {money(p)} {acceso === "vencido" ? "· 🔒 contacto bloqueado" : ""}</div>
-              <div className="flex flex-wrap gap-1.5">
-                {[...m.strict, ...m.weighted].map((x) => <span key={x[0]} className="text-xs px-2 py-0.5 rounded-md" style={{ background: x[1] ? C.okSoft : C.amberSoft, color: x[1] ? C.ok : C.amber }}>{x[1] ? "✅" : "⚠️"} {x[2]}</span>)}
+          !matchAll.length ? <div className="text-center py-8 text-sm" style={{ color: C.mute }}>Todavía no hay propiedades compatibles con este requerimiento. Apenas se publique una que calce, va a aparecer aquí.</div> : <>
+            <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>🎯 Estas son las captaciones de toda la red que más se parecen a lo que busca <b>{r.n.split(" ")[0]}</b>. El porcentaje dice cuánto calzan; los ✅ son lo que sí cumple y los ⚠️ lo que no calza del todo.</div>
+            {res.map(({ p, m }) => (
+              <button key={p.id} onClick={() => open(p)} className="w-full text-left rounded-2xl p-3 space-y-2" style={{ background: C.card, border: `1px solid ${C.line}` }}>
+                <div className="flex items-center justify-between"><span className="font-semibold text-sm" style={{ color: C.ink }}>{p.t}</span><span className="font-bold" style={{ ...serif, color: m.pct >= 95 ? C.ok : C.amber, fontSize: 20 }}>{m.pct}%</span></div>
+                <div className="text-xs" style={{ color: C.mute }}>{m.tag} · {money(p)} {acceso === "vencido" ? "· 🔒 contacto bloqueado" : ""}</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {[...m.strict, ...m.weighted].map((x) => <span key={x[0]} className="text-xs px-2 py-0.5 rounded-md" style={{ background: x[1] ? C.okSoft : C.amberSoft, color: x[1] ? C.ok : C.amber }}>{x[1] ? "✅" : "⚠️"} {x[2]}</span>)}
+                </div>
+              </button>
+            ))}
+            {matchExtra > 0 && (
+              <div className="rounded-2xl p-3.5 text-center space-y-1.5" style={{ background: C.grad, color: "#fff" }}>
+                <div className="font-bold text-sm">🔒 Hay {matchExtra} coincidencia{matchExtra > 1 ? "s" : ""} más esperando</div>
+                <div className="text-xs opacity-90">Tu plan muestra hasta {matchLim === Infinity ? "todas" : matchLim} por requerimiento. Sube de plan para verlas todas.</div>
+                <button onClick={goSub} className="px-4 py-1.5 rounded-xl text-xs font-semibold" style={{ background: "#fff", color: C.lilaDk }}>Ver planes</button>
               </div>
-            </button>
-          ))
+            )}
+          </>
         )}
       </>}
     </div>
@@ -1728,7 +1755,11 @@ const proximoCorte = (dia) => { let d = new Date(HOY.getFullYear(), HOY.getMonth
 const prorrateo = (precio, dia) => { const fin = proximoCorte(dia); const ini = new Date(fin.getFullYear(), fin.getMonth() - 1, dia); const ciclo = Math.round((fin - ini) / 864e5), resta = Math.round((fin - HOY) / 864e5); return { fin, resta, ciclo, monto: Math.round((precio * resta) / ciclo) }; };
 const PRECIOS = { Inicial: 49, Profesional: 99, Premium: 169 };
 const ORD = { gratuito: 0, Inicial: 1, Profesional: 2, Premium: 3, prueba: 3, admin: 3 };
-const permisos = (n) => { const r = ORD[n] ?? 0; return { nivel: n, ficha: r >= 1, maxCapt: { Inicial: 5, Profesional: 20, Premium: 40 }[n] || null, maxFotos: { Inicial: 3, Profesional: 5 }[n] || (r >= 3 ? 8 : 3), req: r >= 1, fav: r >= 2, vis: r >= 1, share: r >= 2, report: r >= 1, cierre: r >= 1, filtros: r >= 1, match: r >= 2, matchAv: r >= 2, inversa: r >= 2, cliente: r >= 2, busq: r >= 2, vigDet: r >= 2, hist: r >= 2, seg: r >= 2, recordatorios: r >= 2, stats: r >= 3, informes: r >= 3, auto: r >= 3, soporte: r >= 3, video: r >= 3 }; };
+// Cuántas coincidencias (match) puede VER cada plan por requerimiento. El plan
+// Gratuito ya ve 1 (para que note lo útil que es la función y se anime a subir
+// de plan); de ahí para arriba el límite sube hasta ser ilimitado en Premium.
+const MATCH_LIM = { gratuito: 1, Inicial: 5, Profesional: 15, Premium: Infinity, prueba: Infinity, admin: Infinity };
+const permisos = (n) => { const r = ORD[n] ?? 0; return { nivel: n, ficha: r >= 1, maxCapt: { Inicial: 5, Profesional: 20, Premium: 40 }[n] || null, maxFotos: { Inicial: 3, Profesional: 5 }[n] || (r >= 3 ? 8 : 3), req: true, fav: r >= 2, vis: r >= 1, share: r >= 2, report: r >= 1, cierre: r >= 1, filtros: r >= 1, match: r >= 2, matchAv: r >= 2, matchLim: MATCH_LIM[n] ?? 1, inversa: r >= 2, cliente: r >= 2, busq: r >= 2, vigDet: r >= 2, hist: r >= 2, seg: r >= 2, recordatorios: r >= 2, stats: r >= 3, informes: r >= 3, auto: r >= 3, soporte: r >= 3, video: r >= 3 }; };
 // Meses que se guardan las captaciones cerradas (fotos y datos). Después se eliminan y queda solo el registro del cierre.
 const RETENCION = { Inicial: 3, Profesional: 7, Premium: 12 };
 const retencion = (nivel) => RETENCION[nivel] || (nivel === "admin" ? 12 : 3);
@@ -1738,15 +1769,15 @@ const RESUMEN = {
   admin: "Panel de administración: aprobar pagos, configurar cobros y planes, crear y gestionar usuarios, revisar reportes, sugerencias y auditoría.",
   cliente: "Vista del público registrado como cliente (no es agente): buscador con ficha completa de las propiedades, solo el botón de contactar al captador por WhatsApp, favoritos («Guardados») con aviso si cambian, búsquedas guardadas, comparador y calificar al captador tras un cierre. No tiene captaciones, requerimientos, visitas ni herramientas de agente.",
   prueba: "48 horas con acceso completo (igual que Premium). Al terminar, la cuenta pasa automáticamente a Gratuito hasta que pague un plan. Tus captaciones, requerimientos y demás datos NO se borran: solo se limitan algunas herramientas hasta que elijas un plan.",
-  gratuito: "Solo puede buscar y ver datos básicos de las propiedades. Bloqueado: ficha completa, contacto con captadores, requerimientos, visitas, captaciones, reportes y todo lo de los planes.",
-  Inicial: "Hasta 5 captaciones · 3 fotos por captación · cerradas guardadas 3 meses · ficha completa y WhatsApp con captadores · requerimientos de clientes · agenda de visitas · reportes. Sin favoritos, coincidencias avanzadas ni estadísticas.",
-  Profesional: "Hasta 20 captaciones · 5 fotos por captación · cerradas guardadas 7 meses · todo lo de Inicial · coincidencias ponderadas e inversas · favoritos · compartir por WhatsApp · búsquedas guardadas · seguimiento · recordatorios. Sin estadísticas, informes ni automatizaciones.",
-  Premium: `Hasta 40 captaciones · 8 fotos por captación · 1 video corto (máx. ${VIDEO_MAX_SEG} s) por captación · cerradas guardadas 12 meses · confirmaciones de visita programadas por WhatsApp · todo lo de Profesional · estadísticas · informes con exportación CSV · automatizaciones · soporte prioritario.`,
+  gratuito: "Puede buscar y ver datos básicos de las propiedades, y registrar requerimientos de clientes con 1 coincidencia automática por requerimiento (🎯 te mostramos qué tan compatible es, para que veas lo útil que es la función). Bloqueado: ficha completa, contacto con captadores, visitas, captaciones, favoritos y el resto de las herramientas de los planes pagos.",
+  Inicial: "Hasta 5 captaciones · 3 fotos por captación · cerradas guardadas 3 meses · ficha completa y WhatsApp con captadores · requerimientos de clientes con hasta 5 coincidencias por requerimiento · agenda de visitas · reportes. Sin favoritos ni estadísticas.",
+  Profesional: "Hasta 20 captaciones · 5 fotos por captación · cerradas guardadas 7 meses · todo lo de Inicial · hasta 15 coincidencias por requerimiento, ponderadas con explicación y coincidencia inversa · favoritos · compartir por WhatsApp · búsquedas guardadas · seguimiento · recordatorios. Sin estadísticas, informes ni automatizaciones.",
+  Premium: `Hasta 40 captaciones · 8 fotos por captación · 1 video corto (máx. ${VIDEO_MAX_SEG} s) por captación · cerradas guardadas 12 meses · coincidencias ILIMITADAS por requerimiento · confirmaciones de visita programadas por WhatsApp · todo lo de Profesional · estadísticas · informes con exportación CSV · automatizaciones · soporte prioritario.`,
 };
 const PLAN_BEN = {
-  Inicial: ["Hasta 5 captaciones activas", "Hasta 3 fotos por captación", "Captaciones cerradas guardadas 3 meses", "Ficha completa y contacto por WhatsApp con captadores", "Registro de requerimientos de clientes", "Agenda de visitas", "Reportes y consultas"],
-  Profesional: ["Hasta 20 captaciones activas", "Hasta 5 fotos por captación", "Captaciones cerradas guardadas 7 meses", "Todo lo de Inicial", "Coincidencias ponderadas con explicación y coincidencia inversa", "Favoritos y guardar para clientes", "Compartir propiedades por WhatsApp", "Búsquedas guardadas", "Seguimiento de oportunidades", "Recordatorios de agenda", "Historial de cierres y vigencia detallada"],
-  Premium: ["Hasta 40 captaciones activas", "Hasta 8 fotos por captación", "Captaciones cerradas guardadas 12 meses", "Confirmaciones de visita programadas por WhatsApp", "Todo lo de Profesional", "Estadísticas de captaciones y cierres", "Informes avanzados con exportación CSV", "Automatizaciones configurables", "Soporte prioritario"],
+  Inicial: ["Hasta 5 captaciones activas", "Hasta 3 fotos por captación", "Captaciones cerradas guardadas 3 meses", "Ficha completa y contacto por WhatsApp con captadores", "Registro de requerimientos de clientes", "🎯 Hasta 5 coincidencias por requerimiento", "Agenda de visitas", "Reportes y consultas"],
+  Profesional: ["Hasta 20 captaciones activas", "Hasta 5 fotos por captación", "Captaciones cerradas guardadas 7 meses", "Todo lo de Inicial", "🎯 Hasta 15 coincidencias por requerimiento, ponderadas con explicación, más coincidencia inversa", "Favoritos y guardar para clientes", "Compartir propiedades por WhatsApp", "Búsquedas guardadas", "Seguimiento de oportunidades", "Recordatorios de agenda", "Historial de cierres y vigencia detallada"],
+  Premium: ["Hasta 40 captaciones activas", "Hasta 8 fotos por captación", "Captaciones cerradas guardadas 12 meses", "🎯 Coincidencias ILIMITADAS por requerimiento", "Confirmaciones de visita programadas por WhatsApp", "Todo lo de Profesional", "Estadísticas de captaciones y cierres", "Informes avanzados con exportación CSV", "Automatizaciones configurables", "Soporte prioritario"],
 };
 // Pago por varios meses: 6 meses pagas 5 (1 gratis) · 12 meses pagas 10 (2 gratis)
 const PERIODOS = [[1, "1 mes", 1], [6, "6 meses", 5], [12, "12 meses", 10]];
@@ -1847,12 +1878,21 @@ function MapaCaptaciones({ props, onOpen }) {
   useEffect(() => {
     if (!listo || !divRef.current || mapRef.current) return;
     const L = window.L;
-    const mapa = L.map(divRef.current, { zoomControl: true }).setView([-16.7, -64.6], 6); // Bolivia completa por defecto; se ajusta a los puntos abajo
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(mapa);
-    capaRef.current = L.layerGroup().addTo(mapa);
-    mapRef.current = mapa;
-    setTimeout(() => mapa.invalidateSize(), 150);
-    return () => { mapa.remove(); mapRef.current = null; capaRef.current = null; };
+    const el = divRef.current;
+    // Si este <div> ya tuvo un mapa antes (por ejemplo al cambiar de "ver como"
+    // admin/premium/etc., donde React puede reutilizar el nodo), Leaflet guarda
+    // un id interno y se niega a reinicializarlo: lo limpiamos para evitar que
+    // el mapa se quede a medio crear y se vea "sobrepuesto".
+    try { if (el._leaflet_id) el._leaflet_id = null; } catch {}
+    let mapa;
+    try {
+      mapa = L.map(el, { zoomControl: true }).setView([-16.7, -64.6], 6); // Bolivia completa por defecto; se ajusta a los puntos abajo
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(mapa);
+      capaRef.current = (L.markerClusterGroup ? L.markerClusterGroup({ maxClusterRadius: 50 }) : L.layerGroup()).addTo(mapa);
+      mapRef.current = mapa;
+      setTimeout(() => mapa.invalidateSize(), 150);
+    } catch (e) { console.warn("No se pudo crear el mapa", e); }
+    return () => { try { mapa && mapa.remove(); } catch {} mapRef.current = null; capaRef.current = null; try { if (el._leaflet_id) el._leaflet_id = null; } catch {} };
   }, [listo]);
 
   useEffect(() => {
@@ -2570,7 +2610,10 @@ function BuscarCliente({ props, favs, rate, open, moneda, setMoneda, busq, setBu
   const [dorm, setDorm] = useState("Todos");
   const [fv, setFv] = useState(false);
   const [verMapa, setVerMapa] = useState(true);
+  const [verN, setVerN] = useState(30);
   const list = useMemo(() => props.filter((p) => (p.est || "Disponible") === "Disponible" && (dorm === "Todos" || (dorm === "4+" ? p.dorm >= 4 : p.dorm === Number(dorm))) && (!fv || favs.some((f) => f.pid === p.id && f.cid == null)) && (op === "Todas" || p.op === op) && (ciu === "Todas" || p.ciudad === ciu)).sort((a, b) => RK[a.est || "Disponible"] - RK[b.est || "Disponible"] || vigencia(a).n - vigencia(b).n || a.dias - b.dias), [op, ciu, dorm, fv, favs, props]);
+  useEffect(() => setVerN(30), [op, ciu, dorm, fv]);
+  const visibles = list.slice(0, verN);
   return (
     <div className="p-4 space-y-3">
       <div className="flex items-center justify-end gap-1.5 text-xs" style={{ color: C.mute }}>Ver precios en <span className="inline-flex rounded-full p-0.5" style={{ background: C.lilaSoft }}>{[["BOB", "Bs"], ["USD", "$us"]].map(([k, l]) => <button key={k} onClick={() => setMoneda(k)} className="px-2.5 py-0.5 rounded-full font-semibold" style={{ background: moneda === k ? C.lila : "transparent", color: moneda === k ? "#fff" : C.lilaDk }}>{l}</button>)}</span></div>
@@ -2593,13 +2636,14 @@ function BuscarCliente({ props, favs, rate, open, moneda, setMoneda, busq, setBu
       {verMapa
         ? <MapaCaptaciones props={list} onOpen={open} />
         : <>
-            <div className="vx-grid-pc">{list.map((p) => (
+            <div className="vx-grid-pc">{visibles.map((p) => (
               <div key={p.id} className="flex items-start gap-2">
                 <button onClick={() => toggleComparar(p.id)} title="Agregar a comparar" className="mt-3 shrink-0 w-6 h-6 rounded-md text-xs flex items-center justify-center" style={{ background: comparar.includes(p.id) ? C.lila : C.card, color: comparar.includes(p.id) ? "#fff" : C.mute, border: `1px solid ${comparar.includes(p.id) ? C.lila : C.line}` }}>{comparar.includes(p.id) ? "✓" : "+"}</button>
                 <div className="flex-1"><Card p={p} onOpen={open} locked={false} rate={rate} perm={{ vigDet: true }} /></div>
               </div>
             ))}</div>
             {!list.length && <div className="text-center py-10 text-sm" style={{ color: C.mute }}>Sin resultados. Prueba quitando algún filtro.</div>}
+            {verN < list.length && <button onClick={() => setVerN(verN + 30)} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.lilaSoft, color: C.lilaDk }}>Cargar {Math.min(30, list.length - verN)} más ({list.length - verN} restantes)</button>}
           </>}
     </div>
   );
