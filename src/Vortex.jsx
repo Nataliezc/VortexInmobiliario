@@ -197,7 +197,7 @@ function DetalleInner({ p, acceso, onBack, onVisit, onReport, ant, rate, onProfi
       ) : propia ? (
         <>
           <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Esta es tu captación.</div>
-          {p.exclusiva && p.ubic ? <a href={linkUbic(p.ubic)} target="_blank" rel="noreferrer" className="block text-center text-xs underline" style={{ color: C.lilaDk }}>📍 Ver ubicación exacta en el mapa</a> : !p.exclusiva && p.ubicRef ? <div className="text-xs text-center" style={{ color: C.mute }}>📍 Zona referencial: {p.ubicRef}</div> : null}
+          {p.exclusiva && p.ubic ? <a href={linkUbic(p.ubic)} target="_blank" rel="noreferrer" className="block text-center text-xs underline" style={{ color: C.lilaDk }}>📍 Ver ubicación exacta en el mapa</a> : !p.exclusiva && (refTexto(p.ubicRef) || refTieneMapa(p.ubicRef)) ? <div className="text-xs text-center" style={{ color: C.mute }}>📍 Zona referencial{refTexto(p.ubicRef) ? `: ${refTexto(p.ubicRef)}` : ""}{refTieneMapa(p.ubicRef) && <> · <a href={linkUbic(p.ubicRef)} target="_blank" rel="noreferrer" className="underline">Ver en el mapa</a></>}</div> : null}
           {(p.est || "Disponible") === "Disponible" && <button onClick={() => compartirGrupo(p, miTel(), flash)} className="block text-center w-full py-3 rounded-xl text-sm font-semibold text-white" style={{ background: "#25D366" }}>📢 Compartir en grupos de WhatsApp</button>}
           <button onClick={async () => { const ok = await copiarTexto(textoCopy(p, miTel())); flash && flash(ok ? "Copy copiado." : "No se pudo copiar automáticamente."); }} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.lilaSoft, color: C.lilaDk }}>📋 Copiar copy</button>
           {perm.auto && onRespuestas && <button onClick={() => onRespuestas({ propiedad: p.t, agente: ME })} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.brandSoft, color: C.brandDk }}>💬 Respuestas rápidas</button>}
@@ -210,7 +210,7 @@ function DetalleInner({ p, acceso, onBack, onVisit, onReport, ant, rate, onProfi
             <button onClick={() => onProfile(p.cap.n)} className="text-xs px-2 py-1 rounded-md" style={{ background: C.lilaSoft, color: C.lilaDk }}>Ver perfil</button>
           </div>
           <div className="text-xs rounded-xl p-2.5" style={{ background: C.lilaSoft, color: C.lilaDk }}>Colaboración 50/50: si cierras con tu cliente, la comisión se divide en partes iguales con el captador.</div>
-          {p.exclusiva && p.ubic ? <a href={linkUbic(p.ubic)} target="_blank" rel="noreferrer" className="block text-center text-xs underline" style={{ color: C.lilaDk }}>📍 Ver ubicación exacta en el mapa</a> : !p.exclusiva && p.ubicRef ? <div className="text-xs text-center" style={{ color: C.mute }}>📍 Zona referencial: {p.ubicRef}</div> : null}
+          {p.exclusiva && p.ubic ? <a href={linkUbic(p.ubic)} target="_blank" rel="noreferrer" className="block text-center text-xs underline" style={{ color: C.lilaDk }}>📍 Ver ubicación exacta en el mapa</a> : !p.exclusiva && (refTexto(p.ubicRef) || refTieneMapa(p.ubicRef)) ? <div className="text-xs text-center" style={{ color: C.mute }}>📍 Zona referencial{refTexto(p.ubicRef) ? `: ${refTexto(p.ubicRef)}` : ""}{refTieneMapa(p.ubicRef) && <> · <a href={linkUbic(p.ubicRef)} target="_blank" rel="noreferrer" className="underline">Ver en el mapa</a></>}</div> : null}
           {perm.auto && onRespuestas && <button onClick={() => onRespuestas({ propiedad: p.t, agente: ME })} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.brandSoft, color: C.brandDk }}>💬 Respuestas rápidas</button>}
           <button onClick={async () => { const ok = await copiarTexto(textoCopy(p, miTel())); flash && flash(ok ? (waNum(miTel()).length < 8 ? "Copy copiado. Tip: agrega tu WhatsApp en Mis datos para incluir tu enlace." : "Copy copiado con tu WhatsApp. Pégalo en el chat de tu cliente.") : "No se pudo copiar automáticamente."); }} className="w-full py-2.5 rounded-xl text-sm font-semibold" style={{ background: C.lilaSoft, color: C.lilaDk }}>📋 Copiar copy para enviar a un cliente</button>
           <div className={`grid ${perm.share ? "grid-cols-2" : "grid-cols-1"} gap-2`}>
@@ -246,7 +246,7 @@ function Buscar({ acceso, open, props, rate, favs, perm, goSub, busq, setBusq, m
   const [fv, setFv] = useState(false);
   const [dorm, setDorm] = useState("Todos");
   const [masc, setMasc] = useState(false);
-  const [verMapa, setVerMapa] = useState(true);
+  const [verMapa, setVerMapa] = useState(false);
   const [verN, setVerN] = useState(30);
   const list = useMemo(() => props.filter((p) => (p.est || "Disponible") === "Disponible" && (dorm === "Todos" || (dorm === "4+" ? p.dorm >= 4 : p.dorm === Number(dorm))) && (!masc || p.mascotas !== "No") && (!fv || favs.some((f) => f.pid === p.id)) && (op === "Todas" || p.op === op) && (ciu === "Todas" || p.ciudad === ciu) && (!gar || p.garaje) && (!max || enMoneda(p) <= Number(max))).sort((a, b) => RK[a.est || "Disponible"] - RK[b.est || "Disponible"] || vigencia(a).n - vigencia(b).n || a.dias - b.dias), [op, ciu, max, gar, fv, dorm, masc, favs, props]);
   useEffect(() => setVerN(30), [op, ciu, max, gar, fv, dorm, masc]);
@@ -970,7 +970,7 @@ const Seg = ({ o, v, set }) => <div className="flex flex-wrap gap-2">{o.map((x) 
 const Fld = ({ l, children, x }) => <div className="space-y-1.5" style={x ? { background: C.amberSoft, borderRadius: 12, padding: 8, outline: `1.5px solid ${C.amber}` } : undefined}><div className="text-xs font-medium" style={{ color: x ? C.amber : C.mute }}>{l}</div>{children}</div>;
 
 const TIPOS_INM = ["Casa", "Departamento", "Monoambiente", "Habitación/Cuarto", "Galpón", "Depósito", "Edificio", "Terreno", "Oficina", "Comercial"];
-const toF = (p) => ({ tcModo: p.tcModo || "dia", tc: p.tc ? String(p.tc) : "", op: p.op, tipo: TIPOS_INM.includes(p.tipo) ? p.tipo : "Otro", tipoOtro: TIPOS_INM.includes(p.tipo) || p.tipo === "Otro" ? "" : p.tipo, ciudad: p.ciudad, zona: p.zona, t: p.t, precio: String(p.precio), mon: p.mon, dorm: String(p.dorm), ban: String(p.ban), m2: String(p.m2), garaje: p.garaje ? "Sí" : "No", gTipo: p.gTipo || "Independiente", gAparte: p.gAparte ? "Sí" : "No", gPrecio: p.gPrecio || "", mascotas: p.mascotas, mascCond: p.mascCond || "", amoblado: p.amoblado, com: p.com, condComp: p.condComp || "", desc: p.desc || "", fotos: p.fotos || [], video: p.video || null, exclusiva: !!p.exclusiva, ubic: p.ubic || null, ubicRef: p.ubicRef || "", vig: p.vig || "" });
+const toF = (p) => ({ tcModo: p.tcModo || "dia", tc: p.tc ? String(p.tc) : "", op: p.op, tipo: TIPOS_INM.includes(p.tipo) ? p.tipo : "Otro", tipoOtro: TIPOS_INM.includes(p.tipo) || p.tipo === "Otro" ? "" : p.tipo, ciudad: p.ciudad, zona: p.zona, t: p.t, precio: String(p.precio), mon: p.mon, dorm: String(p.dorm), ban: String(p.ban), m2: String(p.m2), garaje: p.garaje ? "Sí" : "No", gTipo: p.gTipo || "Independiente", gAparte: p.gAparte ? "Sí" : "No", gPrecio: p.gPrecio || "", mascotas: p.mascotas, mascCond: p.mascCond || "", amoblado: p.amoblado, com: p.com, condComp: p.condComp || "", desc: p.desc || "", fotos: p.fotos || [], video: p.video || null, exclusiva: !!p.exclusiva, ubic: p.ubic || null, ubicRef: refObj(p.ubicRef), vig: p.vig || "" });
 
 function Form({ onSave, init, maxFotos = 3, autoCopy = false, perm = {} }) {
   const [copyTxt, setCopyTxt] = useState("");
@@ -989,10 +989,12 @@ function Form({ onSave, init, maxFotos = 3, autoCopy = false, perm = {} }) {
     const fal = camposFaltantes(nuevo);
     setInfo(fal.length ? `✨ Listo: llenamos los datos que encontramos en tu copy. Completa ${fal.length === 1 ? "el campo marcado" : `los ${fal.length} campos marcados`} en amarillo: ${fal.map((k) => NOMBRES_CAMPOS[k]).join(", ")}.` : "✨ ¡Encontramos todos los datos! Revísalos antes de publicar.");
   };
-  const [f, setF] = useState(init ? toF(init) : { op: "Alquiler", tipo: "Departamento", tipoOtro: "", tcModo: "dia", tc: "", ciudad: "La Paz", zona: "", t: "", precio: "", mon: MONEDA, dorm: "2", ban: "1", m2: "", garaje: "No", gTipo: "Independiente", gAparte: "No", gPrecio: "", mascotas: "No", mascCond: "", amoblado: "Vacío", com: "", condComp: "", desc: "", fotos: [], video: null, exclusiva: false, ubic: null, ubicRef: "", vig: "" });
+  const [f, setF] = useState(init ? toF(init) : { op: "Alquiler", tipo: "Departamento", tipoOtro: "", tcModo: "dia", tc: "", ciudad: "La Paz", zona: "", t: "", precio: "", mon: MONEDA, dorm: "2", ban: "1", m2: "", garaje: "No", gTipo: "Independiente", gAparte: "No", gPrecio: "", mascotas: "No", mascCond: "", amoblado: "Vacío", com: "", condComp: "", desc: "", fotos: [], video: null, exclusiva: false, ubic: null, ubicRef: null, vig: "" });
   const [err, setErr] = useState("");
   const [ubicErr, setUbicErr] = useState("");
   const [ubicManual, setUbicManual] = useState("");
+  const [mapaUbic, setMapaUbic] = useState(false);
+  const [mapaRef, setMapaRef] = useState(false);
   const [subiendoVideo, setSubiendoVideo] = useState(false);
   const [videoErr, setVideoErr] = useState("");
   const guardarUbicManual = () => {
@@ -1018,7 +1020,7 @@ function Form({ onSave, init, maxFotos = 3, autoCopy = false, perm = {} }) {
     if (fal.length) { setMarcar(true); setErr(`Para publicar falta completar: ${fal.map((k) => NOMBRES_CAMPOS[k]).join(", ")}. Están marcados en amarillo.`); return; }
     const tipoFinal = f.tipo === "Otro" ? f.tipoOtro.trim().charAt(0).toUpperCase() + f.tipoOtro.trim().slice(1) : f.tipo;
     f.desc = limpiarContacto(f.desc || "");
-    const b = ({ id: Date.now(), ...(f.mon === "USD" ? { tcModo: f.tcModo || "dia", tc: f.tcModo === "fijo" ? +f.tc : null } : { tcModo: null, tc: null }), op: f.op, tipo: tipoFinal, t: limpiarGlifosRaros(f.t), ciudad: f.ciudad, zona: f.zona, precio: +f.precio, mon: f.mon, dorm: vivienda ? +f.dorm : 0, ban: vivienda ? +f.ban : 0, m2: +f.m2, garaje: f.garaje === "Sí", gTipo: f.garaje === "Sí" ? f.gTipo : "", gAparte: f.gAparte === "Sí", gPrecio: f.gAparte === "Sí" ? f.gPrecio : "", mascotas: f.mascotas, mascCond: f.mascotas === "Condicionado" ? limpiarGlifosRaros(f.mascCond) : "", condComp: limpiarGlifosRaros(f.condComp), desc: f.desc, amoblado: f.amoblado, dias: 0, est: "Disponible", cap: { n: ME, tel: miTel(), ciu: f.ciudad }, com: f.com || "A definir con el captador", hue: Math.floor(Math.random() * 360), fotos: f.fotos, video: perm.video ? f.video : null, exclusiva: f.exclusiva, ubic: f.exclusiva ? f.ubic : null, ubicRef: !f.exclusiva ? limpiarGlifosRaros(f.ubicRef) : "", vig: f.vig || null });
+    const b = ({ id: Date.now(), ...(f.mon === "USD" ? { tcModo: f.tcModo || "dia", tc: f.tcModo === "fijo" ? +f.tc : null } : { tcModo: null, tc: null }), op: f.op, tipo: tipoFinal, t: limpiarGlifosRaros(f.t), ciudad: f.ciudad, zona: f.zona, precio: +f.precio, mon: f.mon, dorm: vivienda ? +f.dorm : 0, ban: vivienda ? +f.ban : 0, m2: +f.m2, garaje: f.garaje === "Sí", gTipo: f.garaje === "Sí" ? f.gTipo : "", gAparte: f.gAparte === "Sí", gPrecio: f.gAparte === "Sí" ? f.gPrecio : "", mascotas: f.mascotas, mascCond: f.mascotas === "Condicionado" ? limpiarGlifosRaros(f.mascCond) : "", condComp: limpiarGlifosRaros(f.condComp), desc: f.desc, amoblado: f.amoblado, dias: 0, est: "Disponible", cap: { n: ME, tel: miTel(), ciu: f.ciudad }, com: f.com || "A definir con el captador", hue: Math.floor(Math.random() * 360), fotos: f.fotos, video: perm.video ? f.video : null, exclusiva: f.exclusiva, ubic: f.exclusiva ? f.ubic : null, ubicRef: !f.exclusiva && f.ubicRef ? { ...(f.ubicRef.texto ? { texto: limpiarGlifosRaros(f.ubicRef.texto) } : {}), ...(f.ubicRef.lat != null ? { lat: f.ubicRef.lat, lng: f.ubicRef.lng } : {}) } : null, vig: f.vig || null });
     onSave(init ? { ...init, ...b, id: init.id, dias: init.dias, est: init.est, hue: init.hue, cap: init.cap } : b);
   };
   return (
@@ -1042,15 +1044,24 @@ function Form({ onSave, init, maxFotos = 3, autoCopy = false, perm = {} }) {
         {f.exclusiva && (
           <div className="space-y-1.5 pt-1">
             <div className="text-xs font-medium" style={{ color: C.lilaDk }}>Ubicación exacta (opcional)</div>
-            {f.ubic ? (
+            {mapaUbic ? (
+              <>
+                <SelectorMapa valor={f.ubic && f.ubic.lat != null ? f.ubic : null} onCambiar={(v) => s("ubic")(v)} color={C.lila} colorDk={C.lilaDk} />
+                <button type="button" onClick={() => setMapaUbic(false)} className="text-xs underline" style={{ color: C.lilaDk }}>Listo</button>
+              </>
+            ) : f.ubic ? (
               <div className="text-xs flex items-center gap-2 flex-wrap" style={{ color: C.lilaDk }}>
                 <span>✓ Ubicación guardada{f.ubic.texto ? `: ${f.ubic.texto}` : ""}</span>
                 <a href={linkUbic(f.ubic)} target="_blank" rel="noreferrer" className="underline">Ver en el mapa</a>
+                {f.ubic.lat != null && <button type="button" onClick={() => setMapaUbic(true)} className="underline">Ajustar en el mapa</button>}
                 <button type="button" onClick={() => s("ubic")(null)} className="underline" style={{ color: C.mute }}>Quitar</button>
               </div>
             ) : (
               <>
-                <button type="button" onClick={capturarUbic} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white" style={{ background: C.lila }}>📍 Usar mi ubicación actual</button>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => setMapaUbic(true)} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white" style={{ background: C.lila }}>🗺️ Elegir en el mapa</button>
+                  <button type="button" onClick={capturarUbic} className="px-3 py-1.5 rounded-lg text-xs font-semibold" style={{ background: "#fff", color: C.lilaDk, border: `1px solid ${C.lila}` }}>📍 Usar mi ubicación actual</button>
+                </div>
                 {ubicErr && <div className="text-xs" style={{ color: ubicErr.startsWith("Obteniendo") ? C.mute : C.red }}>{ubicErr}</div>}
                 <div className="text-xs" style={{ color: C.mute }}>o escribe la ubicación a mano (dirección, referencia o enlace de Google Maps):</div>
                 <div className="flex gap-2">
@@ -1064,8 +1075,22 @@ function Form({ onSave, init, maxFotos = 3, autoCopy = false, perm = {} }) {
         {!f.exclusiva && (
           <div className="space-y-1.5 pt-1">
             <div className="text-xs font-medium" style={{ color: C.ink }}>Ubicación referencial (opcional)</div>
-            <div className="text-xs" style={{ color: C.mute }}>Sin exclusiva no se recomienda dar la ubicación exacta, pero puedes dejar una referencia general (zona, cerca de qué) para orientar a quien la comparta.</div>
-            <input value={f.ubicRef} onChange={(e) => s("ubicRef")(e.target.value)} placeholder="Ej. Cerca de la Plaza del Estudiante, zona Sopocachi" className="w-full rounded-lg px-3 py-1.5 text-xs" style={inp} />
+            <div className="text-xs" style={{ color: C.mute }}>Sin exclusiva no se recomienda dar la ubicación exacta, pero puedes dejar una referencia general (zona, cerca de qué), un punto aproximado en el mapa, o ambos.</div>
+            <input value={(f.ubicRef && f.ubicRef.texto) || ""} onChange={(e) => s("ubicRef")({ ...(f.ubicRef || {}), texto: e.target.value })} placeholder="Ej. Cerca de la Plaza del Estudiante, zona Sopocachi" className="w-full rounded-lg px-3 py-1.5 text-xs" style={inp} />
+            {mapaRef ? (
+              <>
+                <SelectorMapa valor={f.ubicRef && f.ubicRef.lat != null ? f.ubicRef : null} onCambiar={(v) => s("ubicRef")({ ...(f.ubicRef || {}), ...v })} color={COLOR_REF} colorDk={COLOR_REF_DK} />
+                <button type="button" onClick={() => setMapaRef(false)} className="text-xs underline" style={{ color: COLOR_REF_DK }}>Listo</button>
+              </>
+            ) : f.ubicRef && f.ubicRef.lat != null ? (
+              <div className="text-xs flex items-center gap-2 flex-wrap" style={{ color: COLOR_REF_DK }}>
+                <span>✓ Punto referencial marcado en el mapa</span>
+                <button type="button" onClick={() => setMapaRef(true)} className="underline">Ajustar</button>
+                <button type="button" onClick={() => s("ubicRef")({ texto: (f.ubicRef && f.ubicRef.texto) || "" })} className="underline" style={{ color: C.mute }}>Quitar punto</button>
+              </div>
+            ) : (
+              <button type="button" onClick={() => setMapaRef(true)} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white" style={{ background: COLOR_REF }}>🗺️ Marcar punto aproximado en el mapa</button>
+            )}
           </div>
         )}
       </div>
@@ -1851,6 +1876,12 @@ const waLink = (tel, txt) => `https://wa.me/${waNum(tel)}?text=${encodeURICompon
 // ── Ubicación exacta de una exclusiva: por GPS ({lat,lng}) o escrita a mano
 //    ({texto}: dirección, referencia o un enlace de Google Maps ya pegado) ──
 const linkUbic = (u) => !u ? "" : (u.lat != null && u.lng != null) ? `https://www.google.com/maps?q=${u.lat},${u.lng}` : u.texto ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(u.texto)}` : "";
+// La "ubicación referencial" (captaciones sin exclusiva) antes era solo texto libre;
+// ahora también puede llevar un punto del mapa. refObj() entiende ambos formatos
+// (texto antiguo, u objeto {texto, lat, lng} nuevo) para no romper captaciones viejas.
+const refObj = (u) => !u ? null : typeof u === "string" ? (u.trim() ? { texto: u } : null) : u;
+const refTexto = (u) => { const o = refObj(u); return (o && o.texto) || ""; };
+const refTieneMapa = (u) => { const o = refObj(u); return !!(o && o.lat != null && o.lng != null); };
 const parseUbicTexto = (t) => {
   t = String(t || "").trim();
   const m = t.match(/(-?\d{1,3}\.\d+)[,\s]+(-?\d{1,3}\.\d+)/); // saca lat,lng si pegaron coordenadas o un enlace de Maps
@@ -1866,12 +1897,20 @@ function esperarLeaflet(ms = 6000) {
     chk();
   });
 }
+// Color de los marcadores "ubicación referencial" (las que no son exclusiva):
+// un celeste/verdeazulado, distinto del morado que ya se usa para las exactas,
+// pero tomado de la misma gama de colores de la app (es uno de los tonos del degradado C.grad).
+const COLOR_REF = "#08BFC5", COLOR_REF_DK = "#0a7d80";
 function MapaCaptaciones({ props, onOpen }) {
   const divRef = useRef(null);
   const mapRef = useRef(null);
   const capaRef = useRef(null);
   const [listo, setListo] = useState(!!window.L);
-  const puntos = useMemo(() => (props || []).filter((p) => p.ubic && p.ubic.lat != null && p.ubic.lng != null), [props]);
+  const puntos = useMemo(() => {
+    const exactas = (props || []).filter((p) => p.exclusiva && p.ubic && p.ubic.lat != null && p.ubic.lng != null).map((p) => ({ p, tipo: "exacta", lat: p.ubic.lat, lng: p.ubic.lng }));
+    const refs = (props || []).filter((p) => !p.exclusiva && p.ubicRef && typeof p.ubicRef === "object" && p.ubicRef.lat != null && p.ubicRef.lng != null).map((p) => ({ p, tipo: "referencial", lat: p.ubicRef.lat, lng: p.ubicRef.lng }));
+    return [...exactas, ...refs];
+  }, [props]);
 
   useEffect(() => {
     let activo = true;
@@ -1904,25 +1943,83 @@ function MapaCaptaciones({ props, onOpen }) {
     const L = window.L;
     capaRef.current.clearLayers();
     if (!puntos.length) return;
-    puntos.forEach((p) => {
+    puntos.forEach((pt) => {
+      const esExacta = pt.tipo === "exacta";
+      const bg = esExacta ? C.grad : `linear-gradient(135deg, ${COLOR_REF}, ${COLOR_REF_DK})`;
+      const borde = esExacta ? C.lilaDk : COLOR_REF_DK;
       const icono = L.divIcon({
         className: "",
         html: `<div style="position:relative;transform:translate(-50%,-100%);cursor:pointer;display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 3px 5px rgba(0,0,0,.35))">
-          <div style="background:${C.grad};color:#fff;font-weight:800;font-size:12px;padding:5px 10px;border-radius:10px;border:2px solid #fff;white-space:nowrap">${money(p)}</div>
-          <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:7px solid ${C.lilaDk};margin-top:-2px"></div>
+          <div style="background:${bg};color:#fff;font-weight:800;font-size:12px;padding:5px 10px;border-radius:10px;border:2px solid #fff;white-space:nowrap">${money(pt.p)}</div>
+          <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:7px solid ${borde};margin-top:-2px"></div>
         </div>`,
         iconSize: [0, 0], iconAnchor: [0, 0],
       });
-      L.marker([p.ubic.lat, p.ubic.lng], { icon: icono }).addTo(capaRef.current).on("click", () => onOpen(p));
+      L.marker([pt.lat, pt.lng], { icon: icono }).addTo(capaRef.current).on("click", () => onOpen(pt.p));
     });
     try { mapRef.current.fitBounds(L.featureGroup(capaRef.current.getLayers()).getBounds().pad(0.25), { maxZoom: 15 }); } catch {}
   }, [puntos]);
 
   if (!listo) return <div className="rounded-xl p-6 text-center text-sm" style={{ background: C.lilaSoft, color: C.lilaDk }}>Cargando mapa…</div>;
   return (
-    <div>
-      <div ref={divRef} style={{ height: 280, borderRadius: 16, overflow: "hidden", border: `1px solid ${C.line}` }} />
-      {!puntos.length && <div className="text-center py-4 text-xs" style={{ color: C.mute }}>Ninguna de estas propiedades tiene ubicación exacta guardada todavía.</div>}
+    <div className="space-y-2">
+      <div ref={divRef} style={{ height: 280, borderRadius: 16, overflow: "hidden", border: `1px solid ${C.line}`, position: "relative", zIndex: 0, isolation: "isolate" }} />
+      {puntos.length > 0 && (
+        <div className="flex items-center gap-4 text-xs justify-center" style={{ color: C.mute }}>
+          <span className="flex items-center gap-1"><span style={{ width: 10, height: 10, borderRadius: 999, background: C.grad, display: "inline-block" }} /> Ubicación exacta</span>
+          <span className="flex items-center gap-1"><span style={{ width: 10, height: 10, borderRadius: 999, background: COLOR_REF, display: "inline-block" }} /> Ubicación referencial</span>
+        </div>
+      )}
+      {!puntos.length && <div className="text-center py-4 text-xs" style={{ color: C.mute }}>Ninguna de estas propiedades tiene ubicación (exacta o referencial) guardada todavía.</div>}
+    </div>
+  );
+}
+
+// ── Selector de ubicación en el mapa: un marcador que se mueve a donde el
+//    agente toque (o arrastre), para elegir la ubicación exacta o referencial
+//    de una captación sin tener que escribirla. Se usa en el formulario.
+function SelectorMapa({ valor, onCambiar, color = C.lila, colorDk = C.lilaDk }) {
+  const divRef = useRef(null);
+  const mapRef = useRef(null);
+  const markRef = useRef(null);
+  const [listo, setListo] = useState(!!window.L);
+
+  useEffect(() => {
+    let activo = true;
+    if (!window.L) esperarLeaflet().then((L) => { if (activo && L) setListo(true); });
+    return () => { activo = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!listo || !divRef.current || mapRef.current) return;
+    const L = window.L;
+    const el = divRef.current;
+    try { if (el._leaflet_id) el._leaflet_id = null; } catch {}
+    let mapa;
+    const icono = () => L.divIcon({ className: "", html: `<div style="width:22px;height:22px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${color};border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4)"></div>`, iconSize: [22, 22], iconAnchor: [11, 22] });
+    const poner = (lat, lng) => {
+      if (markRef.current) markRef.current.setLatLng([lat, lng]);
+      else { markRef.current = L.marker([lat, lng], { icon: icono(), draggable: true }).addTo(mapa); markRef.current.on("dragend", () => { const p = markRef.current.getLatLng(); onCambiar({ lat: p.lat, lng: p.lng }); }); }
+      onCambiar({ lat, lng });
+    };
+    try {
+      const tieneValor = valor && valor.lat != null && valor.lng != null;
+      const centro = tieneValor ? [valor.lat, valor.lng] : [-16.7, -64.6];
+      mapa = L.map(el, { zoomControl: true }).setView(centro, tieneValor ? 15 : 6);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(mapa);
+      if (tieneValor) { markRef.current = L.marker(centro, { icon: icono(), draggable: true }).addTo(mapa); markRef.current.on("dragend", () => { const p = markRef.current.getLatLng(); onCambiar({ lat: p.lat, lng: p.lng }); }); }
+      mapa.on("click", (e) => poner(e.latlng.lat, e.latlng.lng));
+      mapRef.current = mapa;
+      setTimeout(() => mapa.invalidateSize(), 150);
+    } catch (e) { console.warn("No se pudo crear el selector de mapa", e); }
+    return () => { try { mapa && mapa.remove(); } catch {} mapRef.current = null; markRef.current = null; try { if (el._leaflet_id) el._leaflet_id = null; } catch {} };
+  }, [listo]);
+
+  if (!listo) return <div className="rounded-xl p-4 text-center text-xs" style={{ background: C.lilaSoft, color: C.lilaDk }}>Cargando mapa…</div>;
+  return (
+    <div className="space-y-1">
+      <div ref={divRef} style={{ height: 220, borderRadius: 12, overflow: "hidden", border: `1px solid ${C.line}`, position: "relative", zIndex: 0, isolation: "isolate" }} />
+      <div className="text-xs text-center" style={{ color: C.mute }}>Toca el mapa para marcar el punto (o arrastra el pin para ajustarlo)</div>
     </div>
   );
 }
@@ -1970,7 +2067,7 @@ const textoCopy = (p, tel) => {
   const gar = `🚗 Garaje: ${p.garaje ? `Sí${p.gTipo ? ` (${p.gTipo.toLowerCase()})` : ""}` : "No"}${p.gAparte ? ` · garaje aparte en el edificio${p.gPrecio ? `: ${p.mon === "USD" ? "USD" : "Bs"} ${p.gPrecio}/mes` : ""}` : ""}`;
   const masc = `🐾 Mascotas: ${p.mascotas === "Condicionado" ? "Sí, con condiciones" : p.mascotas}${p.mascCond ? ` (${p.mascCond})` : ""}`;
   const dormTxt = p.dorm ? `🛏 ${p.dorm} dormitorio${p.dorm > 1 ? "s" : ""}` : "", banTxt = p.ban ? `🚿 ${p.ban} baño${p.ban > 1 ? "s" : ""}` : "", m2Txt = p.m2 ? `📐 ${p.m2} m²` : "";
-  const ubic = p.exclusiva && p.ubic ? `📍 Ubicación exacta: ${linkUbic(p.ubic)}` : !p.exclusiva && p.ubicRef ? `📍 Zona referencial: ${p.ubicRef}` : "";
+  const ubic = p.exclusiva && p.ubic ? `📍 Ubicación exacta: ${linkUbic(p.ubic)}` : !p.exclusiva && p.ubicRef ? `📍 Zona referencial${refTexto(p.ubicRef) ? `: ${refTexto(p.ubicRef)}` : ""}${refTieneMapa(p.ubicRef) ? ` · ${linkUbic(p.ubicRef)}` : ""}` : "";
   if (desc.length >= 40) {
     const d = leerCopy(desc, ZONAS); // lo que el copy ya dice
     const extra = [
@@ -2580,7 +2677,7 @@ function DetalleCliente({ p, onBack, isFav, toggleFav, rate, users, onProfile, o
       </div>
       <div className="rounded-xl p-3 text-sm space-y-1" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.ink }}>
         <div>📍 {p.zona}, {p.ciudad}</div>
-        {p.exclusiva && p.ubic ? <div><a href={linkUbic(p.ubic)} target="_blank" rel="noreferrer" className="underline" style={{ color: C.lilaDk }}>📍 Ver ubicación exacta en el mapa</a></div> : !p.exclusiva && p.ubicRef ? <div style={{ color: C.mute }}>📍 Zona referencial: {p.ubicRef}</div> : null}
+        {p.exclusiva && p.ubic ? <div><a href={linkUbic(p.ubic)} target="_blank" rel="noreferrer" className="underline" style={{ color: C.lilaDk }}>📍 Ver ubicación exacta en el mapa</a></div> : !p.exclusiva && (refTexto(p.ubicRef) || refTieneMapa(p.ubicRef)) ? <div style={{ color: C.mute }}>📍 Zona referencial{refTexto(p.ubicRef) ? `: ${refTexto(p.ubicRef)}` : ""}{refTieneMapa(p.ubicRef) && <> · <a href={linkUbic(p.ubicRef)} target="_blank" rel="noreferrer" className="underline">Ver en el mapa</a></>}</div> : null}
         <div>🚗 Garaje: {p.garaje ? `Sí${p.gTipo ? ` (${p.gTipo.toLowerCase()})` : ""}` : "No"}{p.gAparte ? ` · se alquila aparte en el edificio${p.gPrecio ? `: ${p.mon === "USD" ? "USD" : "Bs"} ${p.gPrecio}/mes` : ""}` : ""}</div>
         <div>🐾 Mascotas: {p.mascotas}{p.mascCond ? `: ${p.mascCond}` : ""}</div>
         <div>🛋 {p.amoblado}</div>
@@ -2613,7 +2710,7 @@ function BuscarCliente({ props, favs, rate, open, moneda, setMoneda, busq, setBu
   const [ciu, setCiu] = useState("Todas");
   const [dorm, setDorm] = useState("Todos");
   const [fv, setFv] = useState(false);
-  const [verMapa, setVerMapa] = useState(true);
+  const [verMapa, setVerMapa] = useState(false);
   const [verN, setVerN] = useState(30);
   const list = useMemo(() => props.filter((p) => (p.est || "Disponible") === "Disponible" && (dorm === "Todos" || (dorm === "4+" ? p.dorm >= 4 : p.dorm === Number(dorm))) && (!fv || favs.some((f) => f.pid === p.id && f.cid == null)) && (op === "Todas" || p.op === op) && (ciu === "Todas" || p.ciudad === ciu)).sort((a, b) => RK[a.est || "Disponible"] - RK[b.est || "Disponible"] || vigencia(a).n - vigencia(b).n || a.dias - b.dias), [op, ciu, dorm, fv, favs, props]);
   useEffect(() => setVerN(30), [op, ciu, dorm, fv]);
